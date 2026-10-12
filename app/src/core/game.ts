@@ -8,18 +8,28 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition } from "./scenario";
+import { load_definition,engineeringDefinition } from "./scenario";
 import type { State } from "./state";
 import { project_player_view } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move } from "./movement";
+import {player_view} from '../dto';
 export class Game {
   private epoch: number | null = null;
+  private faulted=false;
   constructor(readonly store: Persistence) {}
   private async writer() {
     if (this.epoch === null) this.epoch = await this.store.claim_writer();
     return this.epoch;
+  }
+  private async commit(state:State,expected:number|null,operation_id:string,fingerprint:string){
+    try{await this.store.commit_batch(state,await this.writer(),expected,operation_id,fingerprint);}
+    catch(error){
+      if(error instanceof GameError&&error.code==='STALE_REVISION')throw error;
+      this.faulted=true;
+      throw new GameError(error instanceof GameError&&error.code==='STALE_WRITER'?'STALE_WRITER':'STORAGE_UNCONFIRMED');
+    }
   }
   async create_run(
     input: unknown,
@@ -40,6 +50,7 @@ export class Game {
       if (!snapshot) throw new GameError("STORAGE_UNCONFIRMED");
       return project_player_view(snapshot);
     }
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
     const state: State = {
@@ -147,9 +158,8 @@ export class Game {
         },
       ],
     };
-    await this.store.commit_batch(
+    await this.commit(
       state,
-      epoch,
       null,
       operation,
       `create:${mode}`,
@@ -160,6 +170,18 @@ export class Game {
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     return project_player_view(state);
+  }
+  async takeover(run:string,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}>{
+    if(!valid_id(run)||!valid_id(operation_id))throw new GameError('INVALID_INPUT');
+    const state=await this.store.read_committed(run);
+    if(!state)throw new GameError('RUN_NOT_FOUND');
+    await load_definition(engineeringDefinition);
+    if(state.schema!==4||state.contract!=='0.5.1'||state.phase!=='committed'||state.definition_hash!==engineeringDefinition.definition_hash||JSON.stringify(state.hashes)!==JSON.stringify(engineeringDefinition.hashes)||!player_view(project_player_view(state)))throw new GameError('INVALID_DEFINITION');
+    const prior=await this.store.receipt(run,operation_id);
+    if(prior){const snapshot=await this.store.snapshot(run,prior.revision);const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
+      if(!input||input.intent.kind!=='pause')throw new GameError('OPERATION_CONFLICT');return this.operate(input);
+    }
+    return this.control_clock({run_id:run,operation_id,expected_revision:state.revision,intent:{kind:'pause',reason:'manual'}});
   }
   async preview_plan(
     run: string,
@@ -264,6 +286,7 @@ export class Game {
         view: await this.get_view(envelope.run_id),
       };
     }
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
     const state = await this.store.read_committed(envelope.run_id);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     if (state.revision !== envelope.expected_revision)
@@ -311,9 +334,8 @@ export class Game {
       revision: candidate.revision,
       ...(clock_to===undefined?{}:{clock_to}),
     });
-    await this.store.commit_batch(
+    await this.commit(
       candidate,
-      await this.writer(),
       state.revision,
       envelope.operation_id,
       fingerprint,

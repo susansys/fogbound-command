@@ -8,6 +8,7 @@ import { MapTrifold, Binoculars, PaperPlaneTilt } from "@phosphor-icons/react";
 const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
+  const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
   const pendingControl = useRef<Envelope | null>(null);
   const controlInFlight = useRef(false);
@@ -27,13 +28,14 @@ export function Workbench() {
   const [mode, setMode] = useState<Mode>("command"),
     [view, setView] = useState<PlayerView | null>(null),
     [error, setError] = useState(""),
+    [storageFault,setStorageFault]=useState(false),
     [runs, setRuns] = useState<RunSummary[]>([]),
     [busy, setBusy] = useState(false);
   currentView.current = view;
   function adoptView(next:PlayerView){setView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);}
   useEffect(()=>transport.subscribe(response=>{
     if(response.ok&&response.view)adoptView(response.view);
-    else if(!response.ok&&response.request_id==='clock-fault')setError(response.code);
+    else if(!response.ok&&response.request_id==='clock-fault'){setError(response.code);setStorageFault(true);}
   }),[]);
   async function control(intent:Intent){
     const current=currentView.current;if(!current)return;
@@ -82,6 +84,12 @@ export function Workbench() {
     } finally {
       setBusy(false);
     }
+  }
+  async function takeover(run_id:string){
+    const operation_id=takeoverOperations.current.get(run_id)??crypto.randomUUID();takeoverOperations.current.set(run_id,operation_id);
+    setBusy(true);setError('');
+    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view)adoptView(result.view);else if(!result.ok)setError(result.code);}
+    catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function preview() {
     if (!view) return;
@@ -136,6 +144,7 @@ export function Workbench() {
           setConfirm(false);
         }
       } else if (!response.ok) {
+        if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageFault(true);
         if(pendingControl.current?.operation_id===envelope.operation_id&&['STALE_REVISION','INVALID_INPUT','MODE_LOCKED','RUN_ENDED'].includes(response.code))pendingControl.current=null;
         if (envelope.intent.kind === 'issue' && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
         setError(response.code);
@@ -185,32 +194,36 @@ export function Workbench() {
       };
     await operate(pendingOrder.current);
   }
-  async function queryReceipt() {
-    if (!view || !pendingOrder.current) return;
+  async function queryReceipt(original:Envelope|null=pendingOrder.current) {
+    if (!view || !original) return;
+    try{
     const response = await transport.request({
       kind: "receipt",
-      run_id: view.run_id,
-      operation_id: pendingOrder.current.operation_id,
+      run_id: original.run_id,
+      operation_id: original.operation_id,
     });
     if (response.ok) {
       setReceiptNote(
         response.receipt
-          ? '原命令已登记，请查看编组回报。'
+          ? original.intent.kind==='issue'?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
           : "尚未查到原命令的登记结果，请保留原命令，再查询或重试。",
       );
       if (response.receipt) {
         const current = await transport.request({
           kind: "view",
-          run_id: view.run_id,
+          run_id: original.run_id,
         });
         if (current.ok && current.view) {
           adoptView(current.view);
-          setPlan(null);
-          setConfirm(false);
+          if(original.intent.kind==='issue'){setPlan(null);setConfirm(false);}
           setError("");
+          if(pendingControl.current?.operation_id===original.operation_id){pendingControl.current=null;setControlPending(false);
+            if(deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;void control(pause);}
+          }
         }
       }
     } else setError(response.code);
+    }catch{setError('CHANNEL_UNCERTAIN');}
   }
   return (
     <div className="app crisis-app">
@@ -226,9 +239,10 @@ export function Workbench() {
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
           </span>
           {view&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
-            <select aria-label="时间速率" value={view.rate} disabled={controlPending} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
-            <button disabled={controlPending} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
+            <select aria-label="时间速率" value={view.rate} disabled={controlPending||storageFault} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
+            <button disabled={controlPending||storageFault} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
             {controlPending&&!busy&&<button onClick={()=>{if(pendingControl.current)void control(pendingControl.current.intent);}}>重试原控制</button>}
+            {controlPending&&!busy&&<button onClick={()=>void queryReceipt(pendingControl.current)}>查询控制结果</button>}
           </>}
           <strong>{view ? clock(view.sim_time) : "00:00"}</strong>
           <span>
@@ -242,9 +256,10 @@ export function Workbench() {
           </span>
         </div>
       </header>
-      {error && (
+      {(error||storageFault) && (
         <div role="alert" className="fault">
-          {error_copy(error)}
+          {error_copy(error||'STORAGE_UNCONFIRMED')}
+          {storageFault&&<button onClick={()=>window.location.reload()}>返回最近记录</button>}
         </div>
       )}
       {!view ? (
@@ -281,6 +296,7 @@ export function Workbench() {
           {runs.map((run) => (
             <p key={run.run_id}>
               已保存的演练记录 · {clock(run.sim_time)}
+              <button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>
             </p>
           ))}
         </main>
@@ -328,7 +344,7 @@ export function Workbench() {
                         />
                       </label>
                       <button
-                        disabled={busy}
+                        disabled={busy||storageFault}
                         onClick={() =>
                           void operate({
                             run_id: view.run_id,
@@ -409,7 +425,7 @@ export function Workbench() {
                     <p>{view.gap}</p>
                     <button
                       className="primary full"
-                      disabled={busy || selected !== "T" || !view.can_issue}
+                      disabled={busy || storageFault || selected !== "T" || !view.can_issue}
                       onClick={() => void preview()}
                     >
                       查看通行预案
@@ -450,7 +466,7 @@ export function Workbench() {
                       </button>
                       <button
                         className="primary"
-                        disabled={busy || !plan.allowed || !view.can_issue}
+                        disabled={busy || storageFault || !plan.allowed || !view.can_issue}
                         onClick={() => setConfirm(true)}
                       >
                         <PaperPlaneTilt />

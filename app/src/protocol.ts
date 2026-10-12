@@ -48,7 +48,7 @@ export function valid_request(
       fields(value, ["kind", "request_id", "envelope"]) &&
       valid_envelope(value.envelope) && value.envelope.intent.kind !== 'tick'
     );
-  if (value.kind === "receipt")
+  if (value.kind === "receipt" || value.kind==='takeover')
     return (
       fields(value, ["kind", "request_id", "run_id", "operation_id"]) &&
       valid_id(value.run_id) &&

@@ -5,10 +5,12 @@ import { engineeringDefinition } from "./core/scenario";
 import { GameError, type PlayerView } from "./contracts";
 import type { Request, Response } from "./transport";
 import { valid_request, correlation } from "./protocol";
+import {valid_response} from './dto';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-fb01-schema4");
 const game = new Game(store);
 let locked = false;
+let blocked=false;
 async function acquire_writer(): Promise<boolean> {
   if (locked) return true;
   if (!navigator.locks) throw new GameError("LOCK_UNSUPPORTED");
@@ -30,6 +32,7 @@ let queue = Promise.resolve();
 let active:PlayerView|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
+function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
   if(!active||active.run_id!==view.run_id||active.paused!==view.paused||active.rate!==view.rate)anchor={wall:performance.now(),sim:view.sim_time};
@@ -45,8 +48,9 @@ setInterval(()=>{
       if(to<=active.sim_time)return;
       const result=await game.tick(active.run_id,to,crypto.randomUUID());
       remember(result.view);
-      scope.postMessage({request_id:`clock-${crypto.randomUUID()}`,ok:true,view:result.view} satisfies Response);
+      publish({request_id:`clock-${crypto.randomUUID()}`,ok:true,view:result.view});
     }catch{
+      blocked=true;
       active=null;
       scope.postMessage({request_id:'clock-fault',ok:false,code:'STORAGE_UNCONFIRMED'} satisfies Response);
     }finally{clockQueued=false;}
@@ -59,6 +63,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
+      if(blocked&&['create','operate','takeover'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       if (
         input.kind === "list" &&
@@ -84,6 +89,9 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.operation_id,
           ),
         };
+      } else if(input.kind==='takeover'){
+        if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response={request_id:input.request_id,ok:true,...await game.takeover(input.run_id,input.operation_id)};
       } else if (input.kind === "view" && locked)
         response = {
           request_id: input.request_id,
@@ -115,10 +123,11 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         };
       else throw new GameError("INVALID_INPUT");
       if(response.ok&&response.view)remember(response.view);
-      scope.postMessage(response);
+      publish(response);
     } catch (error) {
       const code =
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
+      if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
       scope.postMessage({ request_id, ok: false, code } satisfies Response);
     }
   });
