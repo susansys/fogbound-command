@@ -13,6 +13,8 @@ const errors:Record<string,string>={
   AUTHORITY_EXPIRED:'本次指挥授权已到期，不能再下达新任务。',
   MODE_LOCKED:'本场演练的时间方式已确定，不能在行动中更改。',
   TIME_REVERSED:'目标时刻早于当前时刻，请选择更晚的时间。',
+  TIME_NOT_ADVANCED:'目标时刻必须晚于当前时刻，请选择更晚的时间。',
+  CLOCK_PAUSED:'指挥时间已经暂停，请明确继续后再等待行动推进。',
   RUN_ENDED:'本次行动已结束，请查看已收到的行动记录。',
   STALE_WRITER:'指挥权已交给另一个窗口，本窗口不能继续操作。请重新打开行动记录。',
   CHANNEL_UNCERTAIN:'暂未收到确认。请查询原指令结果，避免重复下达。',

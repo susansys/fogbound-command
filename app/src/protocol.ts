@@ -46,7 +46,7 @@ export function valid_request(
   if (value.kind === "operate")
     return (
       fields(value, ["kind", "request_id", "envelope"]) &&
-      valid_envelope(value.envelope)
+      valid_envelope(value.envelope) && value.envelope.intent.kind !== 'tick'
     );
   if (value.kind === "receipt")
     return (
@@ -74,7 +74,11 @@ export function valid_envelope(value: unknown): value is Envelope {
   )
     return false;
   const intent = value.intent;
-  if (intent.kind === "advance")
+  if(intent.kind==='pause')return fields(intent,['kind','reason'])&&['manual','focus_lost','application_hidden'].includes(String(intent.reason));
+  if(intent.kind==='continue')return fields(intent,['kind']);
+  if(intent.kind==='rate')return fields(intent,['kind','rate'])&&[1,2,4].includes(Number(intent.rate))&&typeof intent.rate==='number';
+  if(intent.kind==='mode')return fields(intent,['kind','mode'])&&['command','research'].includes(String(intent.mode));
+  if (intent.kind === "advance" || intent.kind==='tick')
     return (
       fields(intent, ["kind", "to"]) &&
       typeof intent.to === "number" &&

@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: process.env.FB01_URL ?? "http://127.0.0.1:4175",
-    headless: true,
+    headless: process.env.FB01_HEADED !== '1',
     launchOptions: process.env.FB01_BROWSER
       ? { executablePath: process.env.FB01_BROWSER }
       : {},

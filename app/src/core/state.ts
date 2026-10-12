@@ -49,7 +49,7 @@ export type State = {
   };
   schedule: MoveEvent[];
   movement_rules: {fix_ms:number;task_expiry_ms:number};
-  inputs: Array<{ envelope: Envelope; at: number; revision: number }>;
+  inputs: Array<{ envelope: Envelope; at: number; revision: number;clock_to?:number }>;
   source_run: string | null;
   schema: 4;
   contract: "0.5.1";

@@ -221,13 +221,26 @@ export class Game {
   }
   async control_clock(
     envelope: Envelope,
+    clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
-    if (envelope?.intent?.kind !== "advance")
+    if (!['advance','pause','continue','rate','mode'].includes(envelope?.intent?.kind))
       throw new GameError("INVALID_INPUT");
-    return this.operate(envelope);
+    return this.operate(envelope,clock_to);
+  }
+  async tick(run:string,to:number,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}> {
+    const prior=await this.store.receipt(run,operation_id);
+    if(prior){
+      const snapshot=await this.store.snapshot(run,prior.revision);
+      const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
+      if(!input||input.intent.kind!=='tick'||input.intent.to!==to)throw new GameError('OPERATION_CONFLICT');
+      return this.operate(input);
+    }
+    const view=await this.get_view(run);
+    return this.operate({run_id:run,operation_id,expected_revision:view.revision,intent:{kind:'tick',to}});
   }
   private async operate(
     envelope: Envelope,
+    clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
     if (!valid_envelope(envelope)) throw new GameError("INVALID_INPUT");
     const fingerprint = await hash(canonical(envelope));
@@ -256,6 +269,10 @@ export class Game {
     if (state.revision !== envelope.expected_revision)
       throw new GameError("STALE_REVISION");
     const candidate = structuredClone(state);
+    if(clock_to!==undefined){
+      if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to<state.sim_time||clock_to>610000)throw new GameError('INVALID_INPUT');
+      if(clock_to>state.sim_time&&!state.ended)advance_move(candidate,clock_to);
+    }
     if (envelope.intent.kind === "issue") {
       const intent = envelope.intent;
       if (state.order) throw new GameError("ORDER_EXISTS");
@@ -271,18 +288,28 @@ export class Game {
         throw new GameError("STALE_PLAN");
       if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
       register_move(candidate, intent);
-    } else if (envelope.intent.kind === "advance") {
-      if (state.mode !== "research") throw new GameError("MODE_LOCKED");
+    } else if (envelope.intent.kind === "advance" || envelope.intent.kind==='tick') {
+      if (state.mode !== (envelope.intent.kind==='tick'?'command':'research')) throw new GameError("MODE_LOCKED");
+      if(envelope.intent.kind==='tick'&&state.paused)throw new GameError('CLOCK_PAUSED');
       if (envelope.intent.to < state.sim_time)
         throw new GameError("TIME_REVERSED");
+      if(envelope.intent.to===state.sim_time)throw new GameError('TIME_NOT_ADVANCED');
       if (state.ended) throw new GameError("RUN_ENDED");
       advance_move(candidate, envelope.intent.to);
-    } else throw new GameError("INVALID_INPUT");
+    } else if(envelope.intent.kind==='pause') candidate.paused=true;
+    else if(envelope.intent.kind==='continue') {
+      if(state.mode!=='command')throw new GameError('MODE_LOCKED');
+      if(state.ended)throw new GameError('RUN_ENDED');
+      candidate.paused=false;
+    } else if(envelope.intent.kind==='rate') candidate.rate=envelope.intent.rate;
+    else if(envelope.intent.kind==='mode')throw new GameError('MODE_LOCKED');
+    else throw new GameError("INVALID_INPUT");
     candidate.revision = state.revision + 1;
     candidate.inputs.push({
       envelope: structuredClone(envelope),
-      at: state.sim_time,
+      at: clock_to===undefined?state.sim_time:candidate.sim_time,
       revision: candidate.revision,
+      ...(clock_to===undefined?{}:{clock_to}),
     });
     await this.store.commit_batch(
       candidate,

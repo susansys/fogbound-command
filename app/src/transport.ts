@@ -24,6 +24,8 @@ export type Response =
     }
   | { request_id: string; ok: false; code: string };
 export class Transport {
+  private listeners=new Set<(response:Response)=>void>();
+  subscribe(listener:(response:Response)=>void){this.listeners.add(listener);return ()=>{this.listeners.delete(listener);};}
   private worker: Worker;
   private pending = new Map<
     string,
@@ -36,6 +38,7 @@ export class Transport {
     this.worker.onmessage = (event: MessageEvent<Response>) => {
       const response = event.data,
         waiting = this.pending.get(response.request_id);
+      for(const listener of this.listeners)listener(response);
       if (!waiting) return;
       this.pending.delete(response.request_id);
       waiting.resolve(response);

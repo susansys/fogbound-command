@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { Mode, PlayerView, Plan, Envelope } from "./contracts";
+import type { Mode, PlayerView, Plan, Envelope, Intent } from "./contracts";
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
 import { clock,error_copy,log_copy } from "./player-copy";
@@ -9,7 +9,12 @@ const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
   const pendingOrder = useRef<Envelope | null>(null);
+  const pendingControl = useRef<Envelope | null>(null);
+  const controlInFlight = useRef(false);
+  const deferredPause = useRef<Extract<Intent,{kind:'pause'}>|null>(null);
+  const issueInFlight = useRef(false);
   const [confirm, setConfirm] = useState(false),
+    [controlPending,setControlPending]=useState(false),
     [advanceTo, setAdvanceTo] = useState("7"),
     [receiptNote, setReceiptNote] = useState("");
   const [selected, setSelected] = useState("R"),
@@ -25,6 +30,36 @@ export function Workbench() {
     [runs, setRuns] = useState<RunSummary[]>([]),
     [busy, setBusy] = useState(false);
   currentView.current = view;
+  function adoptView(next:PlayerView){setView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);}
+  useEffect(()=>transport.subscribe(response=>{
+    if(response.ok&&response.view)adoptView(response.view);
+    else if(!response.ok&&response.request_id==='clock-fault')setError(response.code);
+  }),[]);
+  async function control(intent:Intent){
+    const current=currentView.current;if(!current)return;
+    if(intent.kind==='pause'&&controlInFlight.current){deferredPause.current=intent;setControlPending(true);return;}
+    if(controlInFlight.current)return;
+    if(pendingControl.current&&intent.kind==='pause'&&pendingControl.current.intent.kind!=='pause')deferredPause.current=intent;
+    controlInFlight.current=true;
+    if(!pendingControl.current)pendingControl.current={run_id:current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.revision,intent};
+    setControlPending(true);
+    try{
+      const original=pendingControl.current;
+      const result=await operate(original);
+      if(original.intent.kind==='pause'&&result&&!result.ok&&result.code==='STALE_REVISION')deferredPause.current=original.intent;
+    }
+    finally{
+      controlInFlight.current=false;
+      setControlPending(!!pendingControl.current||!!deferredPause.current);
+      if(!pendingControl.current&&deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;void control(pause);}
+    }
+  }
+  useEffect(()=>{
+    const lost=()=>{const current=currentView.current;if(current?.mode==='command'&&!current.paused)void control({kind:'pause',reason:document.hidden?'application_hidden':'focus_lost'});};
+    const hidden=()=>{if(document.hidden)lost();};
+    window.addEventListener('blur',lost);document.addEventListener('visibilitychange',hidden);
+    return()=>{window.removeEventListener('blur',lost);document.removeEventListener('visibilitychange',hidden);};
+  },[]);
   useEffect(() => {
     void transport.request({ kind: "list" }).then((r) => {
       if (r.ok) setRuns(r.runs ?? []);
@@ -40,7 +75,7 @@ export function Workbench() {
         mode,
         operation_id: createOperation.current,
       });
-      if (result.ok && result.view) setView(result.view);
+      if (result.ok && result.view) adoptView(result.view);
       else if (!result.ok) setError(result.code);
     } catch {
       setError("CHANNEL_UNCERTAIN");
@@ -78,7 +113,7 @@ export function Workbench() {
     } catch {
       if (isCurrent()) setError("CHANNEL_UNCERTAIN");
     } finally {
-      if (isCurrent()) setBusy(false);
+      if(editing.current===seq&&currentView.current?.run_id===context.run_id)setBusy(false);
     }
   }
   function select(id: string) {
@@ -91,7 +126,8 @@ export function Workbench() {
     try {
       const response = await transport.request({ kind: "operate", envelope });
       if (response.ok && response.view && response.receipt) {
-        setView(response.view);
+        adoptView(response.view);
+        if(pendingControl.current?.operation_id===envelope.operation_id)pendingControl.current=null;
         setReceiptNote(
           response.receipt.kind==='issue'?'命令已登记并发出，等待编组回报。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
@@ -100,9 +136,11 @@ export function Workbench() {
           setConfirm(false);
         }
       } else if (!response.ok) {
+        if(pendingControl.current?.operation_id===envelope.operation_id&&['STALE_REVISION','INVALID_INPUT','MODE_LOCKED','RUN_ENDED'].includes(response.code))pendingControl.current=null;
         if (envelope.intent.kind === 'issue' && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
         setError(response.code);
       }
+      return response;
     } catch {
       setError("CHANNEL_UNCERTAIN");
     } finally {
@@ -110,7 +148,29 @@ export function Workbench() {
     }
   }
   async function issue() {
+    if(issueInFlight.current)return;
+    issueInFlight.current=true;setBusy(true);
+    try{await issueChecked();}catch{setError('CHANNEL_UNCERTAIN');}
+    finally{issueInFlight.current=false;setBusy(false);}
+  }
+  async function issueChecked() {
     if (!view || !plan) return;
+    if(view.mode==='command'&&!pendingOrder.current){
+      const shown=plan,chosenReason=reason;
+      for(let attempt=0;attempt<3;attempt++){
+        const current=currentView.current;if(!current)return;
+        const checked=await transport.request({kind:'preview',run_id:current.run_id,revision:current.revision,editing_seq:shown.editing_seq});
+        if(!checked.ok){if(checked.code==='STALE_REVISION')continue;setError(checked.code);return;}
+        const latest=checked.plan;
+        if(!latest||!latest.allowed||['actor','target','path','distance','estimated_move_ms','link_ms'].some(key=>shown[key as keyof Plan]!==latest[key as keyof Plan])){
+          if(latest)setPlan(latest);setConfirm(false);setReceiptNote('情况或任务条件已变化，请重新核对预案。');return;
+        }
+        pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:{kind:'issue',command_id:crypto.randomUUID(),plan:latest,...(chosenReason?{reason:chosenReason}:{})}};
+        const result=await operate(pendingOrder.current);
+        if(!result||result.ok||!['STALE_REVISION','STALE_PLAN'].includes(result.code))return;
+      }
+      setError('STALE_PLAN');return;
+    }
     if (!pendingOrder.current)
       pendingOrder.current = {
         run_id: view.run_id,
@@ -144,7 +204,7 @@ export function Workbench() {
           run_id: view.run_id,
         });
         if (current.ok && current.view) {
-          setView(current.view);
+          adoptView(current.view);
           setPlan(null);
           setConfirm(false);
           setError("");
@@ -165,6 +225,11 @@ export function Workbench() {
           <span>
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
           </span>
+          {view&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
+            <select aria-label="时间速率" value={view.rate} disabled={controlPending} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
+            <button disabled={controlPending} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
+            {controlPending&&!busy&&<button onClick={()=>{if(pendingControl.current)void control(pendingControl.current.intent);}}>重试原控制</button>}
+          </>}
           <strong>{view ? clock(view.sim_time) : "00:00"}</strong>
           <span>
             {view?.finished
@@ -449,6 +514,7 @@ export function Workbench() {
                   预计通行 {plan.estimated_move_ms / 1000}{" "}
                   秒；总部位置与完成只能依据收到的回报更新。
                 </p>
+                {view.mode==='command'&&<p>确认时将按当前已收到的情况再次核对。通行参数或授权发生变化时，将返回预案重新确认。</p>}
               </div>
               <footer className="dialog-actions">
                 <button disabled={busy} onClick={() => setConfirm(false)}>

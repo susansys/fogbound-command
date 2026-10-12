@@ -80,9 +80,11 @@ export type Plan = {
 export type Intent =
   | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
   | { kind: "advance"; to: number }
+  | { kind: "tick"; to: number }
   | { kind: "pause"; reason: "manual" | "focus_lost" | "application_hidden" }
   | { kind: "continue" }
   | { kind: "rate"; rate: 1 | 2 | 4 }
+  | { kind: "mode"; mode: Mode }
   | { kind: "save" };
 export type Envelope = {
   run_id: string;
