@@ -3,6 +3,7 @@ import { Application, Container, Graphics } from "pixi.js";
 import ms from "milsymbol";
 import { Plus, Minus, Crosshair, Stack, Compass } from "@phosphor-icons/react";
 import type { PlayerView } from "./contracts";
+import { clock } from "./player-copy";
 type Props = {
   view: PlayerView;
   selected: string;
@@ -228,7 +229,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
         </div>
       )}
       <div className="map-caption" data-ui>
-        <span className="outline-tag">公开平面 / 图上米</span>
+        <span className="outline-tag">演练地图 / 虚构区域</span>
         <span>最后确认 · 不是现场实时位置</span>
       </div>
       {planned && (
@@ -262,7 +263,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
           return (
             <button
               key={id}
-              aria-label={id === "T" ? "工位T" : "起点H"}
+              aria-label={id === "T" ? "联络点T" : "起点H"}
               data-marker={id}
               className={`site-marker ${selected === id ? "selected" : ""}`}
               style={{ ...point(x, y), marginTop: -44 }}
@@ -271,7 +272,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
               }}
             >
               <span className="site-shape">{id}</span>
-              {labels && <b>{id === "T" ? "目标工位" : "总部起点"}</b>}
+              {labels && <b>{id === "T" ? "目标联络点" : "总部起点"}</b>}
             </button>
           );
         })}
@@ -291,7 +292,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
           />
           {labels && (
             <b>
-              R<small>最后确认 · {view.position.observed / 1000}s</small>
+              R<small>最后确认 · {clock(view.position.observed)}</small>
             </b>
           )}
         </button>
@@ -340,14 +341,14 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
             <br />
             方形：登记地点
             <br />
-            虚线：未签发草案
+            虚线：预案或已下达的计划
             <br />
-            右侧条纹：rough
+            右侧条纹：崎岖地带
           </p>
         )}
       </div>
       <div className="map-scale" data-ui>
-        <Compass size={20} /> N · {Math.round((c.s / c.fit) * 100)}% · 50图上米{" "}
+        <Compass size={20} /> N · {Math.round((c.s / c.fit) * 100)}% · 50米{" "}
         <span style={{ width: 50 * c.s }} />
       </div>
     </section>

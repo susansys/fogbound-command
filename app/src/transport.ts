@@ -1,4 +1,4 @@
-import type { Mode, PlayerView, Plan } from "./contracts";
+import type { Mode, PlayerView, Plan, Envelope, Receipt } from "./contracts";
 export type RunSummary = {
   run_id: string;
   revision: number;
@@ -10,7 +10,9 @@ export type Request =
   | { kind: "create"; mode: Mode; operation_id: string }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
-  | { kind: "preview"; run_id: string; revision: number; editing_seq: number };
+  | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
+  | { kind: "operate"; envelope: Envelope }
+  | { kind: "receipt"; run_id: string; operation_id: string };
 export type Response =
   | {
       request_id: string;
@@ -18,6 +20,7 @@ export type Response =
       view?: PlayerView;
       runs?: RunSummary[];
       plan?: Plan;
+      receipt?: Receipt | null;
     }
   | { request_id: string; ok: false; code: string };
 export class Transport {

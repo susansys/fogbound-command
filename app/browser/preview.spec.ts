@@ -4,17 +4,17 @@ test("S03 map/report selection, marker drag, anchored zoom and cancelled preview
 }, testInfo) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/");
-  await page.getByLabel("开局模式").selectOption("research");
-  await page.getByRole("button", { name: "开始工程局", exact: true }).click();
+  await page.getByLabel("时间方式").selectOption("research");
+  await page.getByRole("button", { name: "开始演练", exact: true }).click();
   const map = page.getByRole("region", { name: "公开态势地图" });
   await expect(
-    page.getByRole("button", { name: "工位T", exact: true }),
+    page.getByRole("button", { name: "联络点T", exact: true }),
   ).toBeVisible();
   await map.focus();
   await page.keyboard.press("t");
-  await page.getByRole("button", { name: "预览移动草案", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "未签发草案" })).toBeVisible();
-  await page.getByLabel("理由（可选）").fill("保留未签草案");
+  await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "待下达预案" })).toBeVisible();
+  await page.getByLabel("指挥意图（选填）").fill("保留未签草案");
   const marker = await page
     .getByRole("button", { name: "编组R最后确认位置", exact: true })
     .boundingBox();
@@ -24,7 +24,7 @@ test("S03 map/report selection, marker drag, anchored zoom and cancelled preview
   await page.mouse.move(marker!.x + 45, marker!.y + 35);
   await page.mouse.up();
   await expect(page.getByText("当前选择：T", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("理由（可选）")).toHaveValue("保留未签草案");
+  await expect(page.getByLabel("指挥意图（选填）")).toHaveValue("保留未签草案");
   await page.mouse.move(marker!.x + 18, marker!.y + 18);
   await page.mouse.down();
   await map.dispatchEvent("pointercancel", { pointerId: 1 });
@@ -52,14 +52,14 @@ test("S03 map/report selection, marker drag, anchored zoom and cancelled preview
   expect(Math.abs((anchor.y - after[1]) / after[2] - before[1])).toBeLessThan(
     0.1,
   );
-  await page.getByRole("button", { name: "取消草案", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "未签发草案" })).toHaveCount(
+  await page.getByRole("button", { name: "取消预案", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "待下达预案" })).toHaveCount(
     0,
   );
   await expect(page.getByTestId("position")).toHaveText("50.00, 150.00");
   await page.getByRole("button", { name: "查看原件", exact: true }).click();
   await page
-    .getByRole("button", { name: "定位工位T", exact: true })
+    .getByRole("button", { name: "定位联络点T", exact: true })
     .first()
     .click();
   await expect(map).toBeVisible();
@@ -73,8 +73,8 @@ test("S03 large viewport and doubled text retain reachable controls and distinct
 }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
-  await page.getByLabel("开局模式").selectOption("research");
-  await page.getByRole("button", { name: "开始工程局", exact: true }).click();
+  await page.getByLabel("时间方式").selectOption("research");
+  await page.getByRole("button", { name: "开始演练", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "公开态势地图" }).locator("canvas"),
   ).toHaveCount(1);
@@ -95,9 +95,9 @@ test("S03 large viewport and doubled text retain reachable controls and distinct
       if (Number.isFinite(sizes[i])) e.style.fontSize = `${sizes[i] * 2}px`;
     });
   });
-  await page.getByRole("button", { name: "定位工位T", exact: true }).click();
-  await page.getByRole("button", { name: "预览移动草案", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "未签发草案" })).toBeVisible();
-  await page.getByRole("button", { name: "取消草案", exact: true }).click();
+  await page.getByRole("button", { name: "定位联络点T", exact: true }).click();
+  await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "待下达预案" })).toBeVisible();
+  await page.getByRole("button", { name: "取消预案", exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath("text-double-1920.png") });
 });

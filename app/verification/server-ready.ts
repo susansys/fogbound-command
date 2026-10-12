@@ -4,7 +4,7 @@ export default async function serverReady() {
   while (Date.now() < deadline) {
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
-      if (response.ok && (await response.text()).includes("FB01")) return;
+      if (response.ok && (await response.text()).includes("玄枢行动")) return;
     } catch {
       /* Wait for the static container's actual HTTP readiness. */
     }

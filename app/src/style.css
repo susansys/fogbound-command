@@ -496,3 +496,85 @@ textarea {
     width: 70px;
   }
 }
+dialog {
+  margin: auto;
+  border: 1px solid #617780;
+  padding: 0;
+  border-radius: 6px;
+  color: #dce4e1;
+  background: #1a2931;
+  width: min(560px, calc(100vw - 36px));
+  max-height: calc(100dvh - 40px);
+  box-shadow: 0 30px 100px #0008;
+}
+dialog.wide {
+  width: min(910px, calc(100vw - 36px));
+}
+dialog::backdrop {
+  background: #071318b8;
+  backdrop-filter: blur(3px);
+}
+dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 21px 27px;
+  border-bottom: 1px solid #3f535b;
+}
+dialog > header small {
+  font-size: 11px;
+  color: #98b4bc;
+}
+dialog > header h2 {
+  font-size: 20px;
+  margin-top: 7px;
+}
+dialog > header > button {
+  border: 0;
+  background: transparent;
+}
+.brief-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 38px;
+  padding: 33px 34px;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 27px;
+  border-top: 1px solid #41565f;
+  background: #18272f;
+}
+.dialog-actions > a {
+  margin-right: auto;
+  font-size: 11px;
+}
+.dialog-body {
+  padding: 24px 27px;
+}
+.dialog-body > p:first-child {
+  margin-top: 0;
+}
+.dialog-body .attention {
+  margin-top: 20px;
+}
+.settings label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.settings p {
+  font-size: 12px;
+}
+.large-text .inspector p,
+.large-text .report-detail section p,
+.large-text .record p,
+.large-text .mission-purpose {
+  font-size: 16px;
+}
+.workspace-actions{margin-left:auto;display:flex;align-items:center;gap:9px}.workspace-actions label{display:flex;align-items:center;gap:6px;font-size:12px}.workspace-actions input{width:90px;min-height:30px;padding:4px 7px}.workspace-actions button{font-size:12px;min-height:30px;padding:4px 9px}button svg{width:18px;height:18px;flex-shrink:0}.rail button svg{width:24px;height:24px}.brand-mark{flex-shrink:0}.rail button{justify-content:center}

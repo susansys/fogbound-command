@@ -1,10 +1,19 @@
-import type { Mode, PlayerView, OriginalReport, Plan } from "../contracts";
+import type {
+  Mode,
+  PlayerView,
+  OriginalReport,
+  Plan,
+  Envelope,
+  Receipt,
+} from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
 import { load_definition } from "./scenario";
 import type { State } from "./state";
 import { project_player_view } from "./knowledge";
-import { valid_id } from "../protocol";
+import { valid_id, valid_envelope } from "../protocol";
+import { hash } from "./scenario";
+import { advance_move, register_move } from "./movement";
 export class Game {
   private epoch: number | null = null;
   constructor(readonly store: Persistence) {}
@@ -41,6 +50,33 @@ export class Game {
       rate: 1,
       paused: mode === "research",
       finished: false,
+      ended: false,
+      status: "ready",
+      order: null,
+      world: {
+        position: {
+          xn: definition.catalogs.position.x,
+          yn: definition.catalogs.position.y,
+          d: 1,
+        },
+        equipment_energy: definition.profile.parameters.equipment_energy,
+        equipment_wear: definition.profile.parameters.equipment_wear,
+        movement_energy: definition.profile.parameters.movement_energy,
+        sends: 0,
+        completed: false,
+        stopped: false,
+      },
+      schedule: [
+        {
+          id: "objective-deadline",
+          at: definition.profile.parameters.deadline,
+          phase: 30,
+          generation: epoch,
+          kind: "deadline",
+        },
+      ],
+      inputs: [],
+      movement_rules: {fix_ms:definition.profile.parameters.fix_ms,task_expiry_ms:definition.profile.parameters.task_expiry_ms},
       source_run: null,
       schema: 4,
       contract: "0.5.1",
@@ -150,11 +186,132 @@ export class Game {
       target: "T",
       path: "H-T",
       ...state.public_rules.preview,
-      allowed:
-        !view.finished &&
-        view.sim_time >= view.authority.from &&
-        view.sim_time < view.authority.to,
-      gap: view.sim_time >= view.authority.to ? "授权窗口已结束" : "",
+      allowed: view.can_issue,
+      gap: view.can_issue ? "" : view.gap,
     };
   }
+  async issue_order(
+    envelope: Envelope,
+  ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    if (envelope?.intent?.kind !== "issue")
+      throw new GameError("INVALID_INPUT");
+    return this.operate(envelope);
+  }
+  async get_receipt(
+    run: string,
+    operation_id: string,
+  ): Promise<Receipt | null> {
+    if(!valid_id(run)||!valid_id(operation_id))throw new GameError('INVALID_INPUT');
+    const row = await this.store.receipt(run, operation_id);
+    if (!row) return null;
+    const state = await this.store.snapshot(run, row.revision),
+      input = state?.inputs.find(
+        (x) => x.envelope.operation_id === operation_id,
+      );
+    if (!input) throw new GameError("INVALID_INPUT");
+    return {
+      run_id: row.run_id,
+      operation_id: row.operation_id,
+      revision: row.revision,
+      sim_time: row.sim_time,
+      fingerprint: row.fingerprint,
+      result: "committed",
+      kind: input.envelope.intent.kind,
+    };
+  }
+  async control_clock(
+    envelope: Envelope,
+  ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    if (envelope?.intent?.kind !== "advance")
+      throw new GameError("INVALID_INPUT");
+    return this.operate(envelope);
+  }
+  private async operate(
+    envelope: Envelope,
+  ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    if (!valid_envelope(envelope)) throw new GameError("INVALID_INPUT");
+    const fingerprint = await hash(canonical(envelope));
+    const previous = await this.store.receipt(
+      envelope.run_id,
+      envelope.operation_id,
+    );
+    if (previous) {
+      if (previous.fingerprint !== fingerprint)
+        throw new GameError("OPERATION_CONFLICT");
+      return {
+        receipt: {
+          run_id: previous.run_id,
+          operation_id: previous.operation_id,
+          revision: previous.revision,
+          sim_time: previous.sim_time,
+          fingerprint: previous.fingerprint,
+          result: "committed",
+          kind: envelope.intent.kind,
+        },
+        view: await this.get_view(envelope.run_id),
+      };
+    }
+    const state = await this.store.read_committed(envelope.run_id);
+    if (!state) throw new GameError("RUN_NOT_FOUND");
+    if (state.revision !== envelope.expected_revision)
+      throw new GameError("STALE_REVISION");
+    const candidate = structuredClone(state);
+    if (envelope.intent.kind === "issue") {
+      const intent = envelope.intent;
+      if (state.order) throw new GameError("ORDER_EXISTS");
+      const expected = await this.preview_plan(
+        state.run_id,
+        state.revision,
+        intent.plan.editing_seq,
+      );
+      if (
+        JSON.stringify(canonical(expected)) !==
+        JSON.stringify(canonical(intent.plan))
+      )
+        throw new GameError("STALE_PLAN");
+      if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
+      register_move(candidate, intent);
+    } else if (envelope.intent.kind === "advance") {
+      if (state.mode !== "research") throw new GameError("MODE_LOCKED");
+      if (envelope.intent.to < state.sim_time)
+        throw new GameError("TIME_REVERSED");
+      if (state.ended) throw new GameError("RUN_ENDED");
+      advance_move(candidate, envelope.intent.to);
+    } else throw new GameError("INVALID_INPUT");
+    candidate.revision = state.revision + 1;
+    candidate.inputs.push({
+      envelope: structuredClone(envelope),
+      at: state.sim_time,
+      revision: candidate.revision,
+    });
+    await this.store.commit_batch(
+      candidate,
+      await this.writer(),
+      state.revision,
+      envelope.operation_id,
+      fingerprint,
+    );
+    return {
+      receipt: {
+        run_id: state.run_id,
+        operation_id: envelope.operation_id,
+        revision: candidate.revision,
+        sim_time: candidate.sim_time,
+        fingerprint,
+        result: "committed",
+        kind: envelope.intent.kind,
+      },
+      view: project_player_view(candidate),
+    };
+  }
+}
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, canonical(v)]),
+    );
+  return value;
 }

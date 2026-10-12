@@ -75,6 +75,18 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.editing_seq,
           ),
         };
+      else if (input.kind === "operate" && locked) {
+        const result =
+          input.envelope.intent.kind === "issue"
+            ? await game.issue_order(input.envelope)
+            : await game.control_clock(input.envelope);
+        response = { request_id: input.request_id, ok: true, ...result };
+      } else if (input.kind === "receipt" && locked)
+        response = {
+          request_id: input.request_id,
+          ok: true,
+          receipt: await game.get_receipt(input.run_id, input.operation_id),
+        };
       else throw new GameError("INVALID_INPUT");
       scope.postMessage(response);
     } catch (error) {

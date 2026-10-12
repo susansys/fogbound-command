@@ -26,3 +26,11 @@ Browser evidence covers 1366×768, 1920×1080, report/map selection, keyboard ta
 Standards review initially found menu wheel zoom and stale preview failure handling; Spec independently found stale preview failure handling. Real Transport-seam delayed failure and menu-wheel regressions each went red then green. Success/error/catch/finally now use the same run/revision/editing-seq guard. Map geometry and displayed Plan estimates come from committed legal fields. Both independent axes re-reviewed the fixes with no remaining serious T02 finding; reviewers did not rerun tests.
 
 T03—T07 and final batch CI remain pending; the original 244AT remains not_run.
+
+## T03 — committed movement and legal feedback (#4)
+
+Public Game movement tests establish the independent 1000/2000/7000/32800/33800 timeline, known fixes, eight R sends, final resources 8/92/18, original-ID retry, changed-content rejection, single-task eligibility, and equal causal feedback/ledger for large and boundary steps. Deadline cases 567199, 567200, 567201 and acceptance at the endpoint are covered. Eight kernel tests, strict typecheck and import-boundary checks pass. Nine actual Edge browser tests pass against final static image config SHA256 `fdbab68dd8506711a9b67ebb57d81b444c0aa9bd0f8df096057bc471930b704e` (`worker-BJcZGPPb.js`).
+
+Both independent axes found completion exactly at deadline and inability to re-confirm a definitively rejected plan. Each regression was observed red before the fix, then green. Completion must precede deadline; definite rejection releases the pending frozen envelope for a new explicit confirmation, while uncertain outcomes retain the original ID. Reason and plan remain editable. Standards also identified duplicated profile constants; movement now consumes validated definition values. Both axes re-reviewed with no remaining serious T03 finding; reviewers did not run tests themselves.
+
+Player wording has a separate browser regression covering start, normal pages and writer denial; it does not claim final all-page coverage before save/replay exist. T04—T07, visual one-to-one final acceptance and GitHub CI remain pending. Original 244AT remains not_run.

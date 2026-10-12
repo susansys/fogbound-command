@@ -42,16 +42,16 @@ test("cancelled preview discards a late Transport failure and preserves editable
     });
   });
   await page.goto("/");
-  await page.getByLabel("开局模式").selectOption("research");
-  await page.getByRole("button", { name: "开始工程局", exact: true }).click();
-  await page.getByRole("button", { name: "定位工位T", exact: true }).click();
-  await page.getByRole("button", { name: "预览移动草案", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "未签发草案" })).toBeVisible();
-  await page.getByLabel("理由（可选）").fill("仍保留理由");
+  await page.getByLabel("时间方式").selectOption("research");
+  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByRole("button", { name: "定位联络点T", exact: true }).click();
+  await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "待下达预案" })).toBeVisible();
+  await page.getByLabel("指挥意图（选填）").fill("仍保留理由");
   await page.evaluate(() => {
     (window as unknown as { latePreview: Hooks }).latePreview.hold = true;
   });
-  await page.getByRole("button", { name: "预览移动草案", exact: true }).click();
+  await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
   await expect
     .poll(() =>
       page.evaluate(
@@ -60,23 +60,23 @@ test("cancelled preview discards a late Transport failure and preserves editable
       ),
     )
     .toBe(true);
-  await page.getByRole("button", { name: "取消草案", exact: true }).click();
+  await page.getByRole("button", { name: "取消预案", exact: true }).click();
   await page.evaluate(() => {
     (window as unknown as { latePreview: Hooks }).latePreview.deliver!();
   });
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "预览移动草案", exact: true }),
+    page.getByRole("button", { name: "查看通行预案", exact: true }),
   ).toBeEnabled();
-  await page.getByRole("button", { name: "预览移动草案", exact: true }).click();
-  await expect(page.getByLabel("理由（可选）")).toHaveValue("仍保留理由");
+  await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
+  await expect(page.getByLabel("指挥意图（选填）")).toHaveValue("仍保留理由");
 });
 test("scrolling the legend and layer menu does not zoom the map", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByLabel("开局模式").selectOption("research");
-  await page.getByRole("button", { name: "开始工程局", exact: true }).click();
+  await page.getByLabel("时间方式").selectOption("research");
+  await page.getByRole("button", { name: "开始演练", exact: true }).click();
   const map = page.getByRole("region", { name: "公开态势地图" });
   await expect(map.locator("canvas")).toHaveCount(1);
   await page.getByRole("button", { name: "图例 展开", exact: true }).click();
