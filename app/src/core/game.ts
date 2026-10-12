@@ -8,17 +8,34 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition } from "./scenario";
+import { load_definition,engineeringDefinition } from "./scenario";
 import type { State } from "./state";
-import { project_player_view } from "./knowledge";
+import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move } from "./movement";
 import {canonical,validate_state} from './snapshot';
+import {replay_state} from './replay';
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
+  private history:State|null=null;
   constructor(readonly store: Persistence) {}
+  private assert_current(){if(this.history)throw new GameError('HISTORY_READ_ONLY');}
+  private async assert_writable(run:string){this.assert_current();if(await this.store.is_read_only(run))throw new GameError('HISTORY_READ_ONLY');}
+  async restart_run(run:string,operation:string):Promise<PlayerView>{
+    this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
+    const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
+    return this.create(engineeringDefinition,source.mode,operation,source);
+  }
+  async get_replay(run:string,to:number):Promise<Game>{
+    if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
+    const latest=await this.store.read_committed(run),initial=await this.store.snapshot(run,1);
+    if(!latest||!initial)throw new GameError('RUN_NOT_FOUND');
+    await validate_state(latest);await validate_state(initial);
+    if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
+    const context=new Game(this.store);context.history=replay_state(initial,latest.inputs,to);return context;
+  }
   private async writer() {
     if (this.epoch === null) this.epoch = await this.store.claim_writer();
     return this.epoch;
@@ -26,7 +43,7 @@ export class Game {
   private async commit(state:State,expected:number|null,operation_id:string,fingerprint:string){
     try{await this.store.commit_batch(state,await this.writer(),expected,operation_id,fingerprint);}
     catch(error){
-      if(error instanceof GameError&&error.code==='STALE_REVISION')throw error;
+      if(error instanceof GameError&&['STALE_REVISION','HISTORY_READ_ONLY'].includes(error.code))throw error;
       this.faulted=true;
       throw new GameError(error instanceof GameError&&error.code==='STALE_WRITER'?'STALE_WRITER':'STORAGE_UNCONFIRMED');
     }
@@ -36,12 +53,16 @@ export class Game {
     mode: Mode,
     operation: string,
   ): Promise<PlayerView> {
+    return this.create(input,mode,operation);
+  }
+  private async create(input:unknown,mode:Mode,operation:string,source:State|null=null):Promise<PlayerView>{
+    this.assert_current();
     const definition = await load_definition(input);
     if (!["command", "research"].includes(mode) || !valid_id(operation))
       throw new GameError("INVALID_INPUT");
     const previous = await this.store.creation(operation);
     if (previous) {
-      if (previous.fingerprint !== `create:${mode}`)
+      if (previous.fingerprint !== (source?`clone:${source.run_id}:${mode}`:`create:${mode}`))
         throw new GameError("OPERATION_CONFLICT");
       const snapshot = await this.store.snapshot(
         previous.run_id,
@@ -52,6 +73,7 @@ export class Game {
       return project_player_view(snapshot);
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
     const state: State = {
@@ -89,7 +111,7 @@ export class Game {
       ],
       inputs: [],
       movement_rules: {fix_ms:definition.profile.parameters.fix_ms,task_expiry_ms:definition.profile.parameters.task_expiry_ms},
-      source_run: null,
+      source_run: source?.run_id??null,
       schema: 4,
       contract: "0.5.1",
       definition_hash: definition.definition_hash,
@@ -99,7 +121,7 @@ export class Game {
         version: 1,
         seed: 1,
         state: 1,
-        origin: run_id,
+        origin: source?.rng.origin??run_id,
         used: false,
       },
       generation: epoch,
@@ -163,18 +185,23 @@ export class Game {
       state,
       null,
       operation,
-      `create:${mode}`,
+      source?`clone:${source.run_id}:${mode}`:`create:${mode}`,
     );
     return project_player_view(state);
   }
   async get_view(run: string): Promise<PlayerView> {
+    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');return reconstruct_known(this.history);}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await validate_state(state);
-    return project_player_view(state);
+    const view=project_player_view(state);
+    if(await this.store.is_read_only(run)){view.can_issue=false;view.next_action='查看保留的行动记录';view.gap='这场行动已保留为只读记录';}
+    return view;
   }
   async restore(run:string,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}>{
+    this.assert_current();
     if(!valid_id(run)||!valid_id(operation_id))throw new GameError('INVALID_INPUT');
+    await this.assert_writable(run);
     const state=await this.store.read_committed(run);
     if(!state)throw new GameError('RUN_NOT_FOUND');
     const snapshot=await this.store.snapshot(run,state.revision);
@@ -188,6 +215,7 @@ export class Game {
     return this.operate({run_id:run,operation_id,expected_revision:state.revision,intent:{kind:'restore',snapshot_revision:state.revision}});
   }
   async save(envelope:Envelope,clock_to?:number){
+    this.assert_current();
     if(envelope?.intent?.kind!=='save')throw new GameError('INVALID_INPUT');
     return this.operate(envelope,clock_to);
   }
@@ -203,7 +231,7 @@ export class Game {
       editing_seq < 0
     )
       throw new GameError("INVALID_INPUT");
-    const state = await this.store.read_committed(run);
+    const state = this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await validate_state(state);
     const view = project_player_view(state);
@@ -224,6 +252,7 @@ export class Game {
   async issue_order(
     envelope: Envelope,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    this.assert_current();
     if (envelope?.intent?.kind !== "issue")
       throw new GameError("INVALID_INPUT");
     return this.operate(envelope);
@@ -233,6 +262,8 @@ export class Game {
     operation_id: string,
   ): Promise<Receipt | null> {
     if(!valid_id(run)||!valid_id(operation_id))throw new GameError('INVALID_INPUT');
+    if(this.history&&run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');
+    if(this.history&&!this.history.inputs.some(x=>x.envelope.operation_id===operation_id))return null;
     const row = await this.store.receipt(run, operation_id);
     if (!row) return null;
     const state = await this.store.snapshot(run, row.revision),
@@ -255,11 +286,13 @@ export class Game {
     envelope: Envelope,
     clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    this.assert_current();
     if (!['advance','pause','continue','rate','mode'].includes(envelope?.intent?.kind))
       throw new GameError("INVALID_INPUT");
     return this.operate(envelope,clock_to);
   }
   async tick(run:string,to:number,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}> {
+    this.assert_current();
     const prior=await this.store.receipt(run,operation_id);
     if(prior){
       const snapshot=await this.store.snapshot(run,prior.revision);
@@ -274,7 +307,9 @@ export class Game {
     envelope: Envelope,
     clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
+    this.assert_current();
     if (!valid_envelope(envelope)) throw new GameError("INVALID_INPUT");
+    await this.assert_writable(envelope.run_id);
     const fingerprint = await hash(canonical(envelope));
     const previous = await this.store.receipt(
       envelope.run_id,
@@ -334,7 +369,7 @@ export class Game {
     } else if(envelope.intent.kind==='pause'||envelope.intent.kind==='restore') candidate.paused=true;
     else if(envelope.intent.kind==='continue') {
       if(state.mode!=='command')throw new GameError('MODE_LOCKED');
-      if(state.ended)throw new GameError('RUN_ENDED');
+      if(candidate.ended)throw new GameError('RUN_ENDED');
       candidate.paused=false;
     } else if(envelope.intent.kind==='rate') candidate.rate=envelope.intent.rate;
     else if(envelope.intent.kind==='save'){/* the committed snapshot is the save point */}

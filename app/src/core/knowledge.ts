@@ -46,4 +46,4 @@ export function project_player_view(state: State): PlayerView {
     log: structuredClone(state.log),
   };
 }
-export const reconstruct_known = project_player_view;
+export const reconstruct_known=project_player_view;

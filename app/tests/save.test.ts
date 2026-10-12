@@ -19,13 +19,14 @@ test('a saved committed 17000ms point restores the same run paused and resumes t
   expect(view.log.filter(x=>x.kind==='complete_receipt')).toHaveLength(1);
   expect(view.resources).toMatchObject({equipment_energy:8,equipment_wear:92,movement_energy:18});await store.delete();
 });
-test.each(['credential','early','late'])('a self-consistent serialized package with an invalid pending delivery %s is refused before resume',async(fault)=>{
+test.each(['credential','early','late','duplicate'])('a self-consistent serialized package with an invalid pending delivery %s is refused before resume',async(fault)=>{
   const store=new Persistence(`bad-delivery-${fault}`),game=new Game(store);let view=await game.create_run(engineeringDefinition,'research','create');
   const plan=await game.preview_plan(view.run_id,view.revision,1);view=(await game.issue_order({run_id:view.run_id,operation_id:'issue',expected_revision:view.revision,intent:{kind:'issue',command_id:'move',plan}})).view;
   view=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:6000}})).view;
   // An authored serialized fault, not a patch of running Game/World: both stored copies carry a valid checksum.
   const bad=structuredClone((await store.read_committed(view.run_id))!);
   if(fault==='credential')bad.schedule.find(x=>x.kind==='fix_receipt')!.payload!.position!.evidence='missing-delivery';
+  else if(fault==='duplicate'){bad.schedule.push(structuredClone(bad.schedule.find(x=>x.kind==='fix'&&x.index===2)!));bad.schedule.sort((a,b)=>a.at-b.at);}
   else{bad.schedule.find(x=>x.kind==='fix_receipt'&&x.index===2)!.at=fault==='early'?6001:12001;bad.schedule.sort((a,b)=>a.at-b.at);}
   const ordered=(value:unknown):unknown=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered((value as Record<string,unknown>)[key])])):value;
   const {integrity,...body}=bad;bad.integrity=createHash('sha256').update(JSON.stringify(ordered(body))).digest('hex');

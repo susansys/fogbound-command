@@ -54,6 +54,7 @@ export class Persistence {
         if ((await this.db.metadata.get("writer"))?.value !== epoch)
           throw new GameError("STALE_WRITER");
         const old = await this.db.runs.get(state.run_id);
+        if(await this.db.metadata.get(`readonly:${state.run_id}`))throw new GameError('HISTORY_READ_ONLY');
         if ((old?.revision ?? null) !== expected)
           throw new GameError("STALE_REVISION");
         if (
@@ -84,12 +85,18 @@ export class Persistence {
             revision: state.revision,
             sim_time: state.sim_time,
           });
+        if(expected===null&&state.source_run!==null){
+          const source=await this.db.runs.get(state.source_run);
+          if(!source||await this.db.metadata.get(`readonly:${state.source_run}`))throw new GameError('HISTORY_READ_ONLY');
+          await this.db.metadata.put({key:`readonly:${state.source_run}`,value:1});
+        }
       },
     );
   }
   async read_committed(run: string): Promise<State | undefined> {
     return this.db.runs.get(run);
   }
+  async is_read_only(run:string){return !!await this.db.metadata.get(`readonly:${run}`);}
   async receipt(run: string, operation: string) {
     return this.db.operations.get(`${run}:${operation}`);
   }

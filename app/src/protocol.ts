@@ -16,6 +16,7 @@ export function valid_request(
   value: unknown,
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
+  if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['focus_lost','application_hidden'].includes(value.reason);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (
@@ -23,7 +24,7 @@ export function valid_request(
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );
-  if (value.kind === "view")
+  if (value.kind === "view"||value.kind==='current'||value.kind==='previous')
     return (
       fields(value, ["kind", "run_id", "request_id"]) && valid_id(value.run_id)
     );
@@ -48,7 +49,8 @@ export function valid_request(
       fields(value, ["kind", "request_id", "envelope"]) &&
       valid_envelope(value.envelope) && !['tick','restore'].includes(value.envelope.intent.kind)
     );
-  if (value.kind === "receipt" || value.kind==='takeover')
+  if(value.kind==='replay')return fields(value,['kind','run_id','to','request_id'])&&valid_id(value.run_id)&&typeof value.to==='number'&&Number.isSafeInteger(value.to)&&value.to>=0;
+  if (value.kind === "receipt" || value.kind==='takeover'||value.kind==='restart')
     return (
       fields(value, ["kind", "request_id", "run_id", "operation_id"]) &&
       valid_id(value.run_id) &&
@@ -76,10 +78,10 @@ export function valid_envelope(value: unknown): value is Envelope {
   const intent = value.intent;
   if(intent.kind==='restore')return fields(intent,['kind','snapshot_revision'])&&typeof intent.snapshot_revision==='number'&&Number.isSafeInteger(intent.snapshot_revision)&&intent.snapshot_revision>=1;
   if(intent.kind==='save')return fields(intent,['kind']);
-  if(intent.kind==='pause')return fields(intent,['kind','reason'])&&['manual','focus_lost','application_hidden'].includes(String(intent.reason));
+  if(intent.kind==='pause')return fields(intent,['kind','reason'])&&typeof intent.reason==='string'&&['manual','focus_lost','application_hidden'].includes(intent.reason);
   if(intent.kind==='continue')return fields(intent,['kind']);
   if(intent.kind==='rate')return fields(intent,['kind','rate'])&&[1,2,4].includes(Number(intent.rate))&&typeof intent.rate==='number';
-  if(intent.kind==='mode')return fields(intent,['kind','mode'])&&['command','research'].includes(String(intent.mode));
+  if(intent.kind==='mode')return fields(intent,['kind','mode'])&&typeof intent.mode==='string'&&['command','research'].includes(intent.mode);
   if (intent.kind === "advance" || intent.kind==='tick')
     return (
       fields(intent, ["kind", "to"]) &&

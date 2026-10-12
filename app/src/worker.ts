@@ -30,8 +30,10 @@ async function acquire_writer(): Promise<boolean> {
 }
 let queue = Promise.resolve();
 let active:PlayerView|null=null;
+let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
+function clockTarget(view:PlayerView){return Math.min(610000,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
@@ -44,7 +46,7 @@ setInterval(()=>{
   queue=queue.then(async()=>{
     try{
       if(!active||active.mode!=='command'||active.paused)return;
-      const to=Math.min(610000,anchor.sim+Math.floor((performance.now()-anchor.wall)*active.rate));
+      const to=clockTarget(active);
       if(to<=active.sim_time)return;
       const result=await game.tick(active.run_id,to,crypto.randomUUID());
       remember(result.view);
@@ -63,6 +65,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
+      if(history&&['create','takeover','restart','operate'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
       if(blocked&&['create','operate'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       if (
@@ -89,6 +92,25 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.operation_id,
           ),
         };
+      } else if(input.kind==='management_pause'&&locked&&active){
+        const view=await game.get_view(active.run_id);
+        if(view.mode==='command'&&!view.paused){
+          const to=clockTarget(view);
+          const result=await game.control_clock({run_id:view.run_id,operation_id:crypto.randomUUID(),expected_revision:view.revision,intent:{kind:'pause',reason:input.reason}},to);
+          remember(result.view);response={request_id:input.request_id,ok:true,...result};
+        }else response={request_id:input.request_id,ok:true,view};
+      } else if(input.kind==='previous'&&locked){
+        const current=await game.get_view(input.run_id);if(!current.source_run)throw new GameError('RUN_NOT_FOUND');
+        const source=await game.get_view(current.source_run);history=await game.get_replay(source.run_id,source.sim_time);
+        response={request_id:input.request_id,ok:true,view:await history.get_view(source.run_id)};
+      } else if(input.kind==='replay'&&locked){
+        history=await game.get_replay(input.run_id,input.to);
+        response={request_id:input.request_id,ok:true,view:await history.get_view(input.run_id)};
+      } else if(input.kind==='current'&&locked){
+        const view=await game.get_view(input.run_id);history=null;
+        response={request_id:input.request_id,ok:true,view};
+      } else if(input.kind==='restart'&&locked){
+        response={request_id:input.request_id,ok:true,view:await game.restart_run(input.run_id,input.operation_id)};
       } else if(input.kind==='takeover'){
         if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
         response={request_id:input.request_id,ok:true,...await game.restore(input.run_id,input.operation_id)};
@@ -97,20 +119,20 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response = {
           request_id: input.request_id,
           ok: true,
-          view: await game.get_view(input.run_id),
+          view: await (history??game).get_view(input.run_id),
         };
       else if (input.kind === "preview" && locked)
         response = {
           request_id: input.request_id,
           ok: true,
-          plan: await game.preview_plan(
+          plan: await (history??game).preview_plan(
             input.run_id,
             input.revision,
             input.editing_seq,
           ),
         };
       else if (input.kind === "operate" && locked) {
-        const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?Math.min(610000,anchor.sim+Math.floor((performance.now()-anchor.wall)*active.rate)):undefined;
+        const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
           input.envelope.intent.kind === "issue"
             ? await game.issue_order(input.envelope)
@@ -121,10 +143,10 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response = {
           request_id: input.request_id,
           ok: true,
-          receipt: await game.get_receipt(input.run_id, input.operation_id),
+          receipt: await (history??game).get_receipt(input.run_id, input.operation_id),
         };
       else throw new GameError("INVALID_INPUT");
-      if(response.ok&&response.view)remember(response.view);
+      if(response.ok&&response.view&&!history)remember(response.view);
       publish(response);
     } catch (error) {
       const code =

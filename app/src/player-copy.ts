@@ -6,6 +6,7 @@ const errors:Record<string,string>={
   INVALID_INPUT:'指令内容不完整或超出本次演练范围，请核对后再试。',
   INVALID_DEFINITION:'演练资料无法核对，未开始新的行动。请重新打开页面。',
   INVALID_SAVE:'存档资料无法核对，原记录仍保留。本次没有恢复行动。',
+  HISTORY_READ_ONLY:'历史记录只能查看，请返回当前行动后再操作。',
   RUN_NOT_FOUND:'未找到这场行动的记录，请返回开始页选择现有记录。',
   STALE_REVISION:'情况记录已更新，请重新核对预案后再下达。',
   STALE_PLAN:'预案所依据的情况已更新，请重新核对。',

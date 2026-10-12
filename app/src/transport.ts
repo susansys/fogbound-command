@@ -15,7 +15,12 @@ export type Request =
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
   | { kind: "operate"; envelope: Envelope }
   | { kind: "receipt"; run_id: string; operation_id: string }
-  | { kind:'takeover';run_id:string;operation_id:string };
+  | { kind:'takeover';run_id:string;operation_id:string }
+  | {kind:'restart';run_id:string;operation_id:string}
+  | {kind:'replay';run_id:string;to:number}
+  | {kind:'current';run_id:string}
+  | {kind:'previous';run_id:string}
+  | {kind:'management_pause';reason:'focus_lost'|'application_hidden'};
 export type Response =
   | {
       request_id: string;

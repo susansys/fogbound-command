@@ -67,6 +67,8 @@ function references(state:State){
   if(state.inputs.some((input,i)=>!record(input)||!fields(input,['envelope','at','revision',...(input.clock_to===undefined?[]:['clock_to'])])||!valid_envelope(input.envelope)||input.envelope.run_id!==state.run_id||input.revision!==i+2||input.envelope.expected_revision!==i+1||!integer(input.at)||input.at>state.sim_time||input.clock_to!==undefined&&(!integer(input.clock_to)||input.clock_to<input.at)))return false;
   if(!Array.isArray(state.schedule)||state.schedule.some((event,i)=>!record(event)||!fields(event,['id','at','phase','generation','kind',...(event.index===undefined?[]:['index']),...(event.payload===undefined?[]:['payload'])])||typeof event.id!=='string'||!integer(event.at)||event.at<state.sim_time||event.generation!==state.generation||event.phase!==(event.kind==='deadline'?30:event.kind.endsWith('receipt')?20:10)||!['accept','accepted_receipt','fix','fix_receipt','complete','complete_receipt','deadline','deadline_receipt'].includes(event.kind)||i>0&&state.schedule[i-1].at>event.at))return false;
   if(state.schedule.some(event=>!pending_delivery(state,event)))return false;
+  if(new Set(state.schedule.map(event=>event.id)).size!==state.schedule.length)return false;
+  if(state.schedule.some((event,i)=>i>0&&(state.schedule[i-1].at-event.at||state.schedule[i-1].phase-event.phase||state.schedule[i-1].id.localeCompare(event.id))>0))return false;
   return true;
 }
 export async function validate_state(value:unknown):Promise<State>{

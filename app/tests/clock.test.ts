@@ -3,6 +3,23 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {engineeringDefinition} from '../src/core/scenario';
 import type {Intent} from '../src/contracts';
+test('non-string control enums cannot masquerade as typed intents or create an administrative receipt',async()=>{
+  const store=new Persistence('control-enum-types'),game=new Game(store);const view=await game.create_run(engineeringDefinition,'command','create');
+  for(const intent of [{kind:'pause',reason:['manual']},{kind:'mode',mode:['command']}]){
+    await expect(game.control_clock({run_id:view.run_id,operation_id:'malformed',expected_revision:view.revision,intent:intent as unknown as Intent})).rejects.toThrow('INVALID_INPUT');
+    expect(await game.get_receipt(view.run_id,'malformed')).toBeNull();expect(await game.get_view(view.run_id)).toEqual(view);
+  }
+  await store.delete();
+});
+test.each(['completion','deadline'])('continue cannot unpause a %s reached by the control clock adoption or corrupt its next save',async(kind)=>{
+  const store=new Persistence(`control-terminal-${kind}`),game=new Game(store);let view=await game.create_run(engineeringDefinition,'command','create');
+  if(kind==='completion'){const plan=await game.preview_plan(view.run_id,view.revision,1);view=(await game.issue_order({run_id:view.run_id,operation_id:'issue',expected_revision:view.revision,intent:{kind:'issue',command_id:'move',plan}})).view;view=(await game.tick(view.run_id,32799,'tick')).view;}
+  const to=kind==='completion'?33800:600000;
+  await expect(game.control_clock({run_id:view.run_id,operation_id:'bad-continue',expected_revision:view.revision,intent:{kind:'continue'}},to)).rejects.toThrow('RUN_ENDED');
+  expect(await game.get_view(view.run_id)).toEqual(view);expect(await game.get_receipt(view.run_id,'bad-continue')).toBeNull();
+  view=(await game.tick(view.run_id,to,'terminal')).view;expect(view.paused).toBe(true);view=(await game.save({run_id:view.run_id,operation_id:'save',expected_revision:view.revision,intent:{kind:'save'}})).view;
+  expect((await new Game(store).restore(view.run_id,'restore')).view.paused).toBe(true);await store.delete();
+});
 test('clock controls commit pause, explicit continue and public rates without changing opening mode',async()=>{
   const store=new Persistence('clock-control'),game=new Game(store);
   let view=await game.create_run(engineeringDefinition,'command','create');

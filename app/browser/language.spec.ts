@@ -4,6 +4,8 @@ test('player pages use plain Chinese instead of project IDs, internal field name
   await page.goto('/');expect(await page.locator('body').innerText()).not.toMatch(internal);
   await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await expect(page.getByTestId('position')).toBeVisible();expect(await page.locator('body').innerText()).not.toMatch(internal);
+  for(const name of ['任务调度','情报中心','指挥记录','行动复盘','态势地图']){await page.getByRole('button',{name,exact:true}).click();expect(await page.locator('body').innerText()).not.toMatch(internal);}
+  await page.getByRole('button',{name:'重开行动',exact:true}).click();expect(await page.locator('dialog').innerText()).not.toMatch(internal);await page.getByRole('button',{name:'保留当前行动',exact:true}).click();
   const other=await context.newPage();await other.goto('/');await other.getByRole('button',{name:'开始演练',exact:true}).click();
   await expect(other.getByRole('alert')).toBeVisible();expect(await other.locator('body').innerText()).not.toMatch(internal);
 });

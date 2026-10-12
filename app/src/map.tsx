@@ -71,6 +71,11 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
     c.y = y - wy * c.s;
     apply();
   }
+  function focusSelection(){
+    const el=host.current;if(!el)return;
+    const position=selected==='R'?[view.position.x,view.position.y]:selected==='T'?view.geometry.T:view.geometry.H;
+    camera.current.x=el.clientWidth/2-position[0]*camera.current.s;camera.current.y=el.clientHeight/2-position[1]*camera.current.s;apply();
+  }
   useEffect(() => {
     const el = host.current!;
     let disposed = false,
@@ -159,6 +164,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
       top: c.y + y * c.s,
     });
   return (
+    <div className="map-wrapper">
     <section
       className="map map-canvas"
       ref={host}
@@ -297,20 +303,20 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
           )}
         </button>
       </div>
-      <div className="map-tools" data-ui>
-        <button aria-label="放大地图" onClick={() => magnify(1.15)}>
+      <div className="map-tools map-controls" data-ui>
+        <button aria-label="放大地图" onClick={() => magnify(1.2)}>
           <Plus />
         </button>
-        <button aria-label="缩小地图" onClick={() => magnify(1 / 1.15)}>
+        <span>{Math.round((c.s/c.fit)*100)}%</span>
+        <button aria-label="缩小地图" onClick={() => magnify(1 / 1.2)}>
           <Minus />
         </button>
-        <button aria-label="适应地图" onClick={fit}>
+        <button aria-label="定位选中" onClick={focusSelection}>
           <Crosshair />
         </button>
-        <button aria-label="地图图层" onClick={() => setLayers((x) => !x)}>
-          <Stack />
-        </button>
+        <button onClick={fit}>全图</button>
       </div>
+      <button className="map-layer-toggle" data-ui aria-label="地图图层" onClick={()=>setLayers(x=>!x)}><Stack/> 图层</button>
       {layers && (
         <div className="map-layers" data-ui>
           <label>
@@ -347,10 +353,9 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
           </p>
         )}
       </div>
-      <div className="map-scale" data-ui>
-        <Compass size={20} /> N · {Math.round((c.s / c.fit) * 100)}% · 50米{" "}
-        <span style={{ width: 50 * c.s }} />
-      </div>
+      <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
+    <div className="map-objects" aria-label="地图对象选择">{(['R','H','T'] as const).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?'联络组':id==='H'?'总部':'联络点'}</button>)}<span className="scale"><i style={{width:100*c.s}}/>100 图上米</span></div>
+    </div>
   );
 }

@@ -4,12 +4,18 @@ import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
 import { clock,error_copy,log_copy } from "./player-copy";
 import { Dialog } from "./dialog";
-import { MapTrifold, Binoculars, PaperPlaneTilt } from "@phosphor-icons/react";
+import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
+import ms from 'milsymbol';
+const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
 const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
+  const orderConfirmed=useRef<string|null>(null);
+  const historyActive=useRef(false),restartOperation=useRef(crypto.randomUUID()),liveView=useRef<PlayerView|null>(null);
+  const [history,setHistory]=useState(false),[reviewTo,setReviewTo]=useState('6'),[restartConfirm,setRestartConfirm]=useState(false);
+  const [previousLimit,setPreviousLimit]=useState<number|null>(null);
   const pendingControl = useRef<Envelope | null>(null);
   const controlInFlight = useRef(false);
   const deferredPause = useRef<Extract<Intent,{kind:'pause'}>|null>(null);
@@ -19,7 +25,7 @@ export function Workbench() {
     [advanceTo, setAdvanceTo] = useState("7"),
     [receiptNote, setReceiptNote] = useState("");
   const [selected, setSelected] = useState("R"),
-    [workspace, setWorkspace] = useState<"map" | "report">("map"),
+    [workspace, setWorkspace] = useState<"map" | "report"|"review"|"tasks"|"log">("map"),
     [plan, setPlan] = useState<Plan | null>(null),
     [reason, setReason] = useState(""),
     [collapsed, setCollapsed] = useState(false);
@@ -34,10 +40,11 @@ export function Workbench() {
   currentView.current = view;
   function adoptView(next:PlayerView){setView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);}
   useEffect(()=>transport.subscribe(response=>{
-    if(response.ok&&response.view)adoptView(response.view);
+    if(response.ok&&response.view&&response.request_id.startsWith('clock-')){liveView.current=response.view;if(!historyActive.current)adoptView(response.view);}
     else if(!response.ok&&response.request_id==='clock-fault'){setError(response.code);setStorageFault(true);}
   }),[]);
   async function control(intent:Intent){
+    if(historyActive.current)return;
     const current=currentView.current;if(!current)return;
     if(intent.kind==='pause'&&controlInFlight.current){deferredPause.current=intent;setControlPending(true);return;}
     if(controlInFlight.current)return;
@@ -57,7 +64,7 @@ export function Workbench() {
     }
   }
   useEffect(()=>{
-    const lost=()=>{const current=currentView.current;if(current?.mode==='command'&&!current.paused)void control({kind:'pause',reason:document.hidden?'application_hidden':'focus_lost'});};
+    const lost=()=>{const reason=document.hidden?'application_hidden':'focus_lost';if(historyActive.current){void transport.request({kind:'management_pause',reason}).then(r=>{if(!r.ok)setError(r.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));return;}const current=currentView.current;if(current?.mode==='command'&&!current.paused)void control({kind:'pause',reason});};
     const hidden=()=>{if(document.hidden)lost();};
     window.addEventListener('blur',lost);document.addEventListener('visibilitychange',hidden);
     return()=>{window.removeEventListener('blur',lost);document.removeEventListener('visibilitychange',hidden);};
@@ -91,6 +98,26 @@ export function Workbench() {
     try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
+  async function replay(){
+    if(!view||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
+    try{const result=await transport.request({kind:'replay',run_id:view.run_id,to:Math.round(Number(reviewTo)*1000)});if(result.ok&&result.view){if(!historyActive.current)liveView.current=view;historyActive.current=true;setHistory(true);editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
+    catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function returnCurrent(){
+    if(!view)return;setBusy(true);setError('');
+    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setPreviousLimit(null);editing.current++;setPlan(null);setView(result.view);liveView.current=result.view;}else if(!result.ok)setError(result.code);}
+    catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function previous(){
+    if(!view||history||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
+    try{const result=await transport.request({kind:'previous',run_id:view.run_id});if(result.ok&&result.view){liveView.current=view;historyActive.current=true;setHistory(true);setPreviousLimit(result.view.sim_time);setReviewTo(String(result.view.sim_time/1000));editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
+    catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function restart(){
+    if(!view||history)return;setBusy(true);setError('');
+    try{const result=await transport.request({kind:'restart',run_id:view.run_id,operation_id:restartOperation.current});if(result.ok&&result.view){setView(result.view);liveView.current=result.view;restartOperation.current=crypto.randomUUID();setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;pendingControl.current=null;editing.current++;setWorkspace('map');setSelected('R');setAdvanceTo('7');setReceiptNote('已开启同场景的新演练，原行动保留为只读记录。这不是独立的首次体验。');setRestartConfirm(false);}else if(!result.ok)setError(result.code);}
+    catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
   async function preview() {
     if (!view) return;
     const seq = ++editing.current;
@@ -102,13 +129,14 @@ export function Workbench() {
     setBusy(true);
     setError("");
     try {
+      for(let attempt=0;attempt<3;attempt++){
       const response = await transport.request({
         kind: "preview",
         run_id: view.run_id,
-        revision: view.revision,
+        revision: context.revision,
         editing_seq: seq,
       });
-      if (!isCurrent()) return;
+      if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
       if (
         response.ok &&
         response.plan &&
@@ -116,8 +144,17 @@ export function Workbench() {
         response.plan.revision === currentView.current?.revision &&
         response.plan.editing_seq === editing.current
       )
-        setPlan(response.plan);
-      else if (!response.ok) setError(response.code);
+        {setPlan(response.plan);return;}
+      if(view.mode==='command'&&(!isCurrent()||!response.ok&&response.code==='STALE_REVISION')){
+        const fresh=await transport.request({kind:'view',run_id:context.run_id});
+        if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
+        if(!fresh.ok||!fresh.view){if(!fresh.ok)setError(fresh.code);return;}
+        if(fresh.view.revision>=currentView.current.revision){currentView.current=fresh.view;adoptView(fresh.view);}
+        context.revision=currentView.current.revision;continue;
+      }
+      if(isCurrent()&&!response.ok)setError(response.code);return;
+      }
+      setReceiptNote('情况更新较快，请再次核对预案。');
     } catch {
       if (isCurrent()) setError("CHANNEL_UNCERTAIN");
     } finally {
@@ -140,6 +177,7 @@ export function Workbench() {
           response.receipt.kind==='issue'?'命令已登记并发出，等待编组回报。':response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
         if (envelope.intent.kind === "issue") {
+          orderConfirmed.current=envelope.operation_id;
           setPlan(null);
           setConfirm(false);
         }
@@ -203,6 +241,7 @@ export function Workbench() {
       operation_id: original.operation_id,
     });
     if (response.ok) {
+      if(response.receipt&&original.intent.kind==='issue')orderConfirmed.current=original.operation_id;
       setReceiptNote(
         response.receipt
           ? original.intent.kind==='issue'?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
@@ -238,11 +277,12 @@ export function Workbench() {
           <span>
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
           </span>
-          {view&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
+          {view&&!history&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
             <select aria-label="时间速率" value={view.rate} disabled={controlPending||storageFault} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
             <button disabled={controlPending||storageFault} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
           </>}
-          {view&&<button disabled={busy||controlPending||storageFault} onClick={()=>void control({kind:'save'})}>{controlPending&&pendingControl.current?.intent.kind==='save'?'保存待确认':'保存记录'}</button>}
+          {view&&!history&&<button disabled={busy||controlPending||storageFault} onClick={()=>void control({kind:'save'})}>{controlPending&&pendingControl.current?.intent.kind==='save'?'保存待确认':'保存记录'}</button>}
+          {history&&<span className="outline-tag">历史记录 · 只读</span>}
           {controlPending&&!busy&&<button onClick={()=>{if(pendingControl.current)void control(pendingControl.current.intent);}}>重试原控制</button>}
           {controlPending&&!busy&&<button onClick={()=>void queryReceipt(pendingControl.current)}>查询控制结果</button>}
           <strong>{view ? clock(view.sim_time) : "00:00"}</strong>
@@ -317,6 +357,7 @@ export function Workbench() {
                 <MapTrifold size={24} />
                 <span>态势地图</span>
               </button>
+              <button className={workspace==='tasks'?'active':''} onClick={()=>setWorkspace('tasks')}><Stack size={24}/><span>任务调度</span></button>
               <button
                 className={workspace === "report" ? "active" : ""}
                 onClick={() => setWorkspace("report")}
@@ -324,12 +365,16 @@ export function Workbench() {
                 <Binoculars size={24} />
                 <span>情报中心</span>
               </button>
+              <button className={workspace==='log'?'active':''} onClick={()=>setWorkspace('log')}><ChatCenteredText size={24}/><span>指挥记录</span></button>
+              <button className={workspace==='review'?'active':''} onClick={()=>setWorkspace('review')}><ClockCounterClockwise size={24}/><span>行动复盘</span></button>
+              <button disabled={busy||history||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>setRestartConfirm(true)}><ArrowsClockwise size={24}/><span>重开行动</span></button>
             </nav>
             <main className="main">
               <div className="workspacebar">
-                <h1>{workspace === "map" ? "态势地图" : "情报中心"}</h1>
+                <h1>{{map:'态势地图',review:'行动复盘',report:'情报中心',tasks:'任务调度',log:'指挥记录'}[workspace]}</h1>
                 <span className="outline-tag">总部已收到的情况</span>
-                {view.mode === "research" &&
+                {history&&<button disabled={busy} onClick={()=>void returnCurrent()}>返回当前行动</button>}
+                {!history&&view.mode === "research" &&
                   !view.finished &&
                   view.status !== "deadline" && (
                     <div className="workspace-actions">
@@ -360,7 +405,7 @@ export function Workbench() {
                     </div>
                   )}
               </div>
-              <div className="workbody">
+              <div className={`workbody workspace-${workspace}`}>
                 {workspace === "map" ? (
                   <MapView
                     view={view}
@@ -370,30 +415,34 @@ export function Workbench() {
                       !!plan || view.log.some((x) => x.kind === "issued")
                     }
                   />
+                ) : workspace==='tasks'?(
+                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>本次只向联络组下达一项通行任务。指令发出后仍要等确认。</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>联络组 · R</h3><span>{view.gap}</span></div><p>由总部H沿固定通道抵达联络点T。</p><button disabled={history||!view.can_issue} onClick={()=>setSelected('T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>联络组 · R</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>通行至联络点</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>联络点 T · 登记地点</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected('T');void preview();}}>查看通行预案</button>{plan&&<section className="plan"><h3>待下达预案</h3><label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>下达通行命令</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
+                ) : workspace==='log'?(
+                  <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><time>{clock(entry.at)}</time><p>{log_copy(entry)}</p></section>)}</article>
+                ) : workspace==='review'?(
+                  <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p><label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p><p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><p key={entry.id}><time>{clock(entry.at)}</time> · {log_copy(entry)}</p>)}</article>
                 ) : (
-                  <article className="report-page">
-                    <span className="outline-tag">原始报告 · 尚未另行核实</span>
+                  <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>登记联络点 T</strong><p>关联地点 T · 原始工位报告</p></button></aside><article className="report-detail">
+                    <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select('T')}>定位联络点T <ArrowRight/></button></div>
                     <h2>登记联络点 T</h2>
-                    <p>
+                    <p className="byline">来源：{view.report.origin}</p>
+                    <p className="report-excerpt">
                       联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。
                     </p>
-                    <p>来源：{view.report.origin}</p>
-                    <p>事情发生的时间：未知</p>
-                    <p>
-                      观察时间：{clock(view.report.observed.value)}<br/>报出时间：{clock(view.report.reported.value)}<br/>总部收到：{clock(view.delivery.received.value)}
-                    </p>
-                    <button onClick={() => select("T")}>定位联络点T</button>
-                  </article>
+                    <div className="time-grid"><div><span>观察时间</span><strong>{clock(view.report.observed.value)}</strong></div><div><span>报出时间</span><strong>{clock(view.report.reported.value)}</strong></div><div><span>总部收到</span><strong>{clock(view.delivery.received.value)}</strong></div><div><span>事情发生的时间</span><strong>未知</strong></div></div>
+                    <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history} onClick={()=>setWorkspace('tasks')}>拟定通行任务</button></section>
+                  </article></div>
                 )}
                 <aside className="inspector">
                   <div className="panel-heading">当前选择：{selected}</div>
-                  <h2>
+                  <div className="unit-title"><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
                     {selected === "R"
                       ? "联络组 R"
                       : selected === "T"
                         ? "联络点 T"
                         : "总部 H"}
-                  </h2>
+                  </h2><p>{{ready:'待命',queued:'等待接令回报',executing:'行动中，等待抵达回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status]} / {clock(view.position.received)}</p></div></div>
+                  <dl className="facts"><div><dt>职责</dt><dd>通行至联络点</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
                   <section>
                     <h3>总部最后确认位置</h3>
                     <p data-testid="position">
@@ -426,13 +475,13 @@ export function Workbench() {
                     <p>{view.gap}</p>
                     <button
                       className="primary full"
-                      disabled={busy || storageFault || selected !== "T" || !view.can_issue}
+                      disabled={busy || history || storageFault || selected !== "T" || !view.can_issue}
                       onClick={() => void preview()}
                     >
                       查看通行预案
                     </button>
                   </section>
-                  {plan && (
+                  {plan && workspace!=='tasks' && (
                     <section className="plan">
                       <h3>待下达预案</h3>
                       <p>
@@ -467,7 +516,7 @@ export function Workbench() {
                       </button>
                       <button
                         className="primary"
-                        disabled={busy || storageFault || !plan.allowed || !view.can_issue}
+                        disabled={busy || history || storageFault || !plan.allowed || !view.can_issue}
                         onClick={() => setConfirm(true)}
                       >
                         <PaperPlaneTilt />
@@ -483,7 +532,7 @@ export function Workbench() {
                     <small>依据 {clock(view.resources.confirmed_at)} 收到的回报更新</small>
                   </section>
                   {receiptNote && <p role="status">{receiptNote}</p>}
-                  {pendingOrder.current && error && (
+                  {!history&&pendingOrder.current && error && (
                     <section>
                       <button onClick={() => void queryReceipt()}>
                         查询原命令结果
@@ -496,6 +545,7 @@ export function Workbench() {
                       </button>
                     </section>
                   )}
+                  <div className="inspector-bottom"><p>先核对情报，再选择编组与地点；下达后等待小组回报。</p><button className="primary full" onClick={()=>setWorkspace(view.finished?'review':'tasks')}>{view.finished?'查看行动复盘':'拟定任务'} <ArrowRight/></button></div>
                 </aside>
               </div>
               <footer className={`bottom-log ${collapsed ? "collapsed" : ""}`}>
@@ -505,16 +555,11 @@ export function Workbench() {
                     {collapsed ? "展开记录" : "收起记录"}
                   </button>
                 </div>
-                {!collapsed &&
-                  view.log.map((entry) => (
-                    <p key={entry.id}>
-                      <time>{clock(entry.at)}</time> ·{" "}
-                      {log_copy(entry)}
-                    </p>
-                  ))}
+                {!collapsed&&<div className="log-lines">{[...view.log].reverse().slice(0,3).map(entry=><div key={entry.id}><time>{clock(entry.at)}</time><span>{entry.kind==='report'?'联络席':'联络组 R'}</span><p>{log_copy(entry)}</p><small>回报</small></div>)}</div>}
               </footer>
             </main>
           </div>
+          <footer className="global-footer"><span>虚构娱乐 · 地形与行动均为演练</span><span>总部位置依据回报，非现场实时画面</span></footer>
           {confirm && plan && (
             <Dialog
               title="确认下达通行命令"
@@ -547,6 +592,7 @@ export function Workbench() {
               </footer>
             </Dialog>
           )}
+          {restartConfirm&&<Dialog title="重开这场演练" onClose={()=>{if(!busy)setRestartConfirm(false);}}><div className="dialog-body"><p>新演练采用相同场景与起始条件，生成新的行动记录。原行动将保留为只读记录；已经获得的经验不会消失。</p></div><footer className="dialog-actions"><button disabled={busy} onClick={()=>setRestartConfirm(false)}>保留当前行动</button><button className="primary" disabled={busy} onClick={()=>void restart()}>确认重开</button></footer></Dialog>}
         </>
       )}
     </div>
