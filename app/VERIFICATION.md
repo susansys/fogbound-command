@@ -16,3 +16,13 @@ This fictional engineering slice is not the complete game, the original 244 acce
 Commands: `npm test -- tests/start.test.ts`; `npm run typecheck`; `docker build -t fogbound-fb01:t01 app`; `node app/node_modules/@playwright/test/cli.js test --config=app/playwright.config.ts browser/start.spec.ts` with an existing local Edge executable, or bundled Chromium in CI.
 
 T02—T07, final batch CI, target production/ARM, real disk quota/eviction and human experience are not yet verified. Original 244AT remains not_run.
+
+## T02 — report/map and safe preview (#3)
+
+Public preview: red NOT_IMPLEMENTED → green independent 120/31800/1000 oracle and unchanged committed state. Existing T01 and T02 kernel tests: four pass. Final static T02 image config `e86038a320dbe1b9f387dfa1e70043b10c804db3f47ad154bbf22205a16f82a5`; all six current browser tests pass. Typecheck, build and UI/core import boundary pass. A large Pixi/milsymbol chunk warning remains; no external runtime assets are required.
+
+Browser evidence covers 1366×768, 1920×1080, report/map selection, keyboard target selection, drag on markers, pointer cancellation, wheel anchor error below 0.1 fictional metre, local reason preservation, cancel without task registration, distinct H/R labels with leader lines, and menu wheel isolation. A separate computed-font-size ×2 accessibility probe confirms controls remain reachable; it is not a claim of browser zoom/DPR testing. Screenshots remain local ignored test artifacts.
+
+Standards review initially found menu wheel zoom and stale preview failure handling; Spec independently found stale preview failure handling. Real Transport-seam delayed failure and menu-wheel regressions each went red then green. Success/error/catch/finally now use the same run/revision/editing-seq guard. Map geometry and displayed Plan estimates come from committed legal fields. Both independent axes re-reviewed the fixes with no remaining serious T02 finding; reviewers did not rerun tests.
+
+T03—T07 and final batch CI remain pending; the original 244AT remains not_run.

@@ -1,12 +1,51 @@
-import type { Request } from './transport';
-export function record(value:unknown):value is Record<string,unknown> { return typeof value==='object' && value!==null && !Array.isArray(value); }
-export function valid_id(value:unknown):value is string { return typeof value==='string' && /^[A-Za-z0-9_.-]{1,128}$/.test(value); }
-export function fields(value:Record<string,unknown>,expected:string[]):boolean { return Object.keys(value).sort().join(',') === expected.sort().join(','); }
-export function valid_request(value:unknown):value is Request&{request_id:string} {
-  if(!record(value)||!valid_id(value.request_id))return false;
-  if(value.kind==='list')return fields(value,['kind','request_id']);
-  if(value.kind==='create')return fields(value,['kind','mode','operation_id','request_id']) && (value.mode==='command'||value.mode==='research') && valid_id(value.operation_id);
-  if(value.kind==='view')return fields(value,['kind','run_id','request_id']) && valid_id(value.run_id);
+import type { Request } from "./transport";
+export function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+export function valid_id(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(value);
+}
+export function fields(
+  value: Record<string, unknown>,
+  expected: string[],
+): boolean {
+  return Object.keys(value).sort().join(",") === expected.sort().join(",");
+}
+export function valid_request(
+  value: unknown,
+): value is Request & { request_id: string } {
+  if (!record(value) || !valid_id(value.request_id)) return false;
+  if (value.kind === "list") return fields(value, ["kind", "request_id"]);
+  if (value.kind === "create")
+    return (
+      fields(value, ["kind", "mode", "operation_id", "request_id"]) &&
+      (value.mode === "command" || value.mode === "research") &&
+      valid_id(value.operation_id)
+    );
+  if (value.kind === "view")
+    return (
+      fields(value, ["kind", "run_id", "request_id"]) && valid_id(value.run_id)
+    );
+  if (value.kind === "preview")
+    return (
+      fields(value, [
+        "kind",
+        "run_id",
+        "revision",
+        "editing_seq",
+        "request_id",
+      ]) &&
+      valid_id(value.run_id) &&
+      typeof value.revision === "number" &&
+      Number.isSafeInteger(value.revision) &&
+      typeof value.editing_seq === "number" &&
+      Number.isSafeInteger(value.editing_seq) &&
+      value.editing_seq >= 0
+    );
   return false;
 }
-export function correlation(value:unknown):string { return record(value)&&valid_id(value.request_id)?value.request_id:'invalid-request'; }
+export function correlation(value: unknown): string {
+  return record(value) && valid_id(value.request_id)
+    ? value.request_id
+    : "invalid-request";
+}
