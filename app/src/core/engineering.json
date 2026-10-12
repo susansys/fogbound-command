@@ -1,0 +1,1531 @@
+{
+  "schema": 4,
+  "contract": "0.5.1",
+  "id": "FB01-ENG-MOVE",
+  "version": 1,
+  "profile": {
+    "id": "FB01-ENG-MOVE",
+    "version": 1,
+    "parent_ref": "FIC-BASE-01/version2",
+    "registry": [
+      {
+        "id": "S01 clock.quantum",
+        "entry_version": 2,
+        "owner_system": "S01",
+        "type_unit": "Duration/ms",
+        "value": "1000ms；按所有到期事件拆批次",
+        "rule": "100至5000ms；步长不改变同时间线结果",
+        "source_ref": "FIC-BASE-01/version2/S01 clock.quantum",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S01 clock.rates",
+        "entry_version": 2,
+        "owner_system": "S01",
+        "type_unit": "enum set/simulation_rate",
+        "value": "research暂停或显式推进；command速率1/2/4",
+        "rule": "只取已注册速率；离线墙钟不补算",
+        "source_ref": "FIC-BASE-01/version2/S01 clock.rates",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S01 activity.min_duration",
+        "entry_version": 2,
+        "owner_system": "S01",
+        "type_unit": "Duration/ms",
+        "value": "1000ms",
+        "rule": "1000至60000ms；完成晚于开始",
+        "source_ref": "FIC-BASE-01/version2/S01 activity.min_duration",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S02 authority.review_work",
+        "entry_version": 2,
+        "owner_system": "S02",
+        "type_unit": "WorkQuantity/work_unit及WorkProfile",
+        "value": "2 work_unit；一个席位每10000ms处理1",
+        "rule": "1至20；积压增加等待不自动批准",
+        "source_ref": "FIC-BASE-01/version2/S02 authority.review_work",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S02 authority.window",
+        "entry_version": 2,
+        "owner_system": "S02",
+        "type_unit": "TimeWindow/ms",
+        "value": "每条授权显式from/to及action目录",
+        "rule": "无默认无限授权；半开窗口",
+        "source_ref": "FIC-BASE-01/version2/S02 authority.window",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S02 risk.scale",
+        "entry_version": 2,
+        "owner_system": "S02",
+        "type_unit": "enum/ordinal",
+        "value": "ordinary/caution/restricted/unknown",
+        "rule": "只定义虚构约束，hard不被风险接受覆盖",
+        "source_ref": "FIC-BASE-01/version2/S02 risk.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 objective.deadline",
+        "entry_version": 3,
+        "owner_system": "S03",
+        "type_unit": "Duration/ms及receipt_grace_ms",
+        "value": "600000ms; receipt_grace_ms=10000",
+        "rule": "300000至1800000ms；宽限只收旧成果确认",
+        "source_ref": "FB01-ENG-MOVE/version1/S03 objective.deadline",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 phase.work",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "typed template/work_unit",
+        "value": "record=4、repair=6、handover=2 work_unit",
+        "rule": "各1至20；活动资格、时间与物资先复核",
+        "source_ref": "FIC-BASE-01/version2/S03 phase.work",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 setup.duration",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "Duration/ms",
+        "value": "5000ms，每个新的作业活动一次",
+        "rule": "1000至20000ms；同cause不重复准备",
+        "source_ref": "FIC-BASE-01/version2/S03 setup.duration",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 map.extent",
+        "entry_version": 3,
+        "owner_system": "S04",
+        "type_unit": "rectangle/fictional_metre",
+        "value": "[0,400]×[0,300]fictional_metre",
+        "rule": "单边300至3000；所有几何在extent内",
+        "source_ref": "FB01-ENG-MOVE/version1/S04 map.extent",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 map.precision",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "fixed decimal/fictional_metre",
+        "value": "0.01fictional_metre；容差0.1",
+        "rule": "精度固定；世界坐标与画面分开",
+        "source_ref": "FIC-BASE-01/version2/S04 map.precision",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 hierarchy",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "acyclic typed hierarchy",
+        "value": "world→district→site；最多3层",
+        "rule": "层级无环；入口link非空、同坐标系",
+        "source_ref": "FIC-BASE-01/version2/S04 hierarchy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 movement.base",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "fixed decimal/fictional_metre per second",
+        "value": "4 fictional_metre/second",
+        "rule": "1至8；图上长度决定基本工作，不是现实速度",
+        "source_ref": "FIC-BASE-01/version2/S04 movement.base",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 terrain.factor",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "enum-indexed rational multiplier",
+        "value": "plain=1、rough=1.5、closed=不可通行",
+        "rule": "1至3；相同环境cause不重复倍率",
+        "source_ref": "FIC-BASE-01/version2/S04 terrain.factor",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 occlusion.rule",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "registered geometry predicate",
+        "value": "opaque相交→occluded；partial相交→partial；缺几何→unknown；否则clear",
+        "rule": "确定规则；只用于观测，非武器模型",
+        "source_ref": "FIC-BASE-01/version2/S04 occlusion.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S05 environment.level",
+        "entry_version": 2,
+        "owner_system": "S05",
+        "type_unit": "enum",
+        "value": "calm/impaired/severe",
+        "rule": "目录固定；变化由注册过程产生",
+        "source_ref": "FIC-BASE-01/version2/S05 environment.level",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S05 work.factor",
+        "entry_version": 2,
+        "owner_system": "S05",
+        "type_unit": "enum-indexed rational multiplier",
+        "value": "calm=1、impaired=1.25、severe=1.5",
+        "rule": "1至2；每消费者一次；变化不清除已完成工作",
+        "source_ref": "FIC-BASE-01/version2/S05 work.factor",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S05 observation.effect",
+        "entry_version": 2,
+        "owner_system": "S05",
+        "type_unit": "enum-indexed result",
+        "value": "clear→正常；partial→limited；occluded→inconclusive",
+        "rule": "非所有采集方式同一失效规则",
+        "source_ref": "FIC-BASE-01/version2/S05 observation.effect",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S05 report.validity",
+        "entry_version": 2,
+        "owner_system": "S05",
+        "type_unit": "Duration/ms",
+        "value": "当前环境60000ms，预报显式窗口",
+        "rule": "30000至300000ms；过期不恢复正常",
+        "source_ref": "FIC-BASE-01/version2/S05 report.validity",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S06 team.slots",
+        "entry_version": 3,
+        "owner_system": "S06",
+        "type_unit": "integer/person",
+        "value": "1虚构link_keeper角色R",
+        "rule": "1至6；资格按岗位与设备同时满足",
+        "source_ref": "FB01-ENG-MOVE/version1/S06 team.slots",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S06 team.capacity",
+        "entry_version": 2,
+        "owner_system": "S06",
+        "type_unit": "Quantity/load_unit和space_unit",
+        "value": "20 load_unit、12 space_unit",
+        "rule": "8至40、6至24；总量按单件计算",
+        "source_ref": "FIC-BASE-01/version2/S06 team.capacity",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S06 fatigue.scale",
+        "entry_version": 2,
+        "owner_system": "S06",
+        "type_unit": "ordinal integer及WorkProfile倍率",
+        "value": "0至4；每完成4 work_unit加1，休整30000ms减1",
+        "rule": "不能低于0或超过4；>=3工作率×0.75",
+        "source_ref": "FIC-BASE-01/version2/S06 fatigue.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S06 stress.scale",
+        "entry_version": 2,
+        "owner_system": "S06",
+        "type_unit": "enum及WorkProfile倍率",
+        "value": "steady/strained/unknown；只用已记录条件",
+        "rule": "strained处理工作率×0.8；不任意违反hard",
+        "source_ref": "FIC-BASE-01/version2/S06 stress.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S06 equipment.condition",
+        "entry_version": 2,
+        "owner_system": "S06",
+        "type_unit": "wear threshold/rate rule",
+        "value": "durability>=40工作率1；1至39工作率0.75；0失效",
+        "rule": "初始上限100wear_unit；退化只影响对应能力",
+        "source_ref": "FIC-BASE-01/version2/S06 equipment.condition",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S07 stock.items",
+        "entry_version": 2,
+        "owner_system": "S07",
+        "type_unit": "enum/item_kind",
+        "value": "record_pack、repair_pack、maintenance_pack、care_pack各item独立",
+        "rule": "无兑换；数量非负；转交两端原子",
+        "source_ref": "FIC-BASE-01/version2/S07 stock.items",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S07 supply.work",
+        "entry_version": 2,
+        "owner_system": "S07",
+        "type_unit": "typed template/work_unit",
+        "value": "分配1work、交接1work；运输另登记",
+        "rule": "不把approved当入库",
+        "source_ref": "FIC-BASE-01/version2/S07 supply.work",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S07 care.rule",
+        "entry_version": 2,
+        "owner_system": "S07",
+        "type_unit": "registered typed template",
+        "value": "类别none/limited/urgent；care需资格、1care_pack和3work",
+        "rule": "缺能力blocked；不作为真实医疗方案",
+        "source_ref": "FIC-BASE-01/version2/S07 care.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S07 recovery.rule",
+        "entry_version": 2,
+        "owner_system": "S07",
+        "type_unit": "registered ConditionExpr及work_unit",
+        "value": "接收方确认＋person/seat容量＋交接2work",
+        "rule": "人员移交与成果验证分别形成事件",
+        "source_ref": "FIC-BASE-01/version2/S07 recovery.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 collection.work",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "typed template/work_unit",
+        "value": "record观测2work；处理1work",
+        "rule": "1至10、1至10；采集、处理、收到分开",
+        "source_ref": "FIC-BASE-01/version2/S08 collection.work",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 freshness",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "enum-indexed Duration/ms",
+        "value": "position=45000、facility=120000、analysis=90000ms",
+        "rule": "30000至300000ms；不同类型不同年龄",
+        "source_ref": "FIC-BASE-01/version2/S08 freshness",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 reliability.scale",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "enum",
+        "value": "reliable/variable/unknown",
+        "rule": "reliable不保证内容正确",
+        "source_ref": "FIC-BASE-01/version2/S08 reliability.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 quality.scale",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "enum",
+        "value": "clear/limited/inconclusive",
+        "rule": "failed空范围不能not_detected",
+        "source_ref": "FIC-BASE-01/version2/S08 quality.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S09 confirmation.scale",
+        "entry_version": 2,
+        "owner_system": "S09",
+        "type_unit": "enum及evidence predicate",
+        "value": "indication/supported/confirmed/disputed",
+        "rule": "supported需2独立相容有效源；confirmed需注册识别条件",
+        "source_ref": "FIC-BASE-01/version2/S09 confirmation.scale",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S09 identity.rule",
+        "entry_version": 2,
+        "owner_system": "S09",
+        "type_unit": "registered evidence predicate",
+        "value": "record_key在clear观测中被核对且匹配登记别名→confirmed",
+        "rule": "无识别证据只indication；后台ID不参与认知",
+        "source_ref": "FIC-BASE-01/version2/S09 identity.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S09 position.error",
+        "entry_version": 2,
+        "owner_system": "S09",
+        "type_unit": "error_radius/fictional_metre",
+        "value": "clear半径10、limited半径40fictional_metre；inconclusive无位置",
+        "rule": "0至100；正误差不能画确定点",
+        "source_ref": "FIC-BASE-01/version2/S09 position.error",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S09 memory.growth",
+        "entry_version": 2,
+        "owner_system": "S09",
+        "type_unit": "growth rule/fictional_metre per Duration",
+        "value": "过期后每30000ms扩展20fictional_metre，最大300",
+        "rule": "0至300；身份假设与当前位置分开",
+        "source_ref": "FIC-BASE-01/version2/S09 memory.growth",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 link.text",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "enum-indexed Duration/ms",
+        "value": "正常1000ms，退化5000ms，断开不送达",
+        "rule": "明确payload类型；不凭内部完成改总部状态",
+        "source_ref": "FIC-BASE-01/version2/S10 link.text",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 link.media",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "integer/byte per second",
+        "value": "1000byte/second；文本优先，媒体可分帧",
+        "rule": "100至10000；排队计数对外只合法摘要",
+        "source_ref": "FIC-BASE-01/version2/S10 link.media",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 message.expiry",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "Duration/ms",
+        "value": "默认120000ms，明确到期时点",
+        "rule": "10000至300000ms；过期不开始活动",
+        "source_ref": "FIC-BASE-01/version2/S10 message.expiry",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 silence.policy",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "enum及send/receive policy",
+        "value": "normal/receive_only/silent/emergency_allowed",
+        "rule": "send/receive独立；定位可继续",
+        "source_ref": "FIC-BASE-01/version2/S10 silence.policy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 rule.preference",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "enum及stable candidate ordering",
+        "value": "confirm_first/task_first/conserve；仅合法候选间的固定优先序",
+        "rule": "角色档冻结；平局稳定request_seq；非现实对抗政策",
+        "source_ref": "FIC-BASE-01/version2/S11 rule.preference",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 hold.limit",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "Duration/ms",
+        "value": "60000ms，之后按已注册fallback",
+        "rule": "30000至180000ms；新授权不凭空产生",
+        "source_ref": "FIC-BASE-01/version2/S11 hold.limit",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.slot/cooldown",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "typed Duration/pending limits",
+        "value": "逻辑决策槽5000ms；每角色冷却10000ms",
+        "rule": "单角色1在途、全局4；按槽裁决",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.slot/cooldown",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.wall_timeout",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "duration/ms",
+        "value": "10000；1000–60000",
+        "rule": "只终止外部调用，不改变SimTime或角色时间规则",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.wall_timeout",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.input/output",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "integer/text_unit",
+        "value": "8000/1500 text_unit上限，实际token另记录",
+        "rule": "目录限制；不承诺text_unit等于token",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.input/output",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S12 abstract_effects",
+        "entry_version": 2,
+        "owner_system": "S12",
+        "type_unit": "enum/effect_kind",
+        "value": "work_progress、temporary_unavailable、access_contested、device_wear",
+        "rule": "不配置真实武器、杀伤概率或射界",
+        "source_ref": "FIC-BASE-01/version2/S12 abstract_effects",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S12 effect.duration",
+        "entry_version": 2,
+        "owner_system": "S12",
+        "type_unit": "Duration/ms",
+        "value": "temporary_unavailable=30000ms，需新条件复核恢复",
+        "rule": "10000至120000ms；同时作用同时结算",
+        "source_ref": "FIC-BASE-01/version2/S12 effect.duration",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S13 provider.capacity",
+        "entry_version": 2,
+        "owner_system": "S13",
+        "type_unit": "integer/asset,seat及work_unit",
+        "value": "一提供方1预约执行资源、6seat；ready需2work",
+        "rule": "容量按半开窗口；审批、就绪、完成分开",
+        "source_ref": "FIC-BASE-01/version2/S13 provider.capacity",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S13 commitment.expiry",
+        "entry_version": 2,
+        "owner_system": "S13",
+        "type_unit": "Duration/ms",
+        "value": "120000ms；条件改变renegotiating",
+        "rule": "不用批准时间推断就绪",
+        "source_ref": "FIC-BASE-01/version2/S13 commitment.expiry",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S14 constraint.directory",
+        "entry_version": 2,
+        "owner_system": "S14",
+        "type_unit": "enum及ConditionExpr",
+        "value": "保管完整、受保护虚构设施不改写、场景区域授权、容量",
+        "rule": "hard未知hold，明确违规deny；非现实法律裁决",
+        "source_ref": "FIC-BASE-01/version2/S14 constraint.directory",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 desk.capacity",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "WorkProfile及integer/concurrency",
+        "value": "各席位1work/10000ms；每席位1执行项",
+        "rule": "优先级0至3；相同级FIFO，未开始可重排",
+        "source_ref": "FIC-BASE-01/version2/S15 desk.capacity",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 handover.work",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "WorkQuantity/work_unit",
+        "value": "1work；未确认内容保持未决",
+        "rule": "不删除在途撤销或假设",
+        "source_ref": "FIC-BASE-01/version2/S15 handover.work",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S16 map.scale_bands",
+        "entry_version": 2,
+        "owner_system": "S16",
+        "type_unit": "fixed decimal thresholds",
+        "value": "low<0.8、medium=[0.8,2)、high>=2",
+        "rule": "世界不受缩放影响；文字等价与图例可查",
+        "source_ref": "FIC-BASE-01/version2/S16 map.scale_bands",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S16 marker.aggregate",
+        "entry_version": 2,
+        "owner_system": "S16",
+        "type_unit": "registered geometry rule/pixel",
+        "value": "同层同类屏幕距离<=18px才聚合",
+        "rule": "只合法记录；来源、年龄、误差仍可展开",
+        "source_ref": "FIC-BASE-01/version2/S16 marker.aggregate",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S17 snapshot.interval",
+        "entry_version": 2,
+        "owner_system": "S17",
+        "type_unit": "Duration/ms",
+        "value": "每30000ms或重大操作建立可恢复点",
+        "rule": "10000至120000ms；提交仍每批次原子",
+        "source_ref": "FIC-BASE-01/version2/S17 snapshot.interval",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S17 save.schema",
+        "entry_version": 2,
+        "owner_system": "S17",
+        "type_unit": "positive integer/version",
+        "value": "4，保存AI请求、生成Manifest、复盘引用及所有原状态",
+        "rule": "旧schema3只读回归另注册，不能默默载入",
+        "source_ref": "FIC-BASE-01/version2/S17 save.schema",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 outcome.priority",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "ordered enum/predicate set",
+        "value": "fault暂停→hard_end→success→合法deadline/abort或可验证不可恢复阻塞",
+        "rule": "同一批次稳定；partial规则显式",
+        "source_ref": "FIC-BASE-01/version2/S18 outcome.priority",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 visible_progress.warning",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "duration/ms",
+        "value": "120000；60000–300000；只reminder",
+        "rule": "私有实际活动不被判停工，重复读报/同源转发不重置",
+        "source_ref": "FIC-BASE-01/version2/S18 visible_progress.warning",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 partial.rule",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "registered ConditionExpr",
+        "value": "至少一主要成果verified且人员交接有确认，主目标未全满足",
+        "rule": "G01固定；其他场景必须明确自己的组合",
+        "source_ref": "FIC-BASE-01/version2/S18 partial.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 decision.quality",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "ordinal integer或not_evaluable",
+        "value": "证据/权限/协调/版本四项，各0/1/2或not_evaluable",
+        "rule": "不以结果或未来信息打分；默认不求总分",
+        "source_ref": "FIC-BASE-01/version2/S18 decision.quality",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 generation.attempts",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "integer/attempt_count",
+        "value": "20次派生尝试；pass才能正常开局",
+        "rule": "拒绝率目标<=20%；不是现实真实性指标",
+        "source_ref": "FIC-BASE-01/version2/S18 generation.attempts",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 batch.seeds",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "typed unsigned seed ranges",
+        "value": "100个初检seed、1000个独立seed及边界组合",
+        "rule": "已放行局硬不变量失败0；统计全部尝试",
+        "source_ref": "FIC-BASE-01/version2/S18 batch.seeds",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 review.players",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "count及exploratory plan",
+        "value": "初轮探索招募目标8，实际数如实记录，未保证招齐",
+        "rule": "成对顺序交换探索反馈；正式门槛以后预登记，无6/8达标线",
+        "source_ref": "FIC-BASE-01/version2/S18 review.players",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S01 clock.default_mode",
+        "entry_version": 2,
+        "owner_system": "S01",
+        "type_unit": "enum",
+        "value": "command；开局research/command，局内locked",
+        "rule": "模式变更拒绝MODE_LOCKED",
+        "source_ref": "FIC-BASE-01/version2/S01 clock.default_mode",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S01 pause.policy",
+        "entry_version": 2,
+        "owner_system": "S01",
+        "type_unit": "enum set",
+        "value": "manual/focus_lost/application_hidden/system_fault/restore",
+        "rule": "普通阅读编辑不触发；恢复需continue",
+        "source_ref": "FIC-BASE-01/version2/S01 pause.policy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 first_play.session_target",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "duration/minute",
+        "value": "有效游玩20–30；管理暂停另记",
+        "rule": "待实测目标，不改回归deadline或声称现实任务时长",
+        "source_ref": "FIC-BASE-01/version2/S03 first_play.session_target",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 first_play.load_target",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "integer/activity",
+        "value": "3–5并行任务活动、约3关键未决",
+        "rule": "待实测负荷，性能20主体另档",
+        "source_ref": "FIC-BASE-01/version2/S03 first_play.load_target",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 cleanup.limit",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "duration/ms",
+        "value": "120000；1000–300000，必须<=本场景剩余截止",
+        "rule": "中止只作公开必要收尾，不新增主目标作业",
+        "source_ref": "FIC-BASE-01/version2/S03 cleanup.limit",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S03 preparation.template",
+        "entry_version": 2,
+        "owner_system": "S03",
+        "type_unit": "enum",
+        "value": "record/repair/handover的registered_setup",
+        "rule": "完成/过期/替代有记录，不由文字自动完成",
+        "source_ref": "FIC-BASE-01/version2/S03 preparation.template",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 movement.path_mode",
+        "entry_version": 3,
+        "owner_system": "S04",
+        "type_unit": "enum",
+        "value": "corridor",
+        "rule": "两项是版本范围承诺，free_surface不能永久剔除",
+        "source_ref": "FB01-ENG-MOVE/version1/S04 movement.path_mode",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S04 movement.rule",
+        "entry_version": 2,
+        "owner_system": "S04",
+        "type_unit": "fixed rule",
+        "value": "逐段length/base_speed×terrain×environment×允许的load_factor，累积有理时间最后ceil(ms)",
+        "rule": "plain100/4=25000ms，rough100×1.5/4=37500ms，总62500ms；不按屏幕像素计时",
+        "source_ref": "FIC-BASE-01/version2/S04 movement.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 time.knowledge",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "tagged union",
+        "value": "known(value_ms,source_ref)或unknown(无值)",
+        "rule": "已知链序合法，未知不伪造0/收到时点",
+        "source_ref": "FIC-BASE-01/version2/S08 time.knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 provenance.visible_kinds",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "enum set",
+        "value": "copy_of/forward_of/revision_of/derived_from/possible_common_source/possible_same_event",
+        "rule": "confirmed关系需合法凭证，其他只能suspected/unknown",
+        "source_ref": "FIC-BASE-01/version2/S08 provenance.visible_kinds",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 dedupe.policy",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "enum",
+        "value": "confirmed_copy_fold_preserve_all",
+        "rule": "同内容不同独立来源不折叠；隐藏关系不进入投影",
+        "source_ref": "FIC-BASE-01/version2/S08 dedupe.policy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 independence.rule",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "registered rule",
+        "value": "凭合法可见采集凭证建立独立关系，不以渠道/署名数自动判定",
+        "rule": "已知同源三转发=1；未知三报告的独立数未知，不自动3或1",
+        "source_ref": "FIC-BASE-01/version2/S08 independence.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S08 report.schedule",
+        "entry_version": 2,
+        "owner_system": "S08",
+        "type_unit": "finite catalog",
+        "value": "on_activity_receipt/on_state_change/on_request/periodic_declared",
+        "rule": "periodic必须给period_ms及validity；无目录项不自行发送",
+        "source_ref": "FIC-BASE-01/version2/S08 report.schedule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S09 belief.update",
+        "entry_version": 2,
+        "owner_system": "S09",
+        "type_unit": "finite catalog",
+        "value": "observed_known_time_latest/equal_time_conflict/unknown_time_hold_history",
+        "rule": "迟到旧报不回滚，来源修订不改旧known",
+        "source_ref": "FIC-BASE-01/version2/S09 belief.update",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 message.task",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "typed policy",
+        "value": "queue_until_expiry、priority=1、expiry=120000ms",
+        "rule": "未送达可撤销/替代，到期作废",
+        "source_ref": "FIC-BASE-01/version2/S10 message.task",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 message.withdrawal",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "typed policy",
+        "value": "独立control_message、priority=3、expiry=120000ms",
+        "rule": "收到/接受/有效分离，未送达不撤远端",
+        "source_ref": "FIC-BASE-01/version2/S10 message.withdrawal",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 message.authority_update",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "typed policy",
+        "value": "独立control_message、priority=3、expiry=120000ms",
+        "rule": "总部/远端版本分别更新，不越过send/receive限制",
+        "source_ref": "FIC-BASE-01/version2/S10 message.authority_update",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S10 control.channel",
+        "entry_version": 2,
+        "owner_system": "S10",
+        "type_unit": "typed policy",
+        "value": "复用已注册合法Link，不另有无延迟魔法通道",
+        "rule": "高优先级也不能突破不可用链路",
+        "source_ref": "FIC-BASE-01/version2/S10 control.channel",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 control.takeover",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "finite policy",
+        "value": "headquarters_view_message_only",
+        "rule": "effective_mode=player_controlled仅在接收生效后；返还同样有消息",
+        "source_ref": "FIC-BASE-01/version2/S11 control.takeover",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 role.error_policy",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "enum",
+        "value": "evidence_load_preference_only",
+        "rule": "无额外随机怠工/迟疑目录；flavor_text不改行为",
+        "source_ref": "FIC-BASE-01/version2/S11 role.error_policy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.slot_rule",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "fixed rule",
+        "value": "request提交时预登记严格未来slot，默认提前5000ms",
+        "rule": "同槽使用统一提交前快照；暂停不偷偷推进，迟到不得替后备",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.slot_rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.budget",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "typed attributes",
+        "value": "100calls/run、4global_pending、1pending/actor、10000ms冷却、8000/1500 text_unit",
+        "rule": "calls只计真实发起一次；公平票序；input/output非token保证",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.budget",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S11 ai.price_policy",
+        "entry_version": 2,
+        "owner_system": "S11",
+        "type_unit": "tagged config",
+        "value": "unknown或用户提供的price_config/version；currency/cost_limit显式",
+        "rule": "无价格不虚算费用；要求金额上限而缺价格时不启用该外部配置",
+        "source_ref": "FIC-BASE-01/version2/S11 ai.price_policy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 work.interruptibility",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "enum",
+        "value": "analysis/paperwork=preemptible；maintenance/handover_check=non_preemptible",
+        "rule": "仅显式合法挂起，non_preemptible须等或终止",
+        "source_ref": "FIC-BASE-01/version2/S15 work.interruptibility",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 work.switch_cost",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "duration/ms",
+        "value": "每次挂起/恢复5000；1000–30000",
+        "rule": "占席位，工作/耗用保留，不产出提前完成",
+        "source_ref": "FIC-BASE-01/version2/S15 work.switch_cost",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 work.max_interruptions",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "integer/count",
+        "value": "3；1–10",
+        "rule": "达上限拒绝再挂起，不能无限切换",
+        "source_ref": "FIC-BASE-01/version2/S15 work.max_interruptions",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S15 queue.aging",
+        "entry_version": 2,
+        "owner_system": "S15",
+        "type_unit": "typed rule",
+        "value": "等待60000ms后每30000ms升1级，最大priority3；原ticket FIFO",
+        "rule": "仅未开始/挂起项，不自动抢占当前工作，不越权",
+        "source_ref": "FIC-BASE-01/version2/S15 queue.aging",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S17 save.contract_version",
+        "entry_version": 2,
+        "owner_system": "S17",
+        "type_unit": "version",
+        "value": "0.5.1，schema4，规则/媒体/参数hash和能力清单",
+        "rule": "只schema相同不兼容，旧0.5不静默迁移",
+        "source_ref": "FIC-BASE-01/version2/S17 save.contract_version",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S17 restore.intents",
+        "entry_version": 2,
+        "owner_system": "S17",
+        "type_unit": "enum",
+        "value": "resume_latest/restore_copy",
+        "rule": "继续最近同run；旧点新run，不覆盖，rng来源命名空间保留",
+        "source_ref": "FIC-BASE-01/version2/S17 restore.intents",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S17 truth.exposure",
+        "entry_version": 2,
+        "owner_system": "S17",
+        "type_unit": "tagged record",
+        "value": "not_observed_in_app/observed_in_app/unknown",
+        "rule": "已知真相重玩显著标识，不与首次局混作公平比较",
+        "source_ref": "FIC-BASE-01/version2/S17 truth.exposure",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 visible_progress.wait_exemption",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "finite rule",
+        "value": "公开已接受工作/承诺的完成窗<=deadline",
+        "rule": "过时承诺需新合法消息，最终deadline仍有界",
+        "source_ref": "FIC-BASE-01/version2/S18 visible_progress.wait_exemption",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 irreversible_block",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "typed predicate",
+        "value": "当前合法已知证据＋所有必需能力/替代均永久不可恢复＋场景允许",
+        "rule": "未证明只unknown，不看未来/隐藏来源来提前结束",
+        "source_ref": "FIC-BASE-01/version2/S18 irreversible_block",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 score.cutoff",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "time/ms",
+        "value": "主要实际动作<=deadline，宽限只收旧结果回执",
+        "rule": "期后验证/交接不补成功；中止收尾另外独立评价",
+        "source_ref": "FIC-BASE-01/version2/S18 score.cutoff",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 witness.rule",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "finite contract",
+        "value": "每个必须区分决定有合法证据路径arrival<=latest_legal_decision",
+        "rule": "决定后才可得证据的标准局拒绝",
+        "source_ref": "FIC-BASE-01/version2/S18 witness.rule",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 generation.difficulty",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "enum",
+        "value": "first_play固定、standard presets easy/standard/hard，seed/profile开局冻",
+        "rule": "自定义和强不可知风险以后另类型，不混standard通过",
+        "source_ref": "FIC-BASE-01/version2/S18 generation.difficulty",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 generation.statistics",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "typed counters",
+        "value": "attempt_rejected/attempt_total为20%工程门槛；root_exhausted/root_total另报",
+        "rule": "两分母不能偷换，全部attempt保留；无运行不能称通过",
+        "source_ref": "FIC-BASE-01/version2/S18 generation.statistics",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 generation.diversity",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "declared signature",
+        "value": "几何拓扑/目标DAG/证据到达窗/资源竞争/角色偏好",
+        "rule": "记录分布重复率；体验门槛待探索后预登记，不以改名当变化",
+        "source_ref": "FIC-BASE-01/version2/S18 generation.diversity",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S18 review.exploratory",
+        "entry_version": 2,
+        "owner_system": "S18",
+        "type_unit": "tagged plan",
+        "value": "招募目标8、actual_count真实填写，未保证招齐",
+        "rule": "探索只收问题，无6/8达标；正式门槛尚待提出审阅",
+        "source_ref": "FIC-BASE-01/version2/S18 review.exploratory",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 extent",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "fixed tuple",
+        "value": [
+          400,
+          300
+        ],
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/extent",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 origin",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "fixed tuple",
+        "value": [
+          50,
+          150
+        ],
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/origin",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 target",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "fixed tuple",
+        "value": [
+          170,
+          150
+        ],
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/target",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 corridor_width",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 20,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/corridor_width",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 speed",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 4,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/speed",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 load",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 3,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/load",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 load_factor",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "fixed tuple",
+        "value": [
+          106,
+          100
+        ],
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/load_factor",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 move_ms",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 31800,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/move_ms",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 link_ms",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 1000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/link_ms",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 fix_ms",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 5000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/fix_ms",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 task_expiry_ms",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 120000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/task_expiry_ms",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 authority_from",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 0,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/authority_from",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 authority_to",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 600000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/authority_to",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 deadline",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 600000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/deadline",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 grace",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 10000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/grace",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 equipment_energy",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 16,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/equipment_energy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 equipment_wear",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 100,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/equipment_wear",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 movement_energy",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 20,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/movement_energy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 message_energy",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 1,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/message_energy",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 message_wear",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 1,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/message_wear",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 move_energy_per_100",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 1,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/move_energy_per_100",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 snapshot_interval",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 30000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/snapshot_interval",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "FB01 warning_ms",
+        "entry_version": 1,
+        "owner_system": "FB01",
+        "type_unit": "finite numeric game quantity",
+        "value": 120000,
+        "rule": "fixed engineering profile; no runtime override",
+        "source_ref": "FB01-ENG-MOVE/version1/warning_ms",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      }
+    ],
+    "parameters": {
+      "extent": [
+        400,
+        300
+      ],
+      "origin": [
+        50,
+        150
+      ],
+      "target": [
+        170,
+        150
+      ],
+      "corridor_width": 20,
+      "speed": 4,
+      "load": 3,
+      "load_factor": [
+        106,
+        100
+      ],
+      "move_ms": 31800,
+      "link_ms": 1000,
+      "fix_ms": 5000,
+      "task_expiry_ms": 120000,
+      "authority_from": 0,
+      "authority_to": 600000,
+      "deadline": 600000,
+      "grace": 10000,
+      "equipment_energy": 16,
+      "equipment_wear": 100,
+      "movement_energy": 20,
+      "message_energy": 1,
+      "message_wear": 1,
+      "move_energy_per_100": 1,
+      "snapshot_interval": 30000,
+      "warning_ms": 120000
+    }
+  },
+  "capabilities": [
+    "corridor_move",
+    "report_delivery",
+    "management_pause",
+    "resume_latest",
+    "known_replay",
+    "single_writer"
+  ],
+  "rules": {
+    "version": "fb01-rules-1",
+    "message_policy": "queue_until_expiry",
+    "movement": "rational_elapsed_then_round_display",
+    "rng_algorithm": "xorshift32-v1",
+    "rng_seed": 1,
+    "rng_used": false
+  },
+  "catalogs": {
+    "actor": {
+      "id": "R",
+      "role": "link_keeper",
+      "movement_capacity": 1,
+      "equipment": "EQ-LINK"
+    },
+    "equipment": {
+      "id": "EQ-LINK",
+      "load": 3,
+      "space": 2,
+      "energy": 16,
+      "wear": 100
+    },
+    "geometry": {
+      "H": [
+        50,
+        150
+      ],
+      "T": [
+        170,
+        150
+      ],
+      "corridor": {
+        "from": "H",
+        "to": "T",
+        "width": 20
+      },
+      "plain": [
+        0,
+        0,
+        200,
+        300
+      ],
+      "rough": [
+        200,
+        0,
+        400,
+        300
+      ]
+    },
+    "authority": {
+      "subject": "HQ",
+      "recipient": "R",
+      "action": "corridor_move",
+      "target": "T",
+      "from": 0,
+      "to": 600000
+    },
+    "report": {
+      "id": "REPORT-T",
+      "origin": "虚构工位登记册",
+      "target": "T",
+      "source_event_time": {
+        "kind": "unknown"
+      },
+      "observed": {
+        "value": 0,
+        "evidence": "initial-observation"
+      },
+      "reported": {
+        "value": 0,
+        "evidence": "initial-report"
+      }
+    },
+    "delivery": {
+      "id": "DELIVERY-T",
+      "report_id": "REPORT-T",
+      "received": {
+        "value": 0,
+        "evidence": "initial-delivery"
+      }
+    },
+    "position": {
+      "x": 50,
+      "y": 150,
+      "observed": 0,
+      "received": 0,
+      "evidence": "initial-position"
+    }
+  },
+  "hashes": {
+    "profile": "ede596f4ad83b82b5da01772184115694d82ceffddbbedfd8fa601bf4debc105",
+    "capabilities": "a98522391c712a31117770805995cee2e87691a8a06646226242d3e657e176c3",
+    "rules": "a55918877f64d1f7a0a37cad5e4e8ef4dc8f12701ebe13ca7542f5ed09a38579",
+    "catalogs": "9d3992475d0d46ad44de2a58909d1c8fd113422129a58d90e4fbbd95f54da87a",
+    "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "definition_hash": "1514007aa26fc8f62fb9bc3c053ead9ee97ba04bef1e6066afbefa13125def87"
+}
