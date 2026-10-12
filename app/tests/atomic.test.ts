@@ -25,7 +25,7 @@ test('explicit takeover is paused and fences a still-referencing older storage w
   const store=new Persistence('writer-handover'),oldGame=new Game(store);
   let view=await oldGame.create_run(engineeringDefinition,'command','create');
   view=(await oldGame.tick(view.run_id,6000,'tick')).view;
-  const next=new Game(store);const takeover=await next.takeover(view.run_id,'takeover');
+  const next=new Game(store);const takeover=await next.restore(view.run_id,'takeover');
   expect(takeover.view.run_id).toBe(view.run_id);expect(takeover.view.paused).toBe(true);expect(takeover.view.sim_time).toBe(6000);
   await expect(oldGame.control_clock({run_id:view.run_id,operation_id:'stale-writer',expected_revision:takeover.view.revision,intent:{kind:'continue'}})).rejects.toThrow('STALE_WRITER');
   expect(await next.get_view(view.run_id)).toEqual(takeover.view);

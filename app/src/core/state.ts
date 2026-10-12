@@ -21,6 +21,7 @@ export type MoveEvent = {
   };
 };
 export type State = {
+  integrity?:string;
   run_id: string;
   revision: number;
   sim_time: number;

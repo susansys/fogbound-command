@@ -63,7 +63,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
-      if(blocked&&['create','operate','takeover'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(blocked&&['create','operate'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       if (
         input.kind === "list" &&
@@ -91,7 +91,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         };
       } else if(input.kind==='takeover'){
         if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
-        response={request_id:input.request_id,ok:true,...await game.takeover(input.run_id,input.operation_id)};
+        response={request_id:input.request_id,ok:true,...await game.restore(input.run_id,input.operation_id)};
+        blocked=false;
       } else if (input.kind === "view" && locked)
         response = {
           request_id: input.request_id,
@@ -113,6 +114,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         const result =
           input.envelope.intent.kind === "issue"
             ? await game.issue_order(input.envelope)
+            : input.envelope.intent.kind==='save'?await game.save(input.envelope,clock_to)
             : await game.control_clock(input.envelope,clock_to);
         response = { request_id: input.request_id, ok: true, ...result };
       } else if (input.kind === "receipt" && locked)

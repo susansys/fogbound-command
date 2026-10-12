@@ -85,7 +85,8 @@ export type Intent =
   | { kind: "continue" }
   | { kind: "rate"; rate: 1 | 2 | 4 }
   | { kind: "mode"; mode: Mode }
-  | { kind: "save" };
+  | { kind: "save" }
+  | {kind:'restore';snapshot_revision:number};
 export type Envelope = {
   run_id: string;
   operation_id: string;
@@ -100,6 +101,7 @@ export type Receipt = {
   fingerprint: string;
   result: "committed";
   kind: Intent["kind"];
+  snapshot_revision?:number;
 };
 export class GameError extends Error {
   constructor(public code: string) {

@@ -88,7 +88,7 @@ export function Workbench() {
   async function takeover(run_id:string){
     const operation_id=takeoverOperations.current.get(run_id)??crypto.randomUUID();takeoverOperations.current.set(run_id,operation_id);
     setBusy(true);setError('');
-    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view)adoptView(result.view);else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function preview() {
@@ -137,7 +137,7 @@ export function Workbench() {
         adoptView(response.view);
         if(pendingControl.current?.operation_id===envelope.operation_id)pendingControl.current=null;
         setReceiptNote(
-          response.receipt.kind==='issue'?'命令已登记并发出，等待编组回报。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
+          response.receipt.kind==='issue'?'命令已登记并发出，等待编组回报。':response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
         if (envelope.intent.kind === "issue") {
           setPlan(null);
@@ -241,9 +241,10 @@ export function Workbench() {
           {view&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
             <select aria-label="时间速率" value={view.rate} disabled={controlPending||storageFault} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
             <button disabled={controlPending||storageFault} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
-            {controlPending&&!busy&&<button onClick={()=>{if(pendingControl.current)void control(pendingControl.current.intent);}}>重试原控制</button>}
-            {controlPending&&!busy&&<button onClick={()=>void queryReceipt(pendingControl.current)}>查询控制结果</button>}
           </>}
+          {view&&<button disabled={busy||controlPending||storageFault} onClick={()=>void control({kind:'save'})}>{controlPending&&pendingControl.current?.intent.kind==='save'?'保存待确认':'保存记录'}</button>}
+          {controlPending&&!busy&&<button onClick={()=>{if(pendingControl.current)void control(pendingControl.current.intent);}}>重试原控制</button>}
+          {controlPending&&!busy&&<button onClick={()=>void queryReceipt(pendingControl.current)}>查询控制结果</button>}
           <strong>{view ? clock(view.sim_time) : "00:00"}</strong>
           <span>
             {view?.finished

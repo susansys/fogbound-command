@@ -46,7 +46,7 @@ export function valid_request(
   if (value.kind === "operate")
     return (
       fields(value, ["kind", "request_id", "envelope"]) &&
-      valid_envelope(value.envelope) && value.envelope.intent.kind !== 'tick'
+      valid_envelope(value.envelope) && !['tick','restore'].includes(value.envelope.intent.kind)
     );
   if (value.kind === "receipt" || value.kind==='takeover')
     return (
@@ -74,6 +74,8 @@ export function valid_envelope(value: unknown): value is Envelope {
   )
     return false;
   const intent = value.intent;
+  if(intent.kind==='restore')return fields(intent,['kind','snapshot_revision'])&&typeof intent.snapshot_revision==='number'&&Number.isSafeInteger(intent.snapshot_revision)&&intent.snapshot_revision>=1;
+  if(intent.kind==='save')return fields(intent,['kind']);
   if(intent.kind==='pause')return fields(intent,['kind','reason'])&&['manual','focus_lost','application_hidden'].includes(String(intent.reason));
   if(intent.kind==='continue')return fields(intent,['kind']);
   if(intent.kind==='rate')return fields(intent,['kind','rate'])&&[1,2,4].includes(Number(intent.rate))&&typeof intent.rate==='number';

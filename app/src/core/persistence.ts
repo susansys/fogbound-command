@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type { State } from "./state";
 import { GameError } from "../contracts";
+import {state_hash} from './snapshot';
 class Database extends Dexie {
   runs!: Table<State, string>;
   snapshots!: Table<{ key: string; run_id: string; state: State }, string>;
@@ -45,6 +46,7 @@ export class Persistence {
     operation_id: string,
     fingerprint: string,
   ): Promise<void> {
+    state.integrity=await state_hash(state);
     await this.db.transaction(
       "rw",
       [this.db.runs, this.db.snapshots, this.db.operations, this.db.metadata],

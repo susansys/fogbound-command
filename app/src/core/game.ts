@@ -8,13 +8,13 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition,engineeringDefinition } from "./scenario";
+import { load_definition } from "./scenario";
 import type { State } from "./state";
 import { project_player_view } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move } from "./movement";
-import {player_view} from '../dto';
+import {canonical,validate_state} from './snapshot';
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
@@ -48,6 +48,7 @@ export class Game {
         previous.revision,
       );
       if (!snapshot) throw new GameError("STORAGE_UNCONFIRMED");
+      await validate_state(snapshot);
       return project_player_view(snapshot);
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
@@ -169,19 +170,26 @@ export class Game {
   async get_view(run: string): Promise<PlayerView> {
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
+    await validate_state(state);
     return project_player_view(state);
   }
-  async takeover(run:string,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}>{
+  async restore(run:string,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}>{
     if(!valid_id(run)||!valid_id(operation_id))throw new GameError('INVALID_INPUT');
     const state=await this.store.read_committed(run);
     if(!state)throw new GameError('RUN_NOT_FOUND');
-    await load_definition(engineeringDefinition);
-    if(state.schema!==4||state.contract!=='0.5.1'||state.phase!=='committed'||state.definition_hash!==engineeringDefinition.definition_hash||JSON.stringify(state.hashes)!==JSON.stringify(engineeringDefinition.hashes)||!player_view(project_player_view(state)))throw new GameError('INVALID_DEFINITION');
+    const snapshot=await this.store.snapshot(run,state.revision);
+    await validate_state(state);await validate_state(snapshot);
+    if(snapshot?.integrity!==state.integrity)throw new GameError('INVALID_SAVE');
     const prior=await this.store.receipt(run,operation_id);
     if(prior){const snapshot=await this.store.snapshot(run,prior.revision);const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
-      if(!input||input.intent.kind!=='pause')throw new GameError('OPERATION_CONFLICT');return this.operate(input);
+      if(!input||input.intent.kind!=='restore')throw new GameError('OPERATION_CONFLICT');return this.operate(input);
     }
-    return this.control_clock({run_id:run,operation_id,expected_revision:state.revision,intent:{kind:'pause',reason:'manual'}});
+    this.faulted=false;
+    return this.operate({run_id:run,operation_id,expected_revision:state.revision,intent:{kind:'restore',snapshot_revision:state.revision}});
+  }
+  async save(envelope:Envelope,clock_to?:number){
+    if(envelope?.intent?.kind!=='save')throw new GameError('INVALID_INPUT');
+    return this.operate(envelope,clock_to);
   }
   async preview_plan(
     run: string,
@@ -197,6 +205,7 @@ export class Game {
       throw new GameError("INVALID_INPUT");
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
+    await validate_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
     return {
@@ -239,6 +248,7 @@ export class Game {
       fingerprint: row.fingerprint,
       result: "committed",
       kind: input.envelope.intent.kind,
+      ...(input.envelope.intent.kind==='restore'?{snapshot_revision:input.envelope.intent.snapshot_revision}:{}),
     };
   }
   async control_clock(
@@ -282,6 +292,7 @@ export class Game {
           fingerprint: previous.fingerprint,
           result: "committed",
           kind: envelope.intent.kind,
+          ...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{}),
         },
         view: await this.get_view(envelope.run_id),
       };
@@ -291,6 +302,7 @@ export class Game {
     if (!state) throw new GameError("RUN_NOT_FOUND");
     if (state.revision !== envelope.expected_revision)
       throw new GameError("STALE_REVISION");
+    await validate_state(state);
     const candidate = structuredClone(state);
     if(clock_to!==undefined){
       if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to<state.sim_time||clock_to>610000)throw new GameError('INVALID_INPUT');
@@ -319,12 +331,13 @@ export class Game {
       if(envelope.intent.to===state.sim_time)throw new GameError('TIME_NOT_ADVANCED');
       if (state.ended) throw new GameError("RUN_ENDED");
       advance_move(candidate, envelope.intent.to);
-    } else if(envelope.intent.kind==='pause') candidate.paused=true;
+    } else if(envelope.intent.kind==='pause'||envelope.intent.kind==='restore') candidate.paused=true;
     else if(envelope.intent.kind==='continue') {
       if(state.mode!=='command')throw new GameError('MODE_LOCKED');
       if(state.ended)throw new GameError('RUN_ENDED');
       candidate.paused=false;
     } else if(envelope.intent.kind==='rate') candidate.rate=envelope.intent.rate;
+    else if(envelope.intent.kind==='save'){/* the committed snapshot is the save point */}
     else if(envelope.intent.kind==='mode')throw new GameError('MODE_LOCKED');
     else throw new GameError("INVALID_INPUT");
     candidate.revision = state.revision + 1;
@@ -349,18 +362,9 @@ export class Game {
         fingerprint,
         result: "committed",
         kind: envelope.intent.kind,
+        ...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{}),
       },
       view: project_player_view(candidate),
     };
   }
-}
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object")
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => [k, canonical(v)]),
-    );
-  return value;
 }
