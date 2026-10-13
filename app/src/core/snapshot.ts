@@ -26,6 +26,7 @@ const finite=(value:unknown):value is number=>typeof value==='number'&&Number.is
 function artifact(value:unknown):boolean{
   return record(value)&&fields(value,['id','report_id','delivery_id','completed','verified','activity_id'])&&valid_id(value.id)&&valid_id(value.report_id)&&valid_id(value.delivery_id)&&integer(value.completed)&&value.verified===false&&valid_id(value.activity_id);
 }
+function equal(a:unknown,b:unknown){return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));}
 function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   const order=state.order,definition=definition_for_package(state.schema,state.definition_hash),parameters=definition.profile.parameters,geometry=definition.catalogs.geometry;
   const recordParameters=state.schema===5?record_definition_for_package(state.schema,state.definition_hash).profile.parameters:null;
@@ -52,7 +53,11 @@ function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   if(payload.artifacts!==undefined&&event.kind!=='complete_receipt')return false;
   if(event.kind==='accepted_receipt')return order.accepted===observed&&payload.position===undefined;
   if(event.kind==='complete_receipt'&&(!state.world.completed||observed>=parameters.deadline)||event.kind==='deadline_receipt'&&!state.world.stopped)return false;
-  if(recordPlan)return payload.position===undefined&&(event.kind!=='complete_receipt'||payload.artifacts?.length===1);
+  if(recordPlan){
+    const plan=order.plan as Extract<typeof order.plan,{kind:'record'}>;
+    const expectedArtifact=event.kind==='complete_receipt'?{id:`artifact-${order.command_id}`,report_id:plan.report_id,delivery_id:plan.delivery_id,completed:observed,verified:false,activity_id:`${order.command_id}.complete.0`}:null;
+    return payload.position===undefined&&(event.kind!=='complete_receipt'||payload.artifacts?.length===1&&equal(payload.artifacts[0],expectedArtifact)&&equal(payload.artifacts,state.world.record_artifacts));
+  }
   if(!payload.position||!position(payload.position)||payload.position.evidence!==event.id||payload.position.observed!==observed||payload.position.received!==event.at)return false;
   const elapsed=event.kind==='complete_receipt'?parameters.move_ms:event.kind==='deadline_receipt'?Math.max(0,Math.min(parameters.move_ms,observed-(order.accepted??observed))):event.index!*parameters.fix_ms;
   return payload.position.x===Math.round((geometry.H[0]+(geometry.T[0]-geometry.H[0])*elapsed/parameters.move_ms)*100)/100&&payload.position.y===Math.round((geometry.H[1]+(geometry.T[1]-geometry.H[1])*elapsed/parameters.move_ms)*100)/100;
@@ -68,7 +73,6 @@ function references(state:State){
   if(!fields(state.known,['position','report','delivery','resources',...(state.schema===5?['artifacts']:[])])||!fields(state.public_rules,['geometry','authority','preview'])||!fields(state.world,['position','equipment_energy','equipment_wear','movement_energy',...recordFields,'sends','completed','stopped'])||!fields(state.rng,['algorithm','version','seed','state','origin','used']))return false;
   if(state.rng.algorithm!=='xorshift32-v1'||state.rng.version!==1||state.rng.seed!==1||state.rng.state!==1||state.rng.used!==false||!valid_id(state.rng.origin))return false;
   if(state.source_run===null&&state.rng.origin!==state.run_id||state.source_run!==null&&!valid_id(state.source_run))return false;
-  const equal=(a:unknown,b:unknown)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
   if(!equal(state.known.report,catalogs.report)||!equal(state.known.delivery,catalogs.delivery)||!equal(state.movement_rules,{fix_ms:parameters.fix_ms,task_expiry_ms:parameters.task_expiry_ms}))return false;
   if(!equal(state.public_rules.geometry,{H:catalogs.geometry.H,T:catalogs.geometry.T,extent:parameters.extent,corridor_width:parameters.corridor_width,plain:catalogs.geometry.plain,rough:catalogs.geometry.rough})||!equal(state.public_rules.authority,{from:catalogs.authority.from,to:catalogs.authority.to})||!equal(state.public_rules.preview,{distance:state.schema===5?0:120,estimated_move_ms:parameters.move_ms,link_ms:parameters.link_ms}))return false;
   if(!record(state.world.position)||!fields(state.world.position,['xn','yn','d'])||![state.world.position.xn,state.world.position.yn,state.world.position.d].every(integer)||state.world.position.d<1||state.world.position.yn!==catalogs.geometry.H[1]*state.world.position.d||state.world.position.xn<catalogs.geometry.H[0]*state.world.position.d||state.world.position.xn>catalogs.geometry.T[0]*state.world.position.d)return false;
@@ -78,6 +82,27 @@ function references(state:State){
   if(state.order){
     if(!fields(state.order,['command_id','issued','expiry','accepted','plan',...(state.order.reason===undefined?[]:['reason'])])||!integer(state.order.issued)||state.order.issued>state.sim_time||state.order.expiry!==state.order.issued+parameters.task_expiry_ms||state.order.accepted!==null&&(!integer(state.order.accepted)||state.order.accepted<state.order.issued+parameters.link_ms||state.order.accepted>=parameters.deadline||state.order.accepted>state.sim_time))return false;
     if(!valid_envelope({run_id:state.run_id,operation_id:'snapshot',expected_revision:state.revision,intent:{kind:'issue',command_id:state.order.command_id,plan:state.order.plan,...(state.order.reason===undefined?{}:{reason:state.order.reason})}})||state.order.plan.run_id!==state.run_id||state.order.plan.revision>state.revision)return false;
+    if(recordParameters&&'kind' in state.order.plan&&state.order.plan.kind==='record'){
+      const plan=state.order.plan;
+      const start=(state.order.accepted??state.sim_time)+plan.setup_ms;
+      const observedUntil=state.world.stopped?state.public_rules.authority.to:state.sim_time;
+      const expectedWork=state.world.completed?plan.work:state.order.accepted===null?0:Math.max(0,Math.min(plan.work,(observedUntil-start)/(plan.estimated_record_ms/plan.work)));
+      if(Math.abs((state.world.record_work??0)-expectedWork)>1e-9)return false;
+      const expectedArtifact={id:`artifact-${state.order.command_id}`,report_id:plan.report_id,delivery_id:plan.delivery_id,completed:start+plan.estimated_record_ms,verified:false,activity_id:`${state.order.command_id}.complete.0`};
+      if(state.world.completed){
+        if(!equal(state.world.record_artifacts,[expectedArtifact])||state.finished&&!equal(state.known.artifacts,[expectedArtifact])||!state.finished&&state.known.artifacts!.length!==0)return false;
+      } else if(state.world.record_artifacts!.length!==0||state.known.artifacts!.length!==0)return false;
+      const expectedLogs=[
+        {kind:'accepted_receipt',activity_id:`${state.order.command_id}.accept.0`},
+        {kind:'fix_receipt',activity_id:`${state.order.command_id}.record.0`},
+        {kind:'complete_receipt',activity_id:`${state.order.command_id}.complete.0`},
+      ];
+      for(const expected of expectedLogs){
+        const entry=state.log.find(x=>x.kind===expected.kind);
+        if(entry&&(entry.sender!=='记录组 R'||entry.activity_id!==expected.activity_id||!entry.text.includes(expected.activity_id)))return false;
+      }
+      if(state.log.some(x=>['accepted_receipt','fix_receipt','complete_receipt'].includes(x.kind)&&(x.sender!=='记录组 R'||!x.activity_id)))return false;
+    }
   }else if(['queued','executing','finished'].includes(state.status)||state.world.completed)return false;
   if(state.known.position.observed>state.known.position.received||state.known.position.received>state.sim_time||state.known.resources.confirmed_at>state.sim_time||state.log.some(x=>x.at>state.sim_time||x.observed!==undefined&&x.observed>x.at))return false;
   if(state.known.position.evidence!==catalogs.position.evidence&&!state.log.some(x=>x.id===state.known.position.evidence&&x.at===state.known.position.received&&x.observed===state.known.position.observed&&['fix_receipt','complete_receipt','deadline_receipt'].includes(x.kind)))return false;
