@@ -18,6 +18,16 @@ Full local regression passes: 45 core tests, strict TypeScript/import boundary, 
 
 Record execution, work progress, resource settlement, failures, save/resume, final visual matching, final SHA remote CI and main acceptance remain pending. Local results are not release evidence; original 244AT remains not_run.
 
+## FB02 T03 — record execution and result report (#13)
+
+2026-10-13: fixed-station Record orders can now be explicitly confirmed and executed through the public Game and real Worker/browser path. Issue deducts HQ once; accept/setup/record/complete receipts follow the locked 0/1000/2000/6000/7000/46000/47000ms schedule. Setup does not add record work, record work accumulates only during the recording span, final resources settle at record 16/97 with one pack left, link 13/97 and HQ 15/99, and the result appears as one unverified RecordArtifact only after the complete receipt. The three normal record receipts carry visible sender `记录组 R` and Activity credentials; deadline/grace paths do not create artifacts or position payloads for fixed-station record work.
+
+Full local regression passes: T03 targeted 2 core tests, all 47 core tests, strict TypeScript/import boundary, targeted real Chrome155.0.8059.39 browser test, and all 33 real-browser tests with one worker and zero retries. The final T03 preview image config is `e955cbfb0ee9175bd2786b3b786fde5d0d3ae2f0c26198cf5d012bc6c3b7b834`; manifest-list/image id `48ef912422b5a14c472033ac6931d8f22c694f54d7d2ea65c86506e803f483a0`; Worker `worker-YKjaJOe6.js`.
+
+Independent Standards review found no remaining blocker after the record deadline path stopped reusing Move position/energy semantics and snapshot artifact checks were tightened. Independent Spec review initially found the sender/Activity credentials were incomplete; after adding `sender`/`activity_id` to log entries, UI display and tests, it re-reviewed with no remaining #13 blocker. Reviewers did not rerun tests.
+
+T04—T06 record failure/save/final demo work, final SHA remote CI, PR/main merge and main acceptance remain pending. Local results are not release evidence; original 244AT remains not_run. This fictional engineering slice is not a complete game experience study or a real military model.
+
 ## T01 — safe start (#2)
 
 - Baseline: `6df6a8a6a8c64a23902978beff53db26f4a5c5b1`; independent Standards/Spec review included all new files via staged diff, not an empty HEAD-only comparison.

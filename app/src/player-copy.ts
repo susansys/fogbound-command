@@ -25,6 +25,7 @@ const errors:Record<string,string>={
 };
 export function error_copy(code:string):string {return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';}
 export function log_copy(entry:LogEntry):string {
+  if(entry.text.startsWith('记录'))return entry.text;
   if(entry.kind==='report')return '工位登记报告已送达。R最后确认位于总部起点H。';
   if(entry.kind==='issued')return '通行命令已登记并发出，等待编组接令回报。';
   if(entry.kind==='accepted_receipt')return 'R已确认接令并开始行动。';

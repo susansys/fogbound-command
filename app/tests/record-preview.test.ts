@@ -15,8 +15,6 @@ test('FB02-S03 previews the fixed archive and public costs without sending, rese
     expect(await store.read_committed(view.run_id)).toEqual(before);
     expect(await game.get_view(view.run_id)).toEqual(view);
     await expect(game.preview_plan(view.run_id,0,7)).rejects.toThrow('STALE_REVISION');
-    await expect(game.issue_order({run_id:view.run_id,operation_id:'record-issue',expected_revision:view.revision,intent:{kind:'issue',command_id:'record-issue',plan}})).rejects.toThrow('INVALID_INPUT');
-    expect(await store.read_committed(view.run_id)).toEqual(before);
     const tampered={...plan,target:'B'} as unknown as typeof plan;
     await expect(game.issue_order({run_id:view.run_id,operation_id:'record-invalid',expected_revision:view.revision,intent:{kind:'issue',command_id:'record-invalid',plan:tampered}})).rejects.toThrow('INVALID_INPUT');
     expect(await store.read_committed(view.run_id)).toEqual(before);

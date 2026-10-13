@@ -13,7 +13,7 @@ import type { State } from "./state";
 import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
-import { advance_move, register_move } from "./movement";
+import { advance_move, register_move, register_record } from "./movement";
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
 export class Game {
@@ -81,6 +81,7 @@ export class Game {
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
+    const recordParameters=definition.schema===5?record_definition_for_package(definition.schema,definition.definition_hash).profile.parameters:null;
     const state: State = {
       run_id,
       revision: 1,
@@ -101,6 +102,15 @@ export class Game {
         equipment_energy: definition.profile.parameters.equipment_energy,
         equipment_wear: definition.profile.parameters.equipment_wear,
         movement_energy: definition.profile.parameters.movement_energy,
+        ...(recordParameters?{
+          record_energy: recordParameters.record_energy,
+          record_wear: recordParameters.record_wear,
+          record_packs: recordParameters.record_packs,
+          hq_energy: recordParameters.hq_energy,
+          hq_wear: recordParameters.hq_wear,
+          record_work: 0,
+          record_artifacts: [],
+        }:{}),
         sends: 0,
         completed: false,
         stopped: false,
@@ -156,12 +166,12 @@ export class Game {
           to: definition.catalogs.authority.to,
         },
         preview: {
-          distance: Math.hypot(
+          distance: (definition.schema===5?0:Math.hypot(
             definition.catalogs.geometry.T[0] -
               definition.catalogs.geometry.H[0],
             definition.catalogs.geometry.T[1] -
               definition.catalogs.geometry.H[1],
-          ) as 120,
+          )) as 120,
           estimated_move_ms: definition.profile.parameters.move_ms as 31800,
           link_ms: definition.profile.parameters.link_ms as 1000,
         },
@@ -174,8 +184,16 @@ export class Game {
           equipment_energy: definition.profile.parameters.equipment_energy,
           equipment_wear: definition.profile.parameters.equipment_wear,
           movement_energy: definition.profile.parameters.movement_energy,
+          ...(recordParameters?{
+            record_energy: recordParameters.record_energy,
+            record_wear: recordParameters.record_wear,
+            record_packs: recordParameters.record_packs,
+            hq_energy: recordParameters.hq_energy,
+            hq_wear: recordParameters.hq_wear,
+          }:{}),
           confirmed_at: 0,
         },
+        ...(definition.schema===5?{artifacts: []}:{}),
       },
       log: [
         {
@@ -358,7 +376,6 @@ export class Game {
     }
     if (envelope.intent.kind === "issue") {
       const intent = envelope.intent;
-      if ('kind' in intent.plan) throw new GameError("INVALID_INPUT");
       if (state.order) throw new GameError("ORDER_EXISTS");
       const expected = await this.preview_plan(
         state.run_id,
@@ -371,7 +388,8 @@ export class Game {
       )
         throw new GameError("STALE_PLAN");
       if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
-      register_move(candidate, intent);
+      if('kind' in intent.plan)register_record(candidate,intent);
+      else register_move(candidate, intent);
     } else if (envelope.intent.kind === "advance" || envelope.intent.kind==='tick') {
       if (state.mode !== (envelope.intent.kind==='tick'?'command':'research')) throw new GameError("MODE_LOCKED");
       if(envelope.intent.kind==='tick'&&state.paused)throw new GameError('CLOCK_PAUSED');

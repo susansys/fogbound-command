@@ -1,4 +1,4 @@
-import type { Mode, PlayerView, LogEntry, Envelope, Plan } from "../contracts";
+import type { Mode, PlayerView, LogEntry, Envelope, Plan, RecordArtifact } from "../contracts";
 export type MoveEvent = {
   id: string;
   at: number;
@@ -18,6 +18,7 @@ export type MoveEvent = {
     position?: PlayerView["position"];
     resources: PlayerView["resources"];
     observed: number;
+    artifacts?: RecordArtifact[];
   };
 };
 export type State = {
@@ -44,6 +45,13 @@ export type State = {
     equipment_energy: number;
     equipment_wear: number;
     movement_energy: number;
+    record_energy?: number;
+    record_wear?: number;
+    record_packs?: number;
+    hq_energy?: number;
+    hq_wear?: number;
+    record_work?: number;
+    record_artifacts?: RecordArtifact[];
     sends: number;
     completed: boolean;
     stopped: boolean;
@@ -67,7 +75,7 @@ export type State = {
   };
   generation: number;
   phase: "committed";
-  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources">;
+  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources" | "artifacts">;
   public_rules: Pick<PlayerView, "geometry" | "authority"> & {
     preview: Pick<
       import("../contracts").MovePlan,

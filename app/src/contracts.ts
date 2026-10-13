@@ -29,7 +29,17 @@ export type LogEntry = {
   kind: string;
   text: string;
   observed?: number;
+  sender?: string;
+  activity_id?: string;
   evidence: string;
+};
+export type RecordArtifact = {
+  id: string;
+  report_id: string;
+  delivery_id: string;
+  completed: number;
+  verified: false;
+  activity_id: string;
 };
 export type PlayerView = {
   scenario_kind?:'record';
@@ -62,7 +72,13 @@ export type PlayerView = {
     equipment_wear: number;
     movement_energy: number;
     confirmed_at: number;
+    record_energy?: number;
+    record_wear?: number;
+    record_packs?: number;
+    hq_energy?: number;
+    hq_wear?: number;
   };
+  artifacts?: RecordArtifact[];
   log: LogEntry[];
 };
 export type MovePlan = {
