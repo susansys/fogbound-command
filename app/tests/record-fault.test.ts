@@ -82,6 +82,9 @@ test('record explicit takeover pauses the same run and fences the older writer g
 });
 
 const corruptions=[
+  {label:'illegal-clock-mode',advance:2000,apply:(s:State)=>{
+    for(const input of s.inputs)if(input.envelope.intent.kind==='advance')input.envelope.intent={kind:'tick',to:input.envelope.intent.to};
+  }},
   {label:'crossed-record-reference',advance:999,apply:(s:State)=>{
     if(s.order&&'kind' in s.order.plan)s.order.plan.report_id='MISSING';
     for(const input of s.inputs)if(input.envelope.intent.kind==='issue'&&'kind' in input.envelope.intent.plan)input.envelope.intent.plan.report_id='MISSING';
@@ -126,5 +129,18 @@ test('private record world variants with the same legal known evidence do not ch
     expect(projected).toEqual(atStart satisfies PlayerView);
     expect(player_view(projected)).toBe(true);
     expect(JSON.stringify(projected)).not.toContain('artifact-private');
+  }finally{await store.delete();}
+});
+
+test('Record restore rejects a rewritten restoration snapshot reference even with a new checksum',async()=>{
+  const {store,game,view}=await recordIssued('record-bad-restore-reference');
+  try{
+    await game.restore(view.run_id,'first-restore');
+    const bad=structuredClone((await store.read_committed(view.run_id))!);
+    const input=bad.inputs.find(x=>x.envelope.intent.kind==='restore')!;
+    if(input.envelope.intent.kind==='restore')input.envelope.intent.snapshot_revision=1;
+    await writeState(store,bad);
+    await expect(new Game(store).restore(view.run_id,'second-restore')).rejects.toThrow('INVALID_SAVE');
+    expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });

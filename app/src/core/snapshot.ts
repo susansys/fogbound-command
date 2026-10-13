@@ -46,7 +46,7 @@ function record_history_matches(state:State):boolean {
   initial.log=[{id:'initial-report',at:0,kind:'report',text:'档案任务简报已递交；R最后确认在工位H。',evidence:definition.catalogs.delivery.id}];
   initial.schedule=[{id:'objective-deadline',at:p.deadline,phase:30,generation:initial.generation,kind:'deadline'}];
   const expected=replay_state(initial,state.inputs,state.sim_time);
-  return (['world','known','log','schedule','order','status','finished','ended','paused','rate','generation','revision'] as const).every(key=>equal(state[key],expected[key]));
+  return (['world','known','log','schedule','order','status','finished','ended','paused','rate','generation','revision','sim_time'] as const).every(key=>equal(state[key],expected[key]));
 }
 function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   const order=state.order,definition=definition_for_package(state.schema,state.definition_hash),parameters=definition.profile.parameters,geometry=definition.catalogs.geometry;

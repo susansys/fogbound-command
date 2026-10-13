@@ -24,13 +24,20 @@ const report:Check=v=>shape(v,{id:text,origin:text,target:text,source_event_time
 const delivery:Check=v=>shape(v,{id:text,report_id:text,received:evidenceTime});
 const log:Check=v=>shape(v,{id:text,at:time,kind:oneOf(['report','issued','sent','accepted_receipt','fix_receipt','complete_receipt','deadline','deadline_receipt']),text,evidence:text},{observed:time,sender:text,activity_id:valid_id});
 const artifact:Check=v=>shape(v,{id:valid_id,report_id:valid_id,delivery_id:valid_id,completed:time,verified:oneOf([false]),activity_id:valid_id});
-export const player_view:Check=v=>shape(v,{
+const common_player_view:Check=v=>shape(v,{
   run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:oneOf(['command','research']),rate:oneOf([1,2,4]),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:oneOf(['ready','queued','executing','finished','deadline']),
   position,report,delivery,resources,
   geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)}),
   authority:v=>shape(v,{from:time,to:time}),can_issue:bool,next_action:text,gap:text,
   log:list(log),
 },{scenario_kind:oneOf(['record']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,label:text}))});
+export const player_view:Check=v=>{
+  if(!common_player_view(v)||!record(v)||!record(v.resources))return false;
+  const keys=['record_energy','record_wear','record_packs','record_energy_reserved','record_packs_reserved','hq_energy','hq_wear'];
+  return v.scenario_kind==='record'
+    ?keys.every(key=>Object.hasOwn(v.resources as object,key))&&Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes')
+    :keys.every(key=>!Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&!Object.hasOwn(v,'replay_nodes');
+};
 const plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
 const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
 const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record']),read_only:bool});

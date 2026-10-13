@@ -6,7 +6,17 @@ export function replay_state(initial:State,inputs:State['inputs'],to:number):Sta
   for(const input of inputs){
     if(input.at>to)break;
     const intent=input.envelope.intent;
+    const originalTime=state.sim_time,originalPaused=state.paused;
+    if(state.schema===5){
+      if(input.clock_to!==undefined&&(state.mode!=='command'||originalPaused||input.clock_to<originalTime))throw new GameError('INVALID_SAVE');
+      if(intent.kind==='tick'&&(state.mode!=='command'||originalPaused)||intent.kind==='advance'&&state.mode!=='research')throw new GameError('INVALID_SAVE');
+      if((intent.kind==='tick'||intent.kind==='advance')&&(state.ended||intent.to<=originalTime))throw new GameError('INVALID_SAVE');
+      if(intent.kind==='continue'&&(state.mode!=='command'||state.ended))throw new GameError('INVALID_SAVE');
+      if(intent.kind==='restore'&&intent.snapshot_revision!==input.envelope.expected_revision)throw new GameError('INVALID_SAVE');
+      if(intent.kind==='issue'&&(state.order||originalTime<state.public_rules.authority.from||originalTime>=state.public_rules.authority.to))throw new GameError('INVALID_SAVE');
+    }
     if(input.clock_to!==undefined){advance_move(state,Math.min(input.clock_to,to));if(input.clock_to>to)break;}
+    if(state.schema===5&&input.at!==state.sim_time)throw new GameError('INVALID_SAVE');
     if(intent.kind==='advance'||intent.kind==='tick'){
       advance_move(state,Math.min(intent.to,to));if(intent.to>to)break;
     }else if(intent.kind==='issue'){
