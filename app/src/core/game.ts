@@ -25,24 +25,41 @@ export class Game {
   private faulted=false;
   private history:State|null=null;
   constructor(readonly store: Persistence) {}
+  private async validate_stored_state(state:State){
+    await validate_state(state);
+    if(state.schema!==6)return;
+    const identity=(value:State)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.prestart?.case_ref}));
+    const seen=new Set<string>();let current=state;
+    while(true){
+      if(seen.has(current.run_id))throw new GameError('INVALID_SAVE');seen.add(current.run_id);
+      const initial=await this.store.snapshot(current.run_id,1);
+      await validate_state(initial);
+      if(!initial||initial.revision!==1||identity(current)!==identity(initial))throw new GameError('INVALID_SAVE');
+      if(current.source_run===null)return;
+      const parent=await this.store.read_committed(current.source_run);
+      await validate_state(parent);
+      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||parent.prestart?.case_ref!==current.prestart?.case_ref||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
+      current=parent;
+    }
+  }
   private assert_current(){if(this.history)throw new GameError('HISTORY_READ_ONLY');}
   private async assert_writable(run:string){this.assert_current();if(await this.store.is_read_only(run))throw new GameError('HISTORY_READ_ONLY');}
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
-    const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
+    const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(source);
     return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.prestart?.case_ref??'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
     const latest=await this.store.read_committed(run),initial=await this.store.snapshot(run,1);
     if(!latest||!initial)throw new GameError('RUN_NOT_FOUND');
-    await validate_state(latest);await validate_state(initial);
+    await this.validate_stored_state(latest);await validate_state(initial);
     if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
     const context=new Game(this.store);
     if(nodeRevision!==undefined){
       if(!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
       const node=await this.store.snapshot(run,nodeRevision);
-      await validate_state(node);
+      await this.validate_stored_state(node!);
       if(node?.run_id!==run||node.revision!==nodeRevision)throw new GameError('INVALID_SAVE');
       context.history=node;return context;
     }
@@ -51,7 +68,7 @@ export class Game {
       const candidates=latest.inputs.filter(input=>input.at===to&&!['advance','tick'].includes(input.envelope.intent.kind)).reverse();
       for(const input of candidates){
         const node=await this.store.snapshot(run,input.revision);
-        await validate_state(node);
+        await this.validate_stored_state(node!);
         if(node?.sim_time===to){context.history=node;return context;}
       }
     }
@@ -248,7 +265,7 @@ export class Game {
     if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=reconstruct_known(this.history);return this.history.schema>=5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
-    await validate_state(state);
+    await this.validate_stored_state(state);
     const view=project_player_view(state);
     if(await this.store.is_read_only(run)){view.can_issue=false;view.next_action='查看保留的行动记录';view.gap='这场行动已保留为只读记录';}
     return view;
@@ -260,7 +277,7 @@ export class Game {
     const state=await this.store.read_committed(run);
     if(!state)throw new GameError('RUN_NOT_FOUND');
     const snapshot=await this.store.snapshot(run,state.revision);
-    await validate_state(state);await validate_state(snapshot);
+    await this.validate_stored_state(state);await validate_state(snapshot);
     if(snapshot?.integrity!==state.integrity)throw new GameError('INVALID_SAVE');
     const prior=await this.store.receipt(run,operation_id);
     if(prior){const snapshot=await this.store.snapshot(run,prior.revision);const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
@@ -288,7 +305,7 @@ export class Game {
       throw new GameError("INVALID_INPUT");
     const state = this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
-    await validate_state(state);
+    await this.validate_stored_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
     if(state.schema===6)return preview_prestart(state,editing_seq,view.can_issue,view.gap);
@@ -400,7 +417,7 @@ export class Game {
     if (!state) throw new GameError("RUN_NOT_FOUND");
     if (state.revision !== envelope.expected_revision)
       throw new GameError("STALE_REVISION");
-    await validate_state(state);
+    await this.validate_stored_state(state);
     const candidate = structuredClone(state);
     if(clock_to!==undefined){
       if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to<state.sim_time||clock_to>610000)throw new GameError('INVALID_INPUT');

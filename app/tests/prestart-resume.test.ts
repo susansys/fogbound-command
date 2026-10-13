@@ -61,7 +61,7 @@ async function write_package(store:Persistence,state:State){
   await new Promise<void>((resolve,reject)=>{const open=indexedDB.open(store.name);open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['runs','snapshots'],'readwrite');tx.objectStore('runs').put(state);tx.objectStore('snapshots').put({key:`${state.run_id}:${state.revision}`,run_id:state.run_id,state});tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};};});
 }
 
-test.each(['definition','registry','reference','phase','reservation','settlement-unit','settlement-cost','case','duplicate-cause'])('CR22 rechecks a full package with valid outer checksum but corrupt %s without rewriting the original',async(fault)=>{
+test.each(['definition','registry','reference','phase','reservation','settlement-unit','settlement-cost','case','duplicate-cause','missing-parent'])('CR22 rechecks a full package with valid outer checksum but corrupt %s without rewriting the original',async(fault)=>{
   const {store,game,view}=await prepared(`prestart-bad-${fault}`,3000);
   try{
     const bad=structuredClone((await store.read_committed(view.run_id))!);
@@ -73,10 +73,22 @@ test.each(['definition','registry','reference','phase','reservation','settlement
     else if(fault==='settlement-unit')Reflect.set(bad.prestart!.activities[0].settlement!.distance,'unit','record_work');
     else if(fault==='settlement-cost')bad.prestart!.activities[0].settlement!.energy=1;
     else if(fault==='case')bad.prestart!.case_ref='unregistered-condition';
+    else if(fault==='missing-parent')bad.source_run='missing-parent';
     else bad.prestart!.activities[1].settlement=structuredClone(bad.prestart!.activities[0].settlement);
     await write_package(store,bad);
     await expect(new Game(store).restore(view.run_id,'restore')).rejects.toMatchObject({code:'INVALID_SAVE'});
     expect(await store.read_committed(view.run_id)).toEqual(bad);expect(await store.snapshot(view.run_id,bad.revision)).toEqual(bad);expect(await game.get_receipt(view.run_id,'restore')).toBeNull();
+  }finally{await store.delete();}
+});
+
+test('CR22/26 a clone cannot replace its retained RNG origin with a different valid ID even with a recomputed checksum',async()=>{
+  const {store,game,view}=await prepared('prestart-clone-origin-fault',2000);
+  try{
+    const cloned=await game.restart_run(view.run_id,'clone');
+    const saved=await game.save({run_id:cloned.run_id,operation_id:'save-clone',expected_revision:cloned.revision,intent:{kind:'save'}});
+    const bad=structuredClone((await store.read_committed(saved.view.run_id))!);bad.rng.origin='unrelated-origin';await write_package(store,bad);
+    await expect(new Game(store).restore(bad.run_id,'restore')).rejects.toMatchObject({code:'INVALID_SAVE'});
+    expect(await store.read_committed(bad.run_id)).toEqual(bad);expect(await game.get_receipt(bad.run_id,'restore')).toBeNull();
   }finally{await store.delete();}
 });
 
