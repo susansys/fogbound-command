@@ -4,6 +4,32 @@ import {Persistence} from '../src/core/persistence';
 import definition from './fixtures/prestart-definition.json';
 import {valid_response} from '../src/dto';
 import {recordEngineeringDefinition} from '../src/core/scenario';
+import type {Envelope} from '../src/contracts';
+import {task_intent} from '../src/contracts';
+
+test('a typed replacement references the frozen original version and records delivery, acceptance, relation and new-task effectiveness independently',async()=>{
+  const store=new Persistence('prestart-typed-phases'),game=new Game(store);
+  try{
+    let view=await game.create_run(definition,'research','create');let plan=await game.preview_plan(view.run_id,view.revision,1);
+    view=(await game.issue_order({run_id:view.run_id,operation_id:'original',expected_revision:view.revision,intent:{kind:'issue',command_id:'N',plan}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'ack',expected_revision:view.revision,intent:{kind:'advance',to:2000}})).view;
+    plan=await game.preview_plan(view.run_id,view.revision,2);
+    if(!('kind' in plan)||plan.kind!=='prestart_move')throw Error('Expected the registered preparation plan');
+    const replace:Envelope={run_id:view.run_id,operation_id:'replace',expected_revision:view.revision,intent:{kind:'replace_task',command_id:'T',original_command_id:'N',original_version:1,plan}};
+    view=(await game.issue_order(replace)).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'new-start',expected_revision:view.revision,intent:{kind:'advance',to:8000}})).view;
+    const committed=await store.read_committed(view.run_id);
+    expect(committed?.prestart?.requests[1]).toMatchObject({command_id:'T',sent_at:2000,delivered_at:3000,accepted_at:3000,effective_at:8000});
+    expect(committed?.prestart).toHaveProperty('records',expect.arrayContaining([
+      expect.objectContaining({command_id:'T',kind:'delivered',at:3000}),
+      expect.objectContaining({command_id:'T',kind:'accepted',at:3000}),
+      expect.objectContaining({command_id:'T',kind:'replacement_applied',at:3000,supersedes:'N'}),
+      expect.objectContaining({command_id:'T',kind:'effective',at:8000}),
+    ]));
+    expect(committed?.prestart?.records.filter(record=>record.command_id==='T').map(record=>[record.sequence,record.kind,record.at])).toEqual([[3,'delivered',3000],[4,'accepted',3000],[5,'replacement_applied',3000],[6,'effective',8000]]);
+    expect(await game.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});
 
 test('CR07 the explicit schema6 preparation scenario has its own validated initial public entry',async()=>{
   const store=new Persistence('prestart-entry'),game=new Game(store);
@@ -49,7 +75,7 @@ test('CR08/CR10 replacing preparing N with T invalidates old work while preservi
     view=(await game.control_clock({run_id:view.run_id,operation_id:'old-ack',expected_revision:view.revision,intent:{kind:'advance',to:2000}})).view;
     const replacement=await game.preview_plan(view.run_id,view.revision,2);
     expect(replacement).toMatchObject({kind:'prestart_move',target:'T',supersedes:'original',allowed:true});
-    view=(await game.issue_order({run_id:view.run_id,operation_id:'register-replacement',expected_revision:view.revision,intent:{kind:'issue',command_id:'replacement',plan:replacement}})).view;
+    view=(await game.issue_order({run_id:view.run_id,operation_id:'register-replacement',expected_revision:view.revision,intent:task_intent(replacement,'replacement')})).view;
     expect(view.resources.hq_energy).toBe(15);
     view=(await game.control_clock({run_id:view.run_id,operation_id:'local-replace',expected_revision:view.revision,intent:{kind:'advance',to:3000}})).view;
     expect(view).not.toHaveProperty('replacement');expect(view.resources.equipment_energy).toBe(15);

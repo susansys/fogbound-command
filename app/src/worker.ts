@@ -2,7 +2,7 @@
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
 import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,load_definition } from "./core/scenario";
-import { GameError, type PlayerView } from "./contracts";
+import { GameError,is_task_intent, type PlayerView } from "./contracts";
 import type { Request, Response } from "./transport";
 import { valid_request, correlation } from "./protocol";
 import {valid_response} from './dto';
@@ -140,7 +140,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       else if (input.kind === "operate" && locked) {
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
-          input.envelope.intent.kind === "issue"
+          is_task_intent(input.envelope.intent)
             ? await game.issue_order(input.envelope)
             : input.envelope.intent.kind==='save'?await game.save(input.envelope,clock_to)
             : await game.control_clock(input.envelope,clock_to);

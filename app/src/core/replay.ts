@@ -1,4 +1,4 @@
-import {is_record_plan} from '../contracts';
+import {is_record_plan,is_task_intent} from '../contracts';
 import type {State} from './state';
 import {advance_move,register_move,register_record} from './movement';
 import {GameError} from '../contracts';
@@ -21,7 +21,7 @@ function replay_inputs(initial:State,inputs:State['inputs'],to:number|null):Stat
       if((intent.kind==='tick'||intent.kind==='advance')&&(state.ended||intent.to<=originalTime))throw new GameError('INVALID_SAVE');
       if(intent.kind==='continue'&&(state.mode!=='command'||state.ended))throw new GameError('INVALID_SAVE');
       if(intent.kind==='restore'&&intent.snapshot_revision!==input.envelope.expected_revision)throw new GameError('INVALID_SAVE');
-      if(intent.kind==='issue'&&(originalTime<state.public_rules.authority.from||originalTime>=state.public_rules.authority.to))throw new GameError('INVALID_SAVE');
+      if(is_task_intent(intent)&&(originalTime<state.public_rules.authority.from||originalTime>=state.public_rules.authority.to))throw new GameError('INVALID_SAVE');
     }
     if(state.schema===5){
       if(input.clock_to!==undefined&&(state.mode!=='command'||originalPaused||input.clock_to<originalTime||input.clock_to>610000))throw new GameError('INVALID_SAVE');
@@ -37,8 +37,9 @@ function replay_inputs(initial:State,inputs:State['inputs'],to:number|null):Stat
     if(state.schema>=5&&input.at!==state.sim_time)throw new GameError('INVALID_SAVE');
     if(intent.kind==='advance'||intent.kind==='tick'){
       advance_move(state,to===null?intent.to:Math.min(intent.to,to));if(to!==null&&intent.to>to)break;
-    }else if(intent.kind==='issue'){
+    }else if(is_task_intent(intent)){
       if(state.schema===6)register_prestart(state,intent);
+      else if(intent.kind==='replace_task')throw new GameError('INVALID_SAVE');
       else if(is_record_plan(intent.plan))register_record(state,intent);
       else register_move(state,intent);
     }else if(intent.kind==='pause'||intent.kind==='restore')state.paused=true;

@@ -1,4 +1,4 @@
-import {is_record_plan} from '../contracts';
+import {is_record_plan,is_task_intent} from '../contracts';
 import type {
   Mode,
   PlayerView,
@@ -19,6 +19,7 @@ import {initial_record_accounts} from './record-accounting';
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
 import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
+import {prestart_parameters} from './scenario';
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
@@ -222,10 +223,12 @@ export class Game {
     };
     if(definition.schema===6){
       const geometry=definition.catalogs.geometry;
+      const prestartParameters=prestart_parameters(state);
       if(!('N' in geometry))throw new GameError('INVALID_DEFINITION');
       state.public_rules.geometry.N=geometry.N as [number,number];
-      state.world.hq_energy=16;state.world.hq_wear=100;
-      state.known.resources.hq_energy=16;state.known.resources.hq_wear=100;
+      state.public_rules.preview={distance:prestartParameters.target[0]-prestartParameters.origin[0],estimated_move_ms:prestartParameters.move_ms,link_ms:prestartParameters.link_ms} as State['public_rules']['preview'];
+      state.world.hq_energy=prestartParameters.hq_energy;state.world.hq_wear=prestartParameters.hq_wear;
+      state.known.resources.hq_energy=prestartParameters.hq_energy;state.known.resources.hq_wear=prestartParameters.hq_wear;
       state.world.movement_energy_reserved=0;state.known.resources.movement_energy_reserved=0;
       state.prestart=initial_prestart_data(state.public_rules.authority.to);state.schedule=[];
     }
@@ -309,7 +312,7 @@ export class Game {
     envelope: Envelope,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
     this.assert_current();
-    if (envelope?.intent?.kind !== "issue")
+    if (!envelope?.intent||!is_task_intent(envelope.intent))
       throw new GameError("INVALID_INPUT");
     return this.operate(envelope);
   }
@@ -399,8 +402,9 @@ export class Game {
       if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to<state.sim_time||clock_to>610000)throw new GameError('INVALID_INPUT');
       if(clock_to>state.sim_time&&!state.ended)advance_move(candidate,clock_to);
     }
-    if (envelope.intent.kind === "issue") {
+    if (is_task_intent(envelope.intent)) {
       const intent = envelope.intent;
+      if(intent.kind==='replace_task'&&state.schema!==6)throw new GameError('INVALID_INPUT');
       if (state.order&&state.schema!==6) throw new GameError("ORDER_EXISTS");
       const expected = await this.preview_plan(
         state.run_id,
@@ -414,8 +418,8 @@ export class Game {
         throw new GameError("STALE_PLAN");
       if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
       if(state.schema===6)register_prestart(candidate,intent);
-      else if(is_record_plan(intent.plan))register_record(candidate,intent);
-      else register_move(candidate, intent);
+      else if(intent.kind==='issue'&&is_record_plan(intent.plan))register_record(candidate,intent);
+      else if(intent.kind==='issue')register_move(candidate, intent);
     } else if (envelope.intent.kind === "advance" || envelope.intent.kind==='tick') {
       if (state.mode !== (envelope.intent.kind==='tick'?'command':'research')) throw new GameError("MODE_LOCKED");
       if(envelope.intent.kind==='tick'&&state.paused)throw new GameError('CLOCK_PAUSED');

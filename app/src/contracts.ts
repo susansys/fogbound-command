@@ -113,6 +113,7 @@ export type Plan=MovePlan|RecordPlan|PrestartPlan;
 export function is_record_plan(plan:Plan):plan is RecordPlan{return 'kind' in plan&&plan.kind==='record';}
 export type Intent =
   | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
+  | {kind:'replace_task';command_id:string;original_command_id:string;original_version:1;plan:PrestartPlan;reason?:string}
   | { kind: "advance"; to: number }
   | { kind: "tick"; to: number }
   | { kind: "pause"; reason: "manual" | "focus_lost" | "application_hidden" }
@@ -121,6 +122,14 @@ export type Intent =
   | { kind: "mode"; mode: Mode }
   | { kind: "save" }
   | {kind:'restore';snapshot_revision:number};
+export type TaskIntent=Extract<Intent,{kind:'issue'|'replace_task'}>;
+export function is_task_intent(intent:Intent):intent is TaskIntent{return intent.kind==='issue'||intent.kind==='replace_task';}
+export function task_intent(plan:Plan,command_id:string,reason?:string):TaskIntent{
+  const common={command_id,plan,...(reason===undefined?{}:{reason})};
+  return 'kind' in plan&&plan.kind==='prestart_move'&&plan.supersedes
+    ?{...common,kind:'replace_task',plan,original_command_id:plan.supersedes,original_version:plan.version}
+    :{...common,kind:'issue'};
+}
 export type Envelope = {
   run_id: string;
   operation_id: string;

@@ -7,6 +7,10 @@ export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
 const definitions=[definition,recordDefinition,prestartDefinition];
 export type Definition = typeof definition | typeof recordDefinition | typeof prestartDefinition;
+export function prestart_parameters(state:{schema:unknown;definition_hash:unknown}):typeof prestartDefinition.profile.parameters{
+  if(state.schema!==6||state.definition_hash!==prestartDefinition.definition_hash)throw new GameError('INVALID_SAVE');
+  return prestartDefinition.profile.parameters;
+}
 export function definition_for_package(schema:unknown,definitionHash:unknown):Definition {
   const found=definitions.find(candidate=>candidate.schema===schema&&candidate.definition_hash===definitionHash);
   if(!found)throw new GameError('INVALID_SAVE');

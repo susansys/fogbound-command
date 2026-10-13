@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef,LogEntry } from "./contracts";
+import {is_task_intent,task_intent} from './contracts';
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
 import { clock,error_copy,status_copy } from "./player-copy";
@@ -218,9 +219,9 @@ export function Workbench() {
         adoptView(response.view);
         if(pendingControl.current?.operation_id===envelope.operation_id)pendingControl.current=null;
         setReceiptNote(
-          response.receipt.kind==='issue'?(response.view.scenario_kind==='prestart_move'?'通行指令已签发登记，实际发送和接受须看后续记录。':'命令已登记并发出，等待编组回报。'):response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
+          is_task_intent(envelope.intent)?(response.view.scenario_kind==='prestart_move'?'通行指令已签发登记，实际发送和接受须看后续记录。':'命令已登记并发出，等待编组回报。'):response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
-        if (envelope.intent.kind === "issue") {
+        if (is_task_intent(envelope.intent)) {
           orderConfirmed.current=envelope.operation_id;
           setPlan(null);
           setConfirm(false);
@@ -228,7 +229,7 @@ export function Workbench() {
       } else if (!response.ok) {
         if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageFault(true);
         if(pendingControl.current?.operation_id===envelope.operation_id&&['STALE_REVISION','INVALID_INPUT','MODE_LOCKED','RUN_ENDED'].includes(response.code))pendingControl.current=null;
-        if (envelope.intent.kind === 'issue' && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
+        if (is_task_intent(envelope.intent) && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
         setError(response.code);
       }
       return response;
@@ -257,7 +258,7 @@ export function Workbench() {
         if(!latest||isRecordPlan(shown)!==isRecordPlan(latest)||!latest.allowed||keys.some(key=>shown[key as keyof typeof shown]!==latest[key as keyof typeof latest])){
           if(latest)setPlan(latest);setConfirm(false);setReceiptNote('情况或任务条件已变化，请重新核对预案。');return;
         }
-        pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:{kind:'issue',command_id:crypto.randomUUID(),plan:latest,...(chosenReason?{reason:chosenReason}:{})}};
+        pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:task_intent(latest,crypto.randomUUID(),chosenReason||undefined)};
         const result=await operate(pendingOrder.current);
         if(!result||result.ok||!['STALE_REVISION','STALE_PLAN'].includes(result.code))return;
       }
@@ -268,12 +269,7 @@ export function Workbench() {
         run_id: view.run_id,
         operation_id: crypto.randomUUID(),
         expected_revision: view.revision,
-        intent: {
-          kind: "issue",
-          command_id: crypto.randomUUID(),
-          plan: structuredClone(plan),
-          ...(reason ? { reason } : {}),
-        },
+        intent:task_intent(structuredClone(plan),crypto.randomUUID(),reason||undefined),
       };
     await operate(pendingOrder.current);
   }
@@ -286,10 +282,10 @@ export function Workbench() {
       operation_id: original.operation_id,
     });
     if (response.ok) {
-      if(response.receipt&&original.intent.kind==='issue')orderConfirmed.current=original.operation_id;
+      if(response.receipt&&is_task_intent(original.intent))orderConfirmed.current=original.operation_id;
       setReceiptNote(
         response.receipt
-          ? original.intent.kind==='issue'?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
+          ? is_task_intent(original.intent)?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
           : "尚未查到原命令的登记结果，请保留原命令，再查询或重试。",
       );
       if (response.receipt) {
@@ -299,7 +295,7 @@ export function Workbench() {
         });
         if (current.ok && current.view) {
           adoptView(current.view);
-          if(original.intent.kind==='issue'){setPlan(null);setConfirm(false);}
+          if(is_task_intent(original.intent)){setPlan(null);setConfirm(false);}
           setError("");
           if(pendingControl.current?.operation_id===original.operation_id){pendingControl.current=null;setControlPending(false);
             if(deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;void control(pause);}

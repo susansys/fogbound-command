@@ -1,9 +1,10 @@
 import type { PlayerView } from "../contracts";
+import {is_task_intent} from '../contracts';
 import type { State } from "./state";
 import {public_replay_nodes} from './public-records';
 import {can_register_prestart} from './prestart-move';
 export function project_player_view(state: State): PlayerView {
-  const issued=state.inputs.filter(input=>input.envelope.intent.kind==='issue').length;
+  const issued=state.inputs.filter(input=>is_task_intent(input.envelope.intent)).length;
   const can_issue =
     (state.schema===6?can_register_prestart(state):state.status === "ready") &&
     !state.finished &&
@@ -28,7 +29,7 @@ export function project_player_view(state: State): PlayerView {
     resources: structuredClone(state.known.resources),
     issued_orders: state.inputs.flatMap(input=>{
       const intent=input.envelope.intent;
-      return intent.kind==='issue'?[{command_id:intent.command_id,issued:input.at,plan:structuredClone(intent.plan),...(intent.reason===undefined?{}:{reason:intent.reason})}]:[];
+      return is_task_intent(intent)?[{command_id:intent.command_id,issued:input.at,plan:structuredClone(intent.plan),...(intent.reason===undefined?{}:{reason:intent.reason})}]:[];
     }),
     ...(state.schema===5?{artifacts: structuredClone(state.known.artifacts??[])}:{}),
     replay_nodes:public_replay_nodes(state),

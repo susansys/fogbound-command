@@ -91,18 +91,20 @@ export function valid_envelope(value: unknown): value is Envelope {
       intent.to >= 0 &&
       intent.to <= 610000
     );
-  if (intent.kind === "issue")
+  if (intent.kind === "issue"||intent.kind==='replace_task')
     return (
       fields(intent, [
         "kind",
         "command_id",
         "plan",
+        ...(intent.kind==='replace_task'?['original_command_id','original_version']:[]),
         ...(intent.reason === undefined ? [] : ["reason"]),
       ]) &&
       valid_id(intent.command_id) &&
       (intent.reason === undefined ||
         (typeof intent.reason === "string" && intent.reason.length <= 2000)) &&
       record(intent.plan) &&
+      (intent.kind!=='replace_task'||intent.plan.kind==='prestart_move'&&intent.plan.target==='T'&&valid_id(intent.original_command_id)&&intent.original_command_id===intent.plan.supersedes&&intent.original_version===1)&&
       (intent.plan.kind==='prestart_move'
         ? fields(intent.plan,['kind','run_id','revision','editing_seq','version','actor','target','path','distance','estimated_move_ms','setup_ms','link_ms','definition_hash','allowed','gap',...(intent.plan.supersedes===undefined?[]:['supersedes'])])&&
           (intent.plan.target==='N'&&intent.plan.path==='H-N'&&intent.plan.distance===60&&intent.plan.estimated_move_ms===15900&&intent.plan.supersedes===undefined||intent.plan.target==='T'&&intent.plan.path==='H-T'&&intent.plan.distance===120&&intent.plan.estimated_move_ms===31800&&valid_id(intent.plan.supersedes))&&intent.plan.setup_ms===5000&&typeof intent.plan.definition_hash==='string'&&/^[a-f0-9]{64}$/.test(intent.plan.definition_hash)
