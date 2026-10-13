@@ -1427,6 +1427,17 @@
         "source_ref": "ENG-PRESTART-REPLACE/version1/S18 pending.cleanup",
         "source_type": "design_assumption",
         "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "S12 prestart.author_cases",
+        "entry_version": 5,
+        "owner_system": "S12",
+        "type_unit": "fixed engineering calendar/ms",
+        "value": "normal；HQ断链[2000,22000)/[2000,122000)；仅原接受回报延迟5000ms；短断链后拒绝回报延迟180000ms检验合法终态后收尾；全部回报延迟700000ms检验无合法终态的公开截止",
+        "rule": "开局选择作者固定输入，禁止运行时修改，旧4/5不适用",
+        "source_ref": "ENG-PRESTART-REPLACE/version1/S12 prestart.author_cases",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
       }
     ],
     "parameters": {
@@ -1582,14 +1593,52 @@
       "observed": 0,
       "received": 0,
       "evidence": "initial-position"
+    },
+    "prestart_cases": {
+      "normal": {
+        "hq_unavailable": []
+      },
+      "hq_short_outage": {
+        "hq_unavailable": [
+          [
+            2000,
+            22000
+          ]
+        ]
+      },
+      "hq_expiry_outage": {
+        "hq_unavailable": [
+          [
+            2000,
+            122000
+          ]
+        ]
+      },
+      "old_acceptance_delayed": {
+        "hq_unavailable": [],
+        "old_acceptance_delay_ms": 5000
+      },
+      "hq_result_unconfirmed": {
+        "hq_unavailable": [
+          [
+            2000,
+            22000
+          ]
+        ],
+        "rejection_delay_ms": 180000
+      },
+      "reports_unconfirmed": {
+        "hq_unavailable": [],
+        "all_reports_delay_ms": 700000
+      }
     }
   },
   "hashes": {
-    "profile": "f4804495019532db8a9be726fd3bf19b142dab5ef29a9214a69c6cf333446f44",
+    "profile": "ab8074185053d57a7d9345a3f4a114af66dc7eb180c1f20d4b0b2aefb702df56",
     "capabilities": "07f9b94b18ca37846bddc1048cbe34165caa4cd822ebbbffdf87b03a3062f15e",
     "rules": "3da0a6f1ab021e674970ca29c876b0e71f87c55383d526997c3624b8622c9a8b",
-    "catalogs": "2574b6b016d34dd0c20412ee6477f60ab4ef99f22c7d9b9a6daf821f5c86e85b",
+    "catalogs": "23129f850d76fecedb1af2e6d465a8ec96d7d5b20dc53480bc7a8936bfb5b11c",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "34f65d6be159078ab3d39d4862ac1f5489025cf68cfac389040b8c498c14fe1b"
+  "definition_hash": "648a3fc075474dfe7c96b77d7b859b1507c438e55391567f8f00477569bb7b12"
 }

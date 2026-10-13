@@ -1,4 +1,6 @@
 import type {LogEntry,PlayerView} from './contracts';
+import type {PrestartCaseRef} from './contracts';
+export const message_condition_copy:Record<PrestartCaseRef,string>={normal:'正常联络',hq_short_outage:'短时联络中断',hq_expiry_outage:'请求等候过久',old_acceptance_delayed:'原接令回报较晚',hq_result_unconfirmed:'替代结果回报未及时收到',reports_unconfirmed:'所有回报未及时收到'};
 export function clock(ms:number):string {const seconds=Math.floor(ms/1000);return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}${ms%1000?'.'+String(ms%1000).padStart(3,'0'):''}`;}
 const errors:Record<string,string>={
   WRITER_BUSY:'另一个窗口正在指挥。请先关闭原窗口，再在这里接手。',
@@ -12,6 +14,7 @@ const errors:Record<string,string>={
   STALE_PLAN:'预案所依据的情况已更新，请重新核对。',
   OPERATION_CONFLICT:'指令内容与已登记记录不一致，请先查询原指令结果。',
   ORDER_EXISTS:'本次演练只允许下达一项任务，原任务仍保留，请查看回报。',
+  REPLACEMENT_LIMIT:'本场唯一的替代请求已登记，请查询或重试原请求，不能另下第二项替代。',
   AUTHORITY_EXPIRED:'本次指挥授权已到期，不能再下达新任务。',
   MODE_LOCKED:'本场演练的时间方式已确定，不能在行动中更改。',
   TIME_REVERSED:'目标时刻早于当前时刻，请选择更晚的时间。',
@@ -45,6 +48,7 @@ export function log_copy(entry:LogEntry):string {
   return '行动记录已更新。';
 }
 export function status_copy(view:PlayerView):string {
+  if(view.scenario_kind==='prestart_move'&&view.status==='deadline')return view.log.some(entry=>entry.kind==='deadline_receipt')?'已收到截止未完成回报':'公开行动窗口已结束，未确认事项保留';
   if(view.scenario_kind==='record'){
     if(view.status==='ready')return '尚未下达。当前只显示草案条件、假设耗时与假设消耗。';
     if(view.status==='queued')return view.gap;

@@ -1,4 +1,5 @@
 import type { PlayerView } from "../contracts";
+import type {PrestartCaseRef} from '../contracts';
 import {is_task_intent} from '../contracts';
 import type { State } from "./state";
 import {public_replay_nodes} from './public-records';
@@ -13,6 +14,7 @@ export function project_player_view(state: State): PlayerView {
   return {
     ...(state.schema===5?{scenario_kind:'record' as const}:{}),
     ...(state.schema===6?{scenario_kind:'prestart_move' as const}:{}),
+    ...(state.schema===6?{scenario_case:state.prestart!.case_ref as PrestartCaseRef}:{}),
     ...(state.schema===6&&state.known.replacement?{replacement:structuredClone(state.known.replacement)}:{}),
     run_id: state.run_id,
     revision: state.revision,
@@ -46,7 +48,7 @@ export function project_player_view(state: State): PlayerView {
           : "查看原件与记录"
       : state.schema===5?"等待记录组回报":"等待编组位置及抵达回报",
     gap: state.schema===6
-      ?state.finished?'抵达回报已收到':issued===0?'尚未签发近点 N 任务':state.known.replacement?'替代已确认，后续进展仍按收到的回报更新':issued===2?'替代请求已登记，原任务回报仍保留，等待接受结果':state.log.some(entry=>entry.kind==='start_receipt')?'已收到开始移动回报，不能再请求准备期替代':'原任务已登记；准备或开始情况均须等待回报'
+      ?state.log.some(entry=>entry.kind==='control_unconfirmed')?'替代结果未确认，已收到的任务事实保留':state.log.some(entry=>entry.kind==='expired')?'替代请求未发送且已过期，原任务事实保留':state.finished?'抵达回报已收到':issued===0?'尚未签发近点 N 任务':state.log.some(entry=>entry.kind==='rejected_receipt')?(state.log.some(entry=>entry.kind==='rejected_receipt'&&entry.text.includes('原任务继续'))?'替代窗口已关闭，原任务继续':'请求未被接受，原任务事实保留'):state.known.replacement?'替代已确认，后续进展仍按收到的回报更新':issued===2?'替代请求已登记，原任务回报仍保留，等待接受结果':state.log.some(entry=>entry.kind==='start_receipt')?'已收到开始移动回报，不能再请求准备期替代':'原任务已登记；准备或开始情况均须等待回报'
       :state.finished
       ? state.schema===5?"记录成果回执已收到":"完成回执已收到"
       : state.status === "deadline"

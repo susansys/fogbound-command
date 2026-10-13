@@ -19,7 +19,7 @@ import {initial_record_accounts} from './record-accounting';
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
 import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
-import {prestart_parameters} from './scenario';
+import {prestart_parameters,prestart_case} from './scenario';
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
@@ -30,7 +30,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
-    return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source);
+    return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.prestart?.case_ref??'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -73,17 +73,20 @@ export class Game {
     input: unknown,
     mode: Mode,
     operation: string,
+    case_ref='normal',
   ): Promise<PlayerView> {
-    return this.create(input,mode,operation);
+    return this.create(input,mode,operation,null,case_ref);
   }
-  private async create(input:unknown,mode:Mode,operation:string,source:State|null=null):Promise<PlayerView>{
+  private async create(input:unknown,mode:Mode,operation:string,source:State|null=null,case_ref='normal'):Promise<PlayerView>{
     this.assert_current();
     const definition = await load_definition(input);
+    if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},case_ref);
+    else if(case_ref!=='normal')throw new GameError('INVALID_INPUT');
     if (!["command", "research"].includes(mode) || !valid_id(operation))
       throw new GameError("INVALID_INPUT");
-    const creationFingerprint=source
+    const creationFingerprint=(source
       ? `clone:${source.run_id}:${definition.id}:${definition.definition_hash}:${mode}`
-      : `create:${definition.id}:${definition.definition_hash}:${mode}`;
+      : `create:${definition.id}:${definition.definition_hash}:${mode}`)+(definition.schema===6?`:${case_ref}`:'');
     const previous = await this.store.creation(operation);
     if (previous) {
       const snapshot = await this.store.snapshot(
@@ -230,7 +233,8 @@ export class Game {
       state.world.hq_energy=prestartParameters.hq_energy;state.world.hq_wear=prestartParameters.hq_wear;
       state.known.resources.hq_energy=prestartParameters.hq_energy;state.known.resources.hq_wear=prestartParameters.hq_wear;
       state.world.movement_energy_reserved=0;state.known.resources.movement_energy_reserved=0;
-      state.prestart=initial_prestart_data(state.public_rules.authority.to);state.schedule=[];
+      state.known.prestart={report_sequence:0};
+      state.prestart=initial_prestart_data(state.public_rules.authority.to,case_ref);state.schedule=[];
     }
     await this.commit(
       state,
@@ -405,6 +409,7 @@ export class Game {
     if (is_task_intent(envelope.intent)) {
       const intent = envelope.intent;
       if(intent.kind==='replace_task'&&state.schema!==6)throw new GameError('INVALID_INPUT');
+      if(intent.kind==='replace_task'&&state.inputs.some(input=>input.envelope.intent.kind==='replace_task'))throw new GameError('REPLACEMENT_LIMIT');
       if (state.order&&state.schema!==6) throw new GameError("ORDER_EXISTS");
       const expected = await this.preview_plan(
         state.run_id,

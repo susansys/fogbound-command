@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef,LogEntry } from "./contracts";
-import {is_task_intent,task_intent} from './contracts';
+import {is_task_intent,task_intent,prestart_case_refs,type PrestartCaseRef} from './contracts';
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
-import { clock,error_copy,status_copy } from "./player-copy";
+import { clock,error_copy,status_copy,message_condition_copy } from "./player-copy";
 import { Dialog } from "./dialog";
 import {FrozenOrders} from './frozen-orders';
 import {RecordSummary,RecordDetail} from './readable-log';
@@ -21,6 +21,7 @@ const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
   const [definitionRef,setDefinitionRef]=useState<DefinitionRef>('FB02-ENG-RECORD');
+  const [caseRef,setCaseRef]=useState<PrestartCaseRef>('normal');
   const [sceneChanging,setSceneChanging]=useState(false);
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
@@ -100,6 +101,7 @@ export function Workbench() {
         kind: "create",
         mode,
         definition_ref:definitionRef,
+        ...(definitionRef==='ENG-PRESTART-REPLACE'?{case_ref:caseRef}:{}),
         operation_id: createOperation.current,
       });
       if (result.ok && result.view) adoptView(result.view);
@@ -229,7 +231,7 @@ export function Workbench() {
       } else if (!response.ok) {
         if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageFault(true);
         if(pendingControl.current?.operation_id===envelope.operation_id&&['STALE_REVISION','INVALID_INPUT','MODE_LOCKED','RUN_ENDED'].includes(response.code))pendingControl.current=null;
-        if (is_task_intent(envelope.intent) && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
+        if (is_task_intent(envelope.intent) && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS','REPLACEMENT_LIMIT'].includes(response.code)) pendingOrder.current = null;
         setError(response.code);
       }
       return response;
@@ -358,7 +360,8 @@ export function Workbench() {
           <p>
             本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>setDefinitionRef(event.target.value as DefinitionRef)}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');createOperation.current=crypto.randomUUID();}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option></select></label>
+          {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);createOperation.current=crypto.randomUUID();}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}
             <select
@@ -394,6 +397,7 @@ export function Workbench() {
             <strong>{view.scenario_kind==='record'?'固定工位 H':'联络通道 H—T'}</strong>
             <span>{view.scenario_kind==='record'?'记录组 R · 目标档案 A':prestart?'联络组 R · 近点 N / 远点 T':'联络组 R · 目标联络点 T'}</span>
             <small>{view.scenario_kind==='record'?'固定作业 · 虚构区域':'120米 · 固定通道 · 虚构区域'}</small>
+            {view.scenario_case&&<small>消息条件：{message_condition_copy[view.scenario_case]}</small>}
           </div>
           <div className="shell">
             <nav className="rail">

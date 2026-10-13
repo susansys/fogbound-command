@@ -86,7 +86,7 @@ export type State = {
   };
   generation: number;
   phase: "committed";
-  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources" | "artifacts" | "replacement">;
+  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources" | "artifacts" | "replacement"> & {prestart?:{report_sequence:number;terminal?:{kind:'finished'|'deadline';received_at:number};cleanup_deadline?:number}};
   public_rules: Pick<PlayerView, "geometry" | "authority"> & {
     preview: Pick<
       import("../contracts").MovePlan,

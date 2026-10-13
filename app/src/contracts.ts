@@ -1,5 +1,7 @@
 export type Mode = "command" | "research";
 export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE';
+export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
+export type PrestartCaseRef=typeof prestart_case_refs[number];
 export type Position = {
   x: number;
   y: number;
@@ -43,6 +45,7 @@ export type RecordArtifact = {
 };
 export type PlayerView = {
   scenario_kind?:'record'|'prestart_move';
+  scenario_case?:PrestartCaseRef;
   run_id: string;
   revision: number;
   sim_time: number;

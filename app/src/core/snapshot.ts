@@ -1,7 +1,7 @@
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {State} from './state';
 import {GameError} from '../contracts';
-import {hash,load_definition,definition_for_package,record_definition_for_package,prestart_parameters} from './scenario';
+import {hash,load_definition,definition_for_package,record_definition_for_package,prestart_parameters,prestart_case} from './scenario';
 import {record,valid_id,fields,valid_envelope} from '../protocol';
 import {player_view,position,resources} from '../dto';
 import {project_player_view} from './knowledge';
@@ -141,15 +141,16 @@ function references(state:State){
 }
 function prestart_history_matches(state:State,definition:ReturnType<typeof definition_for_package>):boolean{
   const p=prestart_parameters(state),c=definition.catalogs;
+  if(!state.prestart||!prestart_case(state,state.prestart.case_ref))return false;
   if(!('N' in c.geometry)||state.scenario_kind!=='prestart_move'||!['command','research'].includes(state.mode))return false;
   if(!fields(state as unknown as Record<string,unknown>,['integrity','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','order','world','schedule','movement_rules','inputs','source_run','schema','scenario_kind','contract','definition_hash','hashes','rng','generation','phase','known','public_rules','log','prestart']))return false;
   if(!integer(state.revision)||state.revision<1||!Array.isArray(state.inputs)||state.inputs.length!==state.revision-1||new Set(state.inputs.map(input=>input.envelope.operation_id)).size!==state.inputs.length)return false;
   if(state.inputs.some((input,index)=>!record(input)||!fields(input,['envelope','at','revision',...(input.clock_to===undefined?[]:['clock_to'])])||!valid_envelope(input.envelope)||input.envelope.run_id!==state.run_id||input.envelope.expected_revision!==index+1||input.revision!==index+2||!integer(input.at)||input.at>state.sim_time||input.clock_to!==undefined&&(!integer(input.clock_to)||input.clock_to<input.at)))return false;
   const initial=structuredClone(state),origin=state.generation-state.inputs.filter(input=>is_task_intent(input.envelope.intent)).length;
   if(!integer(origin)||origin<1||!equal(state.rng,{algorithm:'xorshift32-v1',version:1,seed:1,state:1,origin:state.rng?.origin,used:false})||!valid_id(state.rng.origin)||(state.source_run===null?state.rng.origin!==state.run_id:!valid_id(state.source_run)))return false;
-  initial.revision=1;initial.sim_time=0;initial.rate=1;initial.paused=state.mode==='research';initial.finished=false;initial.ended=false;initial.status='ready';initial.order=null;initial.inputs=[];initial.generation=origin;initial.prestart=initial_prestart_data(p.deadline);
+  initial.revision=1;initial.sim_time=0;initial.rate=1;initial.paused=state.mode==='research';initial.finished=false;initial.ended=false;initial.status='ready';initial.order=null;initial.inputs=[];initial.generation=origin;initial.prestart=initial_prestart_data(p.deadline,state.prestart.case_ref);
   initial.world={position:{xn:c.position.x,yn:c.position.y,d:1},equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,sends:0,completed:false,stopped:false,hq_energy:p.hq_energy,hq_wear:p.hq_wear,movement_energy_reserved:0};
-  initial.known={position:structuredClone(c.position),report:structuredClone(c.report) as State['known']['report'],delivery:structuredClone(c.delivery),resources:{equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,confirmed_at:0,hq_energy:p.hq_energy,hq_wear:p.hq_wear,movement_energy_reserved:0}};
+  initial.known={position:structuredClone(c.position),report:structuredClone(c.report) as State['known']['report'],delivery:structuredClone(c.delivery),resources:{equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,confirmed_at:0,hq_energy:p.hq_energy,hq_wear:p.hq_wear,movement_energy_reserved:0},prestart:{report_sequence:0}};
   initial.public_rules={geometry:{H:c.geometry.H as [number,number],T:c.geometry.T as [number,number],N:c.geometry.N as [number,number],extent:p.extent as [number,number],corridor_width:p.corridor_width,plain:c.geometry.plain as [number,number,number,number],rough:c.geometry.rough as [number,number,number,number]},authority:{from:c.authority.from,to:c.authority.to},preview:{distance:p.target[0]-p.origin[0],estimated_move_ms:p.move_ms,link_ms:p.link_ms} as State['public_rules']['preview']};
   initial.movement_rules={fix_ms:p.fix_ms,task_expiry_ms:p.task_expiry_ms};
   initial.schedule=[];initial.log=[{id:'initial-report',at:0,kind:'report',text:'原始工位报告已递交；R最后确认在H。',evidence:c.delivery.id}];

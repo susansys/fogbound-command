@@ -1,4 +1,4 @@
-import type { Mode, PlayerView, Plan, Envelope, Receipt,DefinitionRef } from "./contracts";
+import type { Mode, PlayerView, Plan, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 export type RunSummary = {
@@ -11,7 +11,7 @@ export type RunSummary = {
   read_only?:boolean;
 };
 export type Request =
-  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef }
+  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
