@@ -22,6 +22,7 @@ export function preview_prestart(state:State,editing_seq:number,allowed:boolean,
 }
 export function register_prestart(state:State,intent:TaskIntent){
   if(!('kind' in intent.plan)||intent.plan.kind!=='prestart_move'||!state.prestart||state.prestart.requests.length>=2)throw new GameError('INVALID_INPUT');
+  if(state.prestart.requests.some(request=>request.command_id===intent.command_id))throw new GameError('INVALID_INPUT');
   if(!can_register_prestart(state))throw new GameError('AUTHORITY_EXPIRED');
   const expected=preview_prestart(state,intent.plan.editing_seq,true,'');
   if(expected.supersedes?(intent.kind!=='replace_task'||intent.original_command_id!==expected.supersedes||intent.original_version!==1):intent.kind!=='issue')throw new GameError('INVALID_INPUT');
@@ -76,8 +77,9 @@ function end_known(state:State,unconfirmed=false){
   state.status=terminal?.kind??'deadline';state.finished=terminal?.kind==='finished';state.ended=true;state.paused=true;
   if(unconfirmed){
     const issued=state.inputs.filter(input=>is_task_intent(input.envelope.intent)).length;
-    const text=issued===0?'准备期通行任务：尚未签发任务，公开窗口及回报宽限已结束。':issued===1?'准备期通行任务结果未确认；公开等待上限已到，只保留已收到的事实，不推断远端完成。':'准备期替代结果未确认；收尾上限已到，保留已经收到的原任务事实，不推断远端接受或拒绝。';
-    state.log.push({id:'control-cleanup',at:state.sim_time,kind:'control_unconfirmed',text,sender:'总部指挥席',evidence:'public-cleanup-limit'});
+    const pending=pending_replacement(state),originalExpired=state.log.some(entry=>entry.kind==='expired'&&entry.request_kind==='task');
+    const text=issued===0?'准备期通行任务：尚未签发任务，公开窗口及回报宽限已结束。':pending?'准备期替代结果未确认；收尾上限已到，保留已经收到的原任务事实，不推断远端接受或拒绝。':originalExpired?'准备期原通行请求未发送且已过期；公开等待上限已到，保留这一已知行政结局。':'准备期通行任务结果未确认；公开等待上限已到，只保留已收到的事实，不推断远端完成。';
+    state.log.push({id:'control-cleanup',at:state.sim_time,kind:'control_unconfirmed',text,sender:'总部指挥席',evidence:'public-cleanup-limit',request_kind:pending?'replacement':'task'});
   }
 }
 function settle_hq(state:State){
@@ -135,7 +137,7 @@ export function advance_prestart(state:State,to:number){
     if(event.kind==='grace'){end_known(state,true);continue;}
     if(!request)throw new GameError('ENGINE_UNCONFIRMED');
     if(event.kind==='expire_command'){
-      if(request.sent_at===undefined){request.expired_at=event.at;state.log.push({id:event.id,at:event.at,kind:'expired',text:'准备期替代请求未发送且已过期；原任务事实保留。',sender:'总部指挥席',evidence:event.id});settle_hq(state);}
+      if(request.sent_at===undefined){request.expired_at=event.at;state.log.push({id:event.id,at:event.at,kind:'expired',text:request.plan.supersedes?'准备期替代请求未发送且已过期；原任务事实保留。':'准备期原通行请求未发送且已过期；这一已知行政结局保留。',sender:'总部指挥席',evidence:event.id,request_kind:request.plan.supersedes?'replacement':'task'});settle_hq(state);}
       else if(request.plan.supersedes&&pending_replacement(state))state.log.push({id:`${request.command_id}:window-ended`,at:event.at,kind:'request_window_ended',text:'准备期替代请求有效期已结束，已发送请求的结果未确认；不据有效期推断远端是否接受。',sender:'总部指挥席',evidence:event.id});
       continue;
     }

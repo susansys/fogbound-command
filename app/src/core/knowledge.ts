@@ -67,9 +67,11 @@ export function project_player_view(state: State): PlayerView {
 }
 export const reconstruct_known=project_player_view;
 function prestart_gap(state:Pick<State,'log'|'known'|'finished'>,issued:number):string{
-  if(state.log.some(entry=>entry.kind==='control_unconfirmed'))return issued===0?'尚未签发任务，公开窗口及回报宽限已结束':issued===1?'任务结果未确认，已收到的事实保留':'替代结果未确认，已收到的任务事实保留';
+  const originalExpired=state.log.some(entry=>entry.kind==='expired'&&entry.request_kind==='task');
+  const ending=state.log.find(entry=>entry.kind==='control_unconfirmed');
+  if(ending)return issued===0?'尚未签发任务，公开窗口及回报宽限已结束':ending.request_kind==='replacement'?'替代结果未确认，已收到的任务事实保留':originalExpired?'原通行请求未发送且已过期，已知行政结局保留':'任务结果未确认，已收到的事实保留';
   if(state.log.some(entry=>entry.kind==='request_window_ended'))return '替代请求有效期已结束，已发送结果未确认；不据有效期推断接受状态';
-  if(state.log.some(entry=>entry.kind==='expired'))return '替代请求未发送且已过期，原任务事实保留';
+  if(state.log.some(entry=>entry.kind==='expired'))return originalExpired?'原通行请求未发送且已过期，已知行政结局保留':'替代请求未发送且已过期，原任务事实保留';
   if(state.finished)return '抵达回报已收到';
   const refusal=[...state.log].reverse().find(entry=>entry.kind==='rejected_receipt');
   if(refusal)return refusal.rejection==='window_closed'?'替代窗口已关闭，原任务继续':'请求未被接受，原任务事实保留';

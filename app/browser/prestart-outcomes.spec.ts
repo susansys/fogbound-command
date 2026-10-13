@@ -49,3 +49,11 @@ for(const issued of [false,true]){
     await expect(page.locator('.task-aside')).not.toContainText('替代结果');await expect(page.locator('.task-aside')).toContainText(issued?'任务结果未确认':'尚未签发任务');
   });
 }
+
+test('CR14 expiry of the original unsent N request remains its known administrative fact on the player page',async({page})=>{
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('ENG-PRESTART-REPLACE');await page.getByLabel('消息条件').selectOption('hq_expiry_outage');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByLabel('推进至秒').fill('2');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.locator('.clock strong')).toHaveText('00:02');
+  await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:'查看通行预案',exact:true}).click();await page.getByRole('button',{name:'下达通行命令',exact:true}).click();await page.getByRole('button',{name:'确认下达',exact:true}).click();await expect(page.getByTestId('frozen-command')).toContainText('近联络点 N');
+  await page.getByLabel('推进至秒').fill('122');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.locator('.task-aside')).toContainText('原通行请求未发送且已过期');await expect(page.locator('.task-aside')).not.toContainText('替代请求未发送');
+  await page.getByLabel('推进至秒').fill('610');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.locator('.clock strong')).toHaveText('10:10');await expect(page.locator('.task-aside')).toContainText('原通行请求未发送且已过期');await expect(page.locator('.task-aside')).not.toContainText('结果未确认');
+});

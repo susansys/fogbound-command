@@ -35,6 +35,7 @@ export type LogEntry = {
   sender?: string;
   activity_id?: string;
   rejection?:TaskRefusalReason;
+  request_kind?:'task'|'replacement';
   evidence: string;
 };
 export type RecordArtifact = {

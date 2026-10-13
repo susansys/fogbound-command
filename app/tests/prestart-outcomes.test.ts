@@ -223,3 +223,18 @@ test('CR15 a sent replacement visibly distinguishes its expired request window f
     expect(view.log.some(entry=>entry.kind==='expired')).toBe(false);expect(view.resources).toMatchObject({hq_energy:14,equipment_energy:10});expect(await game.get_view(view.run_id)).toEqual(view);
   }finally{await store.delete();}
 });
+
+test('CR14 a never-sent original N task keeps its own known expiry instead of inventing a replacement or an unknown acceptance',async()=>{
+  const store=new Persistence('prestart-original-expiry'),game=new Game(store);
+  try{
+    let view=await game.create_run(definition,'research','create','hq_expiry_outage');
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'outage-start',expected_revision:view.revision,intent:{kind:'advance',to:2000}})).view;
+    const plan=await game.preview_plan(view.run_id,view.revision,1);
+    view=(await game.issue_order({run_id:view.run_id,operation_id:'original',expected_revision:view.revision,intent:{kind:'issue',command_id:'N',plan}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'expiry',expected_revision:view.revision,intent:{kind:'advance',to:122000}})).view;
+    expect(view.log.find(entry=>entry.kind==='expired')?.text).toContain('原通行请求');expect(view.gap).not.toContain('替代');
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'public-end',expected_revision:view.revision,intent:{kind:'advance',to:610000}})).view;
+    expect(view.gap).toContain('未发送且已过期');expect(view.gap).not.toContain('结果未确认');expect(view.log.some(entry=>entry.text.includes('替代结果未确认'))).toBe(false);
+    expect(view).toMatchObject({finished:false,resources:{hq_energy:16,equipment_energy:16,movement_energy:20}});expect(await game.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});
