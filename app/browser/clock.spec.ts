@@ -20,7 +20,9 @@ test('command reading keeps the real worker clock running; manual and lost-focus
   expect(await page.locator('.clock strong').innerText()).toBe(pausedTime);
   await page.getByRole('button',{name:'继续',exact:true}).click();
   await expect.poll(()=>page.locator('.clock strong').innerText()).not.toBe(pausedTime);
-  const other=await context.newPage();await other.goto('/');await other.bringToFront();
+  const other=await context.newPage();await other.goto('/');
+  await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});
+  await other.bringToFront();
   await expect.poll(()=>page.evaluate(()=>document.hidden||!document.hasFocus())).toBe(true);
   await expect(page.locator('.clock')).toContainText('已暂停');
   const hiddenTime=await page.locator('.clock strong').innerText();

@@ -34,7 +34,9 @@ test('lost focus during a pending rate receipt queues a real pause after confirm
   await page.getByLabel('时间速率').selectOption('2');
   await expect(page.getByRole('button',{name:'控制待确认',exact:true})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {hasHeldRate:()=>boolean}).hasHeldRate())).toBe(true);
-  const other=await context.newPage();await other.goto('/');await other.bringToFront();
+  const other=await context.newPage();await other.goto('/');
+  await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});
+  await other.bringToFront();
   await expect.poll(()=>page.evaluate(()=>document.hidden||!document.hasFocus())).toBe(true);
   await page.evaluate(()=>(window as unknown as {releaseRate:()=>void}).releaseRate());
   await expect(page.locator('.clock')).toContainText('已暂停');

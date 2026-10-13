@@ -24,7 +24,8 @@ test('history reading keeps the source clock running, while actual loss of focus
   await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).lastView?.sim_time)).toBeGreaterThan(1000);
   await page.getByRole('button',{name:'行动复盘',exact:true}).click();await page.getByLabel('回看时刻（秒）').fill('0');await page.getByRole('button',{name:'查看当时情况',exact:true}).click();await expect(page.getByText('历史记录 · 只读',{exact:true})).toBeVisible();await expect(page.locator('.clock strong')).toHaveText('00:00');
   const at=await page.evaluate(()=>(window as any).lastView.sim_time);await expect.poll(()=>page.evaluate(()=>(window as any).lastView.sim_time)).toBeGreaterThan(at+500);await expect(page.locator('.clock strong')).toHaveText('00:00');
-  const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});const other=await context.newPage();await other.goto('about:blank');await other.bringToFront();
+  const cdp=await context.newCDPSession(page);const other=await context.newPage();await other.goto('about:blank');
+  await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});await other.bringToFront();
   await expect.poll(()=>page.evaluate(()=>document.hidden||!document.hasFocus())).toBe(true);await expect.poll(()=>page.evaluate(()=>(window as any).lastView?.paused)).toBe(true);
   const paused=await page.evaluate(()=>(window as any).lastView.sim_time);await other.waitForTimeout(600);expect(await page.evaluate(()=>(window as any).lastView.sim_time)).toBe(paused);
   await other.close();await page.bringToFront();await cdp.detach();await page.getByRole('button',{name:'返回当前行动',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');await expect(page.getByRole('button',{name:'继续',exact:true})).toBeEnabled();
