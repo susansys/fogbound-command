@@ -19,9 +19,10 @@ async function writeState(store:Persistence,state:State){
   state.integrity=integrity(state);
   await new Promise<void>((resolve,reject)=>{const open=indexedDB.open(store.name);open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['runs','snapshots'],'readwrite');tx.objectStore('runs').put(state);tx.objectStore('snapshots').put({key:`${state.run_id}:${state.revision}`,run_id:state.run_id,state});tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>reject(tx.error);};});
 }
-async function recordIssued(name:string){
+async function recordIssued(name:string,preIssue=0){
   const store=new Persistence(name),game=new Game(store);
-  const start=await game.create_run(recordEngineeringDefinition,'research','create');
+  let start=await game.create_run(recordEngineeringDefinition,'research','create');
+  if(preIssue)start=(await game.control_clock({run_id:start.run_id,operation_id:'pre-issue',expected_revision:start.revision,intent:{kind:'advance',to:preIssue}})).view;
   const plan=await game.preview_plan(start.run_id,start.revision,1);
   const envelope:Envelope={run_id:start.run_id,operation_id:'issue',expected_revision:start.revision,intent:{kind:'issue',command_id:'record',plan}};
   const issued=await game.issue_order(envelope);
@@ -82,6 +83,14 @@ test('record explicit takeover pauses the same run and fences the older writer g
 });
 
 const corruptions=[
+  {label:'disallowed-frozen-plan',advance:2000,apply:(s:State)=>{
+    if(s.order&&'kind' in s.order.plan)s.order.plan.allowed=false;
+    for(const input of s.inputs)if(input.envelope.intent.kind==='issue')input.envelope.intent.plan.allowed=false;
+  }},
+  {label:'stale-frozen-plan',preIssue:100,advance:2000,apply:(s:State)=>{
+    if(s.order)s.order.plan.revision=1;
+    for(const input of s.inputs)if(input.envelope.intent.kind==='issue')input.envelope.intent.plan.revision=1;
+  }},
   {label:'illegal-clock-mode',advance:2000,apply:(s:State)=>{
     for(const input of s.inputs)if(input.envelope.intent.kind==='advance')input.envelope.intent={kind:'tick',to:input.envelope.intent.to};
   }},
@@ -103,8 +112,9 @@ const corruptions=[
   {label:'duplicate-event',advance:2000,apply:(s:State)=>{s.schedule.push(structuredClone(s.schedule.find(x=>x.kind==='fix')!));s.schedule.sort((a,b)=>a.at-b.at||a.phase-b.phase||a.id.localeCompare(b.id));}},
   {label:'activity-log',advance:47000,apply:(s:State)=>{s.log.find(x=>x.kind==='complete_receipt')!.activity_id='record.wrong.0';}},
 ];
-test.each(corruptions)('record restore rejects a self-consistent corrupted $label package',async({label,advance,apply})=>{
-  const {store,game,view}=await recordIssued(`record-bad-${label}`);
+test.each(corruptions)('record restore rejects a self-consistent corrupted $label package',async(corruption)=>{
+  const {label,advance,apply}=corruption;
+  const {store,game,view}=await recordIssued(`record-bad-${label}`,'preIssue' in corruption?corruption.preIssue:0);
   try{
     const current=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:advance}})).view;
     const bad=structuredClone((await store.read_committed(current.run_id))!);

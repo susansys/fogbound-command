@@ -9,11 +9,13 @@ export function replay_state(initial:State,inputs:State['inputs'],to:number):Sta
     const originalTime=state.sim_time,originalPaused=state.paused;
     if(state.schema===5){
       if(input.clock_to!==undefined&&(state.mode!=='command'||originalPaused||input.clock_to<originalTime))throw new GameError('INVALID_SAVE');
+      if(input.clock_to!==undefined&&!['pause','continue','rate','save'].includes(intent.kind))throw new GameError('INVALID_SAVE');
       if(intent.kind==='tick'&&(state.mode!=='command'||originalPaused)||intent.kind==='advance'&&state.mode!=='research')throw new GameError('INVALID_SAVE');
       if((intent.kind==='tick'||intent.kind==='advance')&&(state.ended||intent.to<=originalTime))throw new GameError('INVALID_SAVE');
       if(intent.kind==='continue'&&(state.mode!=='command'||state.ended))throw new GameError('INVALID_SAVE');
       if(intent.kind==='restore'&&intent.snapshot_revision!==input.envelope.expected_revision)throw new GameError('INVALID_SAVE');
       if(intent.kind==='issue'&&(state.order||originalTime<state.public_rules.authority.from||originalTime>=state.public_rules.authority.to))throw new GameError('INVALID_SAVE');
+      if(intent.kind==='issue'&&(!('kind' in intent.plan)||intent.plan.run_id!==state.run_id||intent.plan.revision!==input.envelope.expected_revision||!intent.plan.allowed||intent.plan.gap!==''||intent.plan.definition_hash!==state.definition_hash||intent.plan.report_id!==state.known.report.id||intent.plan.delivery_id!==state.known.delivery.id))throw new GameError('INVALID_SAVE');
     }
     if(input.clock_to!==undefined){advance_move(state,Math.min(input.clock_to,to));if(input.clock_to>to)break;}
     if(state.schema===5&&input.at!==state.sim_time)throw new GameError('INVALID_SAVE');
