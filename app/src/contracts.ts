@@ -82,7 +82,7 @@ export type PlayerView = {
   };
   artifacts?: RecordArtifact[];
   issued_orders: Array<{command_id:string;issued:number;plan:Plan;reason?:string}>;
-  replay_nodes?:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
+  replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   log: LogEntry[];
 };
 export type MovePlan = {

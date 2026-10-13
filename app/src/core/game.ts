@@ -37,7 +37,7 @@ export class Game {
     if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
     const context=new Game(this.store);
     if(nodeRevision!==undefined){
-      if(latest.schema!==5||!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
+      if(!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
       const node=await this.store.snapshot(run,nodeRevision);
       await validate_state(node);
       if(node?.run_id!==run||node.revision!==nodeRevision)throw new GameError('INVALID_SAVE');

@@ -37,7 +37,7 @@ export const player_view:Check=v=>{
   const keys=['record_energy','record_wear','record_packs','record_energy_reserved','record_packs_reserved','hq_energy','hq_wear'];
   return v.scenario_kind==='record'
     ?keys.every(key=>Object.hasOwn(v.resources as object,key))&&Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes')
-    :keys.every(key=>!Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&!Object.hasOwn(v,'replay_nodes');
+    :keys.every(key=>!Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes');
 };
 const plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
 const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});

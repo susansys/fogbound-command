@@ -27,7 +27,7 @@ export function project_player_view(state: State): PlayerView {
       return intent.kind==='issue'?[{command_id:intent.command_id,issued:input.at,plan:structuredClone(intent.plan),...(intent.reason===undefined?{}:{reason:intent.reason})}]:[];
     }),
     ...(state.schema===5?{artifacts: structuredClone(state.known.artifacts??[])}:{}),
-    ...(state.schema===5?{replay_nodes:public_replay_nodes(state)}:{}),
+    replay_nodes:public_replay_nodes(state),
     geometry: structuredClone(state.public_rules.geometry),
     authority: structuredClone(state.public_rules.authority),
     can_issue,
