@@ -8,7 +8,7 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition,engineeringDefinition } from "./scenario";
+import { load_definition,definition_for_package } from "./scenario";
 import type { State } from "./state";
 import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
@@ -26,7 +26,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
-    return this.create(engineeringDefinition,source.mode,operation,source);
+    return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source);
   }
   async get_replay(run:string,to:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -60,16 +60,21 @@ export class Game {
     const definition = await load_definition(input);
     if (!["command", "research"].includes(mode) || !valid_id(operation))
       throw new GameError("INVALID_INPUT");
+    const creationFingerprint=source
+      ? `clone:${source.run_id}:${definition.id}:${definition.definition_hash}:${mode}`
+      : `create:${definition.id}:${definition.definition_hash}:${mode}`;
     const previous = await this.store.creation(operation);
     if (previous) {
-      if (previous.fingerprint !== (source?`clone:${source.run_id}:${mode}`:`create:${mode}`))
-        throw new GameError("OPERATION_CONFLICT");
       const snapshot = await this.store.snapshot(
         previous.run_id,
         previous.revision,
       );
       if (!snapshot) throw new GameError("STORAGE_UNCONFIRMED");
       await validate_state(snapshot);
+      const legacyFingerprint=source?`clone:${source.run_id}:${mode}`:`create:${mode}`;
+      if(snapshot.definition_hash!==definition.definition_hash||snapshot.mode!==mode||snapshot.source_run!==(source?.run_id??null)||
+        previous.fingerprint!==creationFingerprint&&!(snapshot.schema===4&&previous.fingerprint===legacyFingerprint))
+        throw new GameError('OPERATION_CONFLICT');
       return project_player_view(snapshot);
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
@@ -112,7 +117,8 @@ export class Game {
       inputs: [],
       movement_rules: {fix_ms:definition.profile.parameters.fix_ms,task_expiry_ms:definition.profile.parameters.task_expiry_ms},
       source_run: source?.run_id??null,
-      schema: 4,
+      schema: definition.schema as 4 | 5,
+      ...(definition.schema === 5 ? {scenario_kind:'record' as const} : {}),
       contract: "0.5.1",
       definition_hash: definition.definition_hash,
       hashes: definition.hashes,
@@ -176,8 +182,8 @@ export class Game {
           id: "initial-report",
           at: 0,
           kind: "report",
-          text: "原始工位报告已递交；R最后确认在H。",
-          evidence: "DELIVERY-T",
+          text: definition.schema === 5 ? "档案任务简报已递交；R最后确认在工位H。" : "原始工位报告已递交；R最后确认在H。",
+          evidence: definition.catalogs.delivery.id,
         },
       ],
     };
@@ -185,7 +191,7 @@ export class Game {
       state,
       null,
       operation,
-      source?`clone:${source.run_id}:${mode}`:`create:${mode}`,
+      creationFingerprint,
     );
     return project_player_view(state);
   }
@@ -236,6 +242,7 @@ export class Game {
     await validate_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
+    if(state.schema===5)throw new GameError('INVALID_INPUT');
     return {
       run_id: run,
       revision,

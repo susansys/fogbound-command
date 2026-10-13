@@ -1,5 +1,13 @@
 # FB01 engineering verification
 
+## FB02 T01 — dual engineering entry (#11)
+
+2026-10-13: fixed-station Record is a separate schema5 registered definition; original Move definition/hash/schema4 snapshots and creation receipts remain compatible. Default selection does not start a run. Saved entry identity comes from the validated package, genuine scene switches confirm pause, and creation retries/conflicts neither pause nor replace the active run. Read-only retained entry works without acquiring the writer lock.
+
+Eight new core contracts and seven new real-browser contracts pass, including the real FB01 golden package, corrupted registry with a valid outer checksum, same-ID definition conflict, and distinct R/H fixed-station labels. Full local regression: 44 core tests, strict TypeScript/import boundary, and all 31 headed Chrome155.0.8059.39 tests pass with one worker and zero retries. Node22.23.3/Playwright1.56.1/Xvfb/Openbox/localhost are used; the tested app image config is `4c783be79a217e6ecea959e37e8fb2e83c98a2207eb3b28c62e13b6434cadc0b`. Both independent review axes re-reviewed fixes with no remaining T01 blocker; reviewers did not rerun tests.
+
+Record task preview is intentionally unavailable until T02 and the public call refuses safely. T02—T06 record work/resources/failures/resume, final demo comparison, final SHA remote CI and main acceptance remain pending. Local results are not release evidence; original 244AT remains not_run.
+
 This fictional engineering slice is not the complete game, the original 244 acceptance tests, a human experience study, or a real military model.
 
 ## T01 — safe start (#2)

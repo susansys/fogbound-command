@@ -20,7 +20,8 @@ export function valid_request(
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (
-      fields(value, ["kind", "mode", "operation_id", "request_id"]) &&
+      fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref'])]) &&
+      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );

@@ -1,10 +1,10 @@
 import {test,expect} from '@playwright/test';
 test('a live clock aging the first preview request causes a bounded fresh preview without issuing a command',async({page})=>{
   await page.addInitScript(()=>{let delayed=false;const Native=window.Worker;window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args) as Worker;return new Proxy(worker,{get(target,key){const value=Reflect.get(target,key,target);if(key==='postMessage')return(input:any)=>{if(input.kind==='preview'&&!delayed){delayed=true;const release=(event:MessageEvent)=>{if(event.data.view?.revision>input.revision){target.removeEventListener('message',release);target.postMessage(input);}};target.addEventListener('message',release);}else target.postMessage(input);};return typeof value==='function'?value.bind(target):value;},set(target,key,value){return Reflect.set(target,key,value,target);}});}});});
-  await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'定位联络点T',exact:true}).click();await page.getByRole('button',{name:'查看通行预案',exact:true}).click();await expect(page.getByRole('heading',{name:'待下达预案',exact:true})).toBeVisible();await expect(page.getByText('尚未签发移动任务',{exact:true})).toBeVisible();
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'定位联络点T',exact:true}).click();await page.getByRole('button',{name:'查看通行预案',exact:true}).click();await expect(page.getByRole('heading',{name:'待下达预案',exact:true})).toBeVisible();await expect(page.getByText('尚未签发移动任务',{exact:true})).toBeVisible();
 });
 test('command players can read, edit and dwell in confirmation while time advances before explicitly issuing',async({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await page.getByRole('button',{name:'定位联络点T',exact:true}).click();
   await page.getByRole('button',{name:'查看通行预案',exact:true}).click();
   await expect(page.getByLabel('指挥意图（选填）')).toBeVisible();
@@ -30,7 +30,7 @@ test('lost focus during a pending rate receipt queues a real pause after confirm
       }});
     }});
   });
-  await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await page.getByLabel('时间速率').selectOption('2');
   await expect(page.getByRole('button',{name:'控制待确认',exact:true})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {hasHeldRate:()=>boolean}).hasHeldRate())).toBe(true);

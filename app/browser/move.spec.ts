@@ -52,7 +52,7 @@ test("S04/S05/S07 real Worker movement, delayed completion, ledger and original-
   });
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   await page.getByRole("button", { name: "定位联络点T", exact: true }).click();
   await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
   await page.getByRole("button", { name: "下达通行命令", exact: true }).click();

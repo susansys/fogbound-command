@@ -1,4 +1,5 @@
 export type Mode = "command" | "research";
+export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD';
 export type Position = {
   x: number;
   y: number;
@@ -31,6 +32,7 @@ export type LogEntry = {
   evidence: string;
 };
 export type PlayerView = {
+  scenario_kind?:'record';
   run_id: string;
   revision: number;
   sim_time: number;

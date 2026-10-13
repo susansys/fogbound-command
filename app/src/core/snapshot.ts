@@ -1,6 +1,6 @@
 import type {State} from './state';
 import {GameError} from '../contracts';
-import {hash,load_definition,engineeringDefinition} from './scenario';
+import {hash,load_definition,engineeringDefinition,definition_for_package} from './scenario';
 import {record,valid_id,fields,valid_envelope} from '../protocol';
 import {player_view,position,resources} from '../dto';
 import {project_player_view} from './knowledge';
@@ -45,15 +45,17 @@ function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   return payload.position.x===Math.round((geometry.H[0]+(geometry.T[0]-geometry.H[0])*elapsed/parameters.move_ms)*100)/100&&payload.position.y===Math.round((geometry.H[1]+(geometry.T[1]-geometry.H[1])*elapsed/parameters.move_ms)*100)/100;
 }
 function references(state:State){
-  const parameters=engineeringDefinition.profile.parameters,catalogs=engineeringDefinition.catalogs;
-  if(!fields(state as unknown as Record<string,unknown>,['integrity','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','order','world','schedule','movement_rules','inputs','source_run','schema','contract','definition_hash','hashes','rng','generation','phase','known','public_rules','log']))return false;
+  const definition=definition_for_package(state.schema,state.definition_hash);
+  const parameters=definition.profile.parameters,catalogs=definition.catalogs;
+  if(state.schema===5&&state.scenario_kind!=='record')return false;
+  if(!fields(state as unknown as Record<string,unknown>,['integrity','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','order','world','schedule','movement_rules','inputs','source_run','schema','contract','definition_hash','hashes','rng','generation','phase','known','public_rules','log',...(state.schema===5?['scenario_kind']:[])]))return false;
   if(!integer(state.sim_time)||state.sim_time>610000||!integer(state.revision)||state.revision<1||!integer(state.generation)||!record(state.world)||!record(state.rng)||!record(state.known)||!record(state.public_rules))return false;
   if(!fields(state.known,['position','report','delivery','resources'])||!fields(state.public_rules,['geometry','authority','preview'])||!fields(state.world,['position','equipment_energy','equipment_wear','movement_energy','sends','completed','stopped'])||!fields(state.rng,['algorithm','version','seed','state','origin','used']))return false;
   if(state.rng.algorithm!=='xorshift32-v1'||state.rng.version!==1||state.rng.seed!==1||state.rng.state!==1||state.rng.used!==false||!valid_id(state.rng.origin))return false;
   if(state.source_run===null&&state.rng.origin!==state.run_id||state.source_run!==null&&!valid_id(state.source_run))return false;
   const equal=(a:unknown,b:unknown)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
   if(!equal(state.known.report,catalogs.report)||!equal(state.known.delivery,catalogs.delivery)||!equal(state.movement_rules,{fix_ms:parameters.fix_ms,task_expiry_ms:parameters.task_expiry_ms}))return false;
-  if(!equal(state.public_rules.geometry,{H:catalogs.geometry.H,T:catalogs.geometry.T,extent:parameters.extent,corridor_width:parameters.corridor_width,plain:catalogs.geometry.plain,rough:catalogs.geometry.rough})||!equal(state.public_rules.authority,{from:catalogs.authority.from,to:catalogs.authority.to})||!equal(state.public_rules.preview,{distance:120,estimated_move_ms:parameters.move_ms,link_ms:parameters.link_ms}))return false;
+  if(!equal(state.public_rules.geometry,{H:catalogs.geometry.H,T:catalogs.geometry.T,extent:parameters.extent,corridor_width:parameters.corridor_width,plain:catalogs.geometry.plain,rough:catalogs.geometry.rough})||!equal(state.public_rules.authority,{from:catalogs.authority.from,to:catalogs.authority.to})||!equal(state.public_rules.preview,{distance:state.schema===5?0:120,estimated_move_ms:parameters.move_ms,link_ms:parameters.link_ms}))return false;
   if(!record(state.world.position)||!fields(state.world.position,['xn','yn','d'])||![state.world.position.xn,state.world.position.yn,state.world.position.d].every(integer)||state.world.position.d<1||state.world.position.yn!==catalogs.geometry.H[1]*state.world.position.d||state.world.position.xn<catalogs.geometry.H[0]*state.world.position.d||state.world.position.xn>catalogs.geometry.T[0]*state.world.position.d)return false;
   if(!integer(state.world.equipment_energy)||state.world.equipment_energy>parameters.equipment_energy||!integer(state.world.equipment_wear)||state.world.equipment_wear>parameters.equipment_wear||!integer(state.world.movement_energy)||state.world.movement_energy>parameters.movement_energy||!integer(state.world.sends)||state.world.sends>8||typeof state.world.completed!=='boolean'||typeof state.world.stopped!=='boolean'||typeof state.ended!=='boolean')return false;
   if(state.finished!==(state.status==='finished')||(state.status==='finished'||state.status==='deadline')&&(!state.ended||!state.paused)||state.finished&&!state.world.completed)return false;
@@ -73,10 +75,11 @@ function references(state:State){
 }
 export async function validate_state(value:unknown):Promise<State>{
   try{
-    if(!record(value)||!json_data(value)||value.schema!==4||value.contract!=='0.5.1'||value.phase!=='committed'||!valid_id(value.run_id))throw Error('invalid');
+    if(!record(value)||!json_data(value)||![4,5].includes(Number(value.schema))||typeof value.schema!=='number'||value.contract!=='0.5.1'||value.phase!=='committed'||!valid_id(value.run_id))throw Error('invalid');
     const state=value as unknown as State;
-    await load_definition(engineeringDefinition);
-    if(state.definition_hash!==engineeringDefinition.definition_hash||JSON.stringify(canonical(state.hashes))!==JSON.stringify(canonical(engineeringDefinition.hashes))||typeof state.integrity!=='string'||state.integrity!==await state_hash(state)||!player_view(project_player_view(state))||!references(state))throw Error('invalid');
+    const definition=definition_for_package(state.schema,state.definition_hash);
+    await load_definition(definition);
+    if(state.definition_hash!==definition.definition_hash||JSON.stringify(canonical(state.hashes))!==JSON.stringify(canonical(definition.hashes))||typeof state.integrity!=='string'||state.integrity!==await state_hash(state)||!player_view(project_player_view(state))||!references(state))throw Error('invalid');
     return state;
   }catch{throw new GameError('INVALID_SAVE');}
 }

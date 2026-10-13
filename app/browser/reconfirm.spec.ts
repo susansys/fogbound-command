@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 test('a definitively rejected old plan can be checked again and explicitly issued with a new frozen command', async ({page})=>{
   await page.goto('/');
   await page.getByLabel('时间方式').selectOption('research');
-  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await page.getByRole('button',{name:'定位联络点T',exact:true}).click();
   await page.getByRole('button',{name:'查看通行预案',exact:true}).click();
   await page.getByLabel('指挥意图（选填）').fill('先核对再下达');

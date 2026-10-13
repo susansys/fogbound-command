@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { Mode, PlayerView, Plan, Envelope, Intent } from "./contracts";
+import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef } from "./contracts";
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
 import { clock,error_copy,log_copy } from "./player-copy";
@@ -10,6 +10,8 @@ const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).
 const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
+  const [definitionRef,setDefinitionRef]=useState<DefinitionRef>('FB02-ENG-RECORD');
+  const [sceneChanging,setSceneChanging]=useState(false);
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
   const orderConfirmed=useRef<string|null>(null);
@@ -64,7 +66,7 @@ export function Workbench() {
     }
   }
   useEffect(()=>{
-    const lost=()=>{const reason=document.hidden?'application_hidden':'focus_lost';if(historyActive.current){void transport.request({kind:'management_pause',reason}).then(r=>{if(!r.ok)setError(r.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));return;}const current=currentView.current;if(current?.mode==='command'&&!current.paused)void control({kind:'pause',reason});};
+    const lost=()=>{const reason=document.hidden?'application_hidden':'focus_lost';if(historyActive.current){if(liveView.current)void transport.request({kind:'management_pause',reason}).then(r=>{if(!r.ok)setError(r.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));return;}const current=currentView.current;if(current?.mode==='command'&&!current.paused)void control({kind:'pause',reason});};
     const hidden=()=>{if(document.hidden)lost();};
     window.addEventListener('blur',lost);document.addEventListener('visibilitychange',hidden);
     return()=>{window.removeEventListener('blur',lost);document.removeEventListener('visibilitychange',hidden);};
@@ -82,6 +84,7 @@ export function Workbench() {
       const result = await transport.request({
         kind: "create",
         mode,
+        definition_ref:definitionRef,
         operation_id: createOperation.current,
       });
       if (result.ok && result.view) adoptView(result.view);
@@ -98,6 +101,23 @@ export function Workbench() {
     try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
+  async function changeScene(){
+    if(!view||busy||sceneChanging||history||controlPending||storageFault||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;
+    setSceneChanging(true);setError('');
+    try {
+      if(!view.paused)await control({kind:'pause',reason:'manual'});
+      if(pendingControl.current)return;
+      const confirmed=await transport.request({kind:'view',run_id:view.run_id});
+      if(!confirmed.ok){setError(confirmed.code);return;}
+      if(!confirmed.view?.paused){setError('CHANNEL_UNCERTAIN');return;}
+      const listed=await transport.request({kind:'list'});
+      if(!listed.ok){setError(listed.code);return;}
+      setRuns(listed.runs??[]);setView(null);liveView.current=null;
+      createOperation.current=crypto.randomUUID();editing.current++;setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;orderConfirmed.current=null;
+      setWorkspace('map');setSelected('R');setReceiptNote('');
+    } catch {setError('CHANNEL_UNCERTAIN');}
+    finally {setSceneChanging(false);}
+  }
   async function replay(){
     if(!view||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
     try{const result=await transport.request({kind:'replay',run_id:view.run_id,to:Math.round(Number(reviewTo)*1000)});if(result.ok&&result.view){if(!historyActive.current)liveView.current=view;historyActive.current=true;setHistory(true);editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
@@ -105,8 +125,16 @@ export function Workbench() {
   }
   async function returnCurrent(){
     if(!view)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setPreviousLimit(null);editing.current++;setPlan(null);setView(result.view);liveView.current=result.view;}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setPreviousLimit(null);editing.current++;setPlan(null);if(!liveView.current){setView(null);const listed=await transport.request({kind:'list'});if(listed.ok)setRuns(listed.runs??[]);else setError(listed.code);}else{setView(result.view);liveView.current=result.view;}}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function readRetained(run:RunSummary){
+    if(busy||sceneChanging)return;setBusy(true);setError('');
+    try{
+      const result=await transport.request({kind:'replay',run_id:run.run_id,to:run.sim_time});
+      if(result.ok&&result.view){liveView.current=null;historyActive.current=true;setHistory(true);setPreviousLimit(run.sim_time);setReviewTo(String(run.sim_time/1000));setView(result.view);setWorkspace('review');}
+      else if(!result.ok)setError(result.code);
+    }catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function previous(){
     if(!view||history||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
@@ -278,8 +306,8 @@ export function Workbench() {
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
           </span>
           {view&&!history&&view.mode==='command'&&!view.finished&&view.status!=='deadline'&&<>
-            <select aria-label="时间速率" value={view.rate} disabled={controlPending||storageFault} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
-            <button disabled={controlPending||storageFault} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
+            <select aria-label="时间速率" value={view.rate} disabled={controlPending||storageFault||sceneChanging} onChange={e=>void control({kind:'rate',rate:Number(e.target.value) as 1|2|4})}><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option></select>
+            <button disabled={controlPending||storageFault||sceneChanging} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{controlPending?pendingControl.current?.intent.kind==='pause'?'暂停待确认':'控制待确认':view.paused?'继续':'暂停'}</button>
           </>}
           {view&&!history&&<button disabled={busy||controlPending||storageFault} onClick={()=>void control({kind:'save'})}>{controlPending&&pendingControl.current?.intent.kind==='save'?'保存待确认':'保存记录'}</button>}
           {history&&<span className="outline-tag">历史记录 · 只读</span>}
@@ -305,14 +333,15 @@ export function Workbench() {
       )}
       {!view ? (
         <main className="start">
-          <span className="outline-tag">联络演练 / 固定通道 / 一项任务</span>
-          <h2>下达命令，等待编组抵达回报</h2>
+          <span className="outline-tag">{definitionRef==='FB02-ENG-RECORD'?'记录演练 / 固定工位 / 一项任务':'联络演练 / 固定通道 / 一项任务'}</span>
+          <h2>{definitionRef==='FB02-ENG-RECORD'?'记录档案，等待编组完成回报':'下达命令，等待编组抵达回报'}</h2>
           <p>
-            目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。
+            {definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
           </p>
           <p>
-            本次演练只指挥一支联络组，执行一次通行任务。总部依据收到的报告掌握情况。
+            本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
           </p>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>setDefinitionRef(event.target.value as DefinitionRef)}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option></select></label>
           <label>
             时间方式{" "}
             <select
@@ -336,17 +365,18 @@ export function Workbench() {
           </button>
           {runs.map((run) => (
             <p key={run.run_id}>
-              已保存的演练记录 · {clock(run.sim_time)}
-              <button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>
+              已保存的演练记录 · {run.scenario_kind==='record'?'工位记录':'走廊移动'} · {clock(run.sim_time)}
+              {!run.read_only&&<button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>}
+              <button disabled={busy} onClick={()=>void readRetained(run)}>查看记录</button>
             </p>
           ))}
         </main>
       ) : (
         <>
           <div className="contextbar">
-            <strong>联络通道 H—T</strong>
-            <span>联络组 R · 目标联络点 T</span>
-            <small>120米 · 固定通道 · 虚构区域</small>
+            <strong>{view.scenario_kind==='record'?'固定工位 H':'联络通道 H—T'}</strong>
+            <span>{view.scenario_kind==='record'?'记录组 R · 目标档案 A':'联络组 R · 目标联络点 T'}</span>
+            <small>{view.scenario_kind==='record'?'固定作业 · 虚构区域':'120米 · 固定通道 · 虚构区域'}</small>
           </div>
           <div className="shell">
             <nav className="rail">
@@ -357,7 +387,7 @@ export function Workbench() {
                 <MapTrifold size={24} />
                 <span>态势地图</span>
               </button>
-              <button className={workspace==='tasks'?'active':''} onClick={()=>setWorkspace('tasks')}><Stack size={24}/><span>任务调度</span></button>
+              <button disabled={view.scenario_kind==='record'} className={workspace==='tasks'?'active':''} onClick={()=>setWorkspace('tasks')}><Stack size={24}/><span>任务调度</span></button>
               <button
                 className={workspace === "report" ? "active" : ""}
                 onClick={() => setWorkspace("report")}
@@ -368,12 +398,13 @@ export function Workbench() {
               <button className={workspace==='log'?'active':''} onClick={()=>setWorkspace('log')}><ChatCenteredText size={24}/><span>指挥记录</span></button>
               <button className={workspace==='review'?'active':''} onClick={()=>setWorkspace('review')}><ClockCounterClockwise size={24}/><span>行动复盘</span></button>
               <button disabled={busy||history||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>setRestartConfirm(true)}><ArrowsClockwise size={24}/><span>重开行动</span></button>
+              <button disabled={busy||sceneChanging||history||controlPending||storageFault||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void changeScene()}><ArrowsClockwise size={24}/><span>{sceneChanging?'暂停并保留记录':'更换演练'}</span></button>
             </nav>
             <main className="main">
               <div className="workspacebar">
                 <h1>{{map:'态势地图',review:'行动复盘',report:'情报中心',tasks:'任务调度',log:'指挥记录'}[workspace]}</h1>
                 <span className="outline-tag">总部已收到的情况</span>
-                {history&&<button disabled={busy} onClick={()=>void returnCurrent()}>返回当前行动</button>}
+                {history&&<button disabled={busy} onClick={()=>void returnCurrent()}>{liveView.current?'返回当前行动':'返回演练选择'}</button>}
                 {!history&&view.mode === "research" &&
                   !view.finished &&
                   view.status !== "deadline" && (
@@ -416,7 +447,7 @@ export function Workbench() {
                     }
                   />
                 ) : workspace==='tasks'?(
-                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>本次只向联络组下达一项通行任务。指令发出后仍要等确认。</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>联络组 · R</h3><span>{view.gap}</span></div><p>由总部H沿固定通道抵达联络点T。</p><button disabled={history||!view.can_issue} onClick={()=>setSelected('T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>联络组 · R</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>通行至联络点</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>联络点 T · 登记地点</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected('T');void preview();}}>查看通行预案</button>{plan&&<section className="plan"><h3>待下达预案</h3><label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>下达通行命令</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
+                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>本次只向联络组下达一项通行任务。指令发出后仍要等确认。</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>联络组 · R</h3><span>{view.gap}</span></div><p>由总部H沿固定通道抵达联络点T。</p><button disabled={history||!view.can_issue} onClick={()=>setSelected('T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>联络组 · R</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>通行至联络点</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>联络点 T · 登记地点</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。</p><button className="primary" disabled={busy||history||storageFault||view.scenario_kind==='record'||!view.can_issue} onClick={()=>{setSelected('T');void preview();}}>查看通行预案</button>{plan&&<section className="plan"><h3>待下达预案</h3><label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>下达通行命令</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
                 ) : workspace==='log'?(
                   <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><time>{clock(entry.at)}</time><p>{log_copy(entry)}</p></section>)}</article>
                 ) : workspace==='review'?(
@@ -430,19 +461,19 @@ export function Workbench() {
                       联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。
                     </p>
                     <div className="time-grid"><div><span>观察时间</span><strong>{clock(view.report.observed.value)}</strong></div><div><span>报出时间</span><strong>{clock(view.report.reported.value)}</strong></div><div><span>总部收到</span><strong>{clock(view.delivery.received.value)}</strong></div><div><span>事情发生的时间</span><strong>未知</strong></div></div>
-                    <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history} onClick={()=>setWorkspace('tasks')}>拟定通行任务</button></section>
+                    <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history||view.scenario_kind==='record'} onClick={()=>setWorkspace('tasks')}>拟定通行任务</button></section>
                   </article></div>
                 )}
                 <aside className="inspector">
                   <div className="panel-heading">当前选择：{selected}</div>
                   <div className="unit-title"><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
                     {selected === "R"
-                      ? "联络组 R"
+                      ? view.scenario_kind==='record'?"记录组 R":"联络组 R"
                       : selected === "T"
                         ? "联络点 T"
-                        : "总部 H"}
+                        : view.scenario_kind==='record'?"工位 H":"总部 H"}
                   </h2><p>{{ready:'待命',queued:'等待接令回报',executing:'行动中，等待抵达回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status]} / {clock(view.position.received)}</p></div></div>
-                  <dl className="facts"><div><dt>职责</dt><dd>通行至联络点</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
+                  <dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
                   <section>
                     <h3>总部最后确认位置</h3>
                     <p data-testid="position">
@@ -463,7 +494,7 @@ export function Workbench() {
                       原始工位报告与收到凭证分别保留。<br/>观察、报出与收到时间均为00:00，各有开局登记记录。
                     </small>
                     <p>
-                      <button onClick={() => select("T")}>定位联络点T</button>
+                      <button onClick={() => select(view.scenario_kind==='record'?'H':'T')}>{view.scenario_kind==='record'?'定位工位H':'定位联络点T'}</button>
                       <button onClick={() => setWorkspace("report")}>
                         查看原件
                       </button>
@@ -475,7 +506,7 @@ export function Workbench() {
                     <p>{view.gap}</p>
                     <button
                       className="primary full"
-                      disabled={busy || history || storageFault || selected !== "T" || !view.can_issue}
+                      disabled={busy || history || storageFault || view.scenario_kind==='record' || selected !== "T" || !view.can_issue}
                       onClick={() => void preview()}
                     >
                       查看通行预案
@@ -545,7 +576,7 @@ export function Workbench() {
                       </button>
                     </section>
                   )}
-                  <div className="inspector-bottom"><p>先核对情报，再选择编组与地点；下达后等待小组回报。</p><button className="primary full" onClick={()=>setWorkspace(view.finished?'review':'tasks')}>{view.finished?'查看行动复盘':'拟定任务'} <ArrowRight/></button></div>
+                  <div className="inspector-bottom"><p>先核对情报，再选择编组与地点；下达后等待小组回报。</p><button disabled={view.scenario_kind==='record'&&!view.finished} className="primary full" onClick={()=>setWorkspace(view.finished?'review':'tasks')}>{view.finished?'查看行动复盘':'拟定任务'} <ArrowRight/></button></div>
                 </aside>
               </div>
               <footer className={`bottom-log ${collapsed ? "collapsed" : ""}`}>

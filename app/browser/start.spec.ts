@@ -5,12 +5,12 @@ test("S01 real Worker commits to IndexedDB and refuses a second live writer", as
 }) => {
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   await expect(page.getByText("事情发生的时间：未知", { exact: true })).toBeVisible();
   await expect(page.getByTestId("position")).toHaveText("50.00, 150.00");
   const other = await context.newPage();
   await other.goto("/");
-  await other.getByRole("button", { name: "开始演练", exact: true }).click();
+  await other.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await other.getByRole("button", { name: "开始演练", exact: true }).click();
   await expect(other.getByRole("alert")).toContainText("另一个窗口正在指挥");
   await page.reload();
   await expect(page.getByText(/已保存的演练记录/)).toBeVisible();
