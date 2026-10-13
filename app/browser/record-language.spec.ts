@@ -38,14 +38,14 @@ test('Record replay selects confirmed registration and subsequent advance nodes 
   await page.getByRole('button',{name:'推进时间',exact:true}).click();
   await expect(page.locator('.clock strong')).toHaveText('00:00.999');
   await page.getByRole('button',{name:'行动复盘',exact:true}).click();
-  await page.getByLabel('回看节点').selectOption({label:'任务登记后'});
+  await page.getByLabel('回看节点').selectOption('2');
   await page.getByRole('button',{name:'查看当时情况',exact:true}).click();
   await expect(page.locator('.clock strong')).toHaveText('00:00');
   await expect(page.locator('.inspector')).toContainText('总部电量 16 / 16');
   await expect(page.locator('.bottom-log')).not.toContainText('总部已发送');
   await page.getByRole('button',{name:'返回当前行动',exact:true}).click();
   await expect(page.locator('.clock strong')).toHaveText('00:00.999');
-  await page.getByLabel('回看节点').selectOption({label:'时间推进后 · 记录 2'});
+  await page.getByLabel('回看节点').selectOption('3');
   await page.getByRole('button',{name:'查看当时情况',exact:true}).click();
   await expect(page.locator('.inspector')).toContainText('总部电量 15 / 16');
   await expect(page.locator('.bottom-log')).toContainText('总部已发送');

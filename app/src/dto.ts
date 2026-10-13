@@ -30,7 +30,8 @@ const common_player_view:Check=v=>shape(v,{
   geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)}),
   authority:v=>shape(v,{from:time,to:time}),can_issue:bool,next_action:text,gap:text,
   log:list(log),
-},{scenario_kind:oneOf(['record']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,label:text}))});
+  issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan},{reason:text})),
+},{scenario_kind:oneOf(['record']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
   if(!common_player_view(v)||!record(v)||!record(v.resources))return false;
   const keys=['record_energy','record_wear','record_packs','record_energy_reserved','record_packs_reserved','hq_energy','hq_wear'];
