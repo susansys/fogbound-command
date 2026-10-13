@@ -47,7 +47,10 @@ jobs:
         run: docker run -d --name fb01-ci -p 127.0.0.1:4175:80 fogbound-fb01:ci
       - name: Record public build fingerprint
         run: node verification/fingerprint.mjs
-      - run: npm run browser
+      - name: Run browser contracts with virtual display focus changes
+        run: xvfb-run --auto-servernum npm run browser
+        env:
+          FB01_HEADED: '1'
       - name: Failure evidence only
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
