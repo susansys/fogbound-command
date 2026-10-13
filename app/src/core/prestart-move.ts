@@ -5,7 +5,8 @@ type ReportKind='accepted_receipt'|'replace_receipt'|'rejected_receipt'|'start_r
 type Rejection=TaskRefusalReason;
 type ReportPayload={kind:ReportKind;observed:number;sequence:number;activity_id:string;target:'N'|'T';supersedes?:string;rejection?:Rejection;position?:PlayerView['position'];resources:Pick<PlayerView['resources'],'equipment_energy'|'equipment_wear'|'movement_energy'|'movement_energy_reserved'|'confirmed_at'>};
 type Request={command_id:string;issued:number;expiry:number;plan:PrestartPlan;reason?:string;sent_at?:number;delivered_at?:number;accepted_at?:number;rejected_at?:number;rejection?:Rejection;expired_at?:number;effective_at?:number};
-type Activity={id:string;command_id:string;generation:number;phase:'preparing'|'moving'|'completed'|'superseded'|'stopped';accepted:number;starts:number;completes:number;reserved:number;settled:boolean};
+type MovementSettlement={cause:string;at:number;distance:{numerator:number;denominator:number;unit:'fictional_metre'};energy:number;released:number};
+type Activity={id:string;command_id:string;generation:number;phase:'preparing'|'moving'|'completed'|'superseded'|'stopped';accepted:number;starts:number;completes:number;reserved:number;settled:boolean;settlement?:MovementSettlement};
 type Event={id:string;at:number;phase:number;kind:'send_command'|'expire_command'|'receive_command'|'receive_report'|'start'|'fix'|'complete'|'deadline'|'grace'|'cleanup';command_id?:string;generation?:number;index?:number;payload?:ReportPayload};
 type PhaseRecord={sequence:number;command_id:string;at:number;kind:'delivered'|'accepted'|'rejected'|'replacement_applied'|'effective'|'completed';supersedes?:string};
 export type PrestartData={case_ref:string;requests:Request[];activities:Activity[];queue:Event[];records:PhaseRecord[]};
@@ -40,6 +41,16 @@ function locate(state:State,at:number){
   const duration=request.plan.estimated_move_ms,elapsed=Math.max(0,Math.min(duration,at-activity.starts));
   state.world.position={xn:state.public_rules.geometry.H[0]*duration+request.plan.distance*elapsed,yn:state.public_rules.geometry.H[1]*duration,d:duration};
 }
+function settle_movement(state:State,activity:Activity,at:number){
+  if(activity.settled||state.world.movement_energy_reserved!==activity.reserved)throw new GameError('ENGINE_UNCONFIRMED');
+  const numerator=Math.max(0,state.world.position.xn-state.public_rules.geometry.H[0]*state.world.position.d),denominator=state.world.position.d;
+  let divisor=numerator,remainder=denominator;
+  while(remainder){const next=divisor%remainder;divisor=remainder;remainder=next;}
+  const energy=Math.ceil(numerator*prestart_parameters(state).move_energy_per_100/(denominator*100));
+  if(energy>activity.reserved||energy>state.world.movement_energy)throw new GameError('ENGINE_UNCONFIRMED');
+  activity.settlement={cause:`${activity.id}:settle`,at,distance:{numerator:numerator/divisor,denominator:denominator/divisor,unit:'fictional_metre'},energy,released:activity.reserved};
+  activity.settled=true;state.world.movement_energy-=energy;state.world.movement_energy_reserved=0;
+}
 function send_report(state:State,request:Request,kind:ReportKind,at:number,index=0,includePosition=false){
   const p=prestart_parameters(state),calendar=prestart_case(state,state.prestart!.case_ref),received=at+(calendar.all_reports_delay_ms??(kind==='accepted_receipt'?calendar.old_acceptance_delay_ms??p.link_ms:kind==='rejected_receipt'?calendar.rejection_delay_ms??p.link_ms:p.link_ms));
   if(at>=p.send_authority_to)return;
@@ -58,11 +69,12 @@ function accept(state:State,request:Request,at:number){
   if(request.plan.supersedes){
     const old=data.activities.find(activity=>activity.command_id===request.plan.supersedes);
     if(!old||old.phase!=='preparing'||at>=old.starts){reject(state,request,at,'window_closed');return;}
-    old.phase='superseded';state.world.movement_energy_reserved=0;
+    settle_movement(state,old,at);old.phase='superseded';
   }
   request.accepted_at=at;record_phase(state,request,'accepted',at);if(request.plan.supersedes)record_phase(state,request,'replacement_applied',at);
   const p=prestart_parameters(state),generation=data.requests.indexOf(request)+1,reserved=Math.ceil(request.plan.distance*p.move_energy_per_100/100);
   const activity:Activity={id:`${request.command_id}.activity.${generation}`,command_id:request.command_id,generation,phase:'preparing',accepted:at,starts:at+p.setup_ms,completes:at+p.setup_ms+request.plan.estimated_move_ms,reserved,settled:false};
+  if(reserved>state.world.movement_energy||state.world.movement_energy_reserved)throw new GameError('ENGINE_UNCONFIRMED');
   data.activities.push(activity);state.world.movement_energy_reserved=reserved;
   send_report(state,request,request.plan.supersedes?'replace_receipt':'accepted_receipt',at);
   data.queue.push({id:`${request.command_id}:start`,at:activity.starts,phase:30,kind:'start',command_id:request.command_id,generation},{id:`${request.command_id}:complete`,at:activity.completes,phase:30,kind:'complete',command_id:request.command_id,generation});
@@ -116,9 +128,7 @@ function cutoff_work(state:State,at:number){
   const activity=data.activities.find(item=>item.phase==='preparing'||item.phase==='moving');
   if(activity){
     const request=data.requests.find(item=>item.command_id===activity.command_id)!;
-    const distance=Math.max(0,state.world.position.xn-state.public_rules.geometry.H[0]*state.world.position.d);
-    state.world.movement_energy-=Math.ceil(distance*p.move_energy_per_100/(state.world.position.d*100));
-    activity.settled=true;activity.phase='stopped';state.world.movement_energy_reserved=0;
+    settle_movement(state,activity,at);activity.phase='stopped';
     send_report(state,request,'deadline_receipt',at,0,true);
   }
   state.world.stopped=true;
@@ -127,7 +137,8 @@ function cutoff_work(state:State,at:number){
 }
 export function advance_prestart(state:State,to:number){
   const data=state.prestart;if(!data)throw new GameError('ENGINE_UNCONFIRMED');
-  const sort=()=>data.queue.sort((a,b)=>a.at-b.at||a.phase-b.phase||a.id.localeCompare(b.id));sort();
+  const causal_order=(event:Event)=>event.payload?.sequence??data.requests.findIndex(request=>request.command_id===event.command_id);
+  const sort=()=>data.queue.sort((a,b)=>a.at-b.at||a.phase-b.phase||causal_order(a)-causal_order(b));sort();
   while(data.queue[0]?.at<=to&&!state.ended){
     const event=data.queue.shift()!;locate(state,event.at);state.sim_time=event.at;
     const request=data.requests.find(request=>request.command_id===event.command_id);
@@ -159,8 +170,7 @@ export function advance_prestart(state:State,to:number){
     if(event.kind==='start'){activity.phase='moving';request.effective_at=event.at;record_phase(state,request,'effective',event.at);send_report(state,request,'start_receipt',event.at,0,true);}
     else if(event.kind==='fix')send_report(state,request,'fix_receipt',event.at,event.index,true);
     else if(event.kind==='complete'){
-      if(activity.settled)throw new GameError('ENGINE_UNCONFIRMED');
-      activity.settled=true;activity.phase='completed';state.world.movement_energy-=Math.ceil(request.plan.distance*prestart_parameters(state).move_energy_per_100/100);state.world.movement_energy_reserved=0;state.world.completed=true;
+      settle_movement(state,activity,event.at);activity.phase='completed';state.world.completed=true;
       record_phase(state,request,'completed',event.at);
       send_report(state,request,'complete_receipt',event.at,0,true);
     }
