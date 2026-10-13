@@ -8,7 +8,7 @@ test('command reading keeps the real worker clock running; manual and lost-focus
     document.addEventListener('visibilitychange',()=>records.push(`visibility:${document.visibilityState}`));
   });
   await page.goto('/');
-  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await page.getByRole('button',{name:'查看原件',exact:true}).click();
   await expect.poll(()=>page.locator('.clock strong').innerText()).not.toBe('00:00');
   const readingTime=await page.locator('.clock strong').innerText();
@@ -33,7 +33,7 @@ test('command reading keeps the real worker clock running; manual and lost-focus
   await expect.poll(()=>page.locator('.clock strong').innerText()).not.toBe(hiddenTime);
 });
 test('public 1x/2x/4x rates follow elapsed wall time rather than UI frames',async({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   function ms(text:string){const [m,s]=text.split(':');return Math.round((Number(m)*60+Number(s))*1000);}
   for(const rate of [1,2,4]){
     await page.getByRole('button',{name:'暂停',exact:true}).click();

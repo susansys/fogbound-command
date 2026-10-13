@@ -5,7 +5,7 @@ test("S03 map/report selection, marker drag, anchored zoom and cancelled preview
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   const map = page.getByRole("region", { name: "公开态势地图" });
   await expect(
     page.getByRole("button", { name: "联络点T", exact: true }),
@@ -74,7 +74,7 @@ test("S03 large viewport and doubled text retain reachable controls and distinct
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "公开态势地图" }).locator("canvas"),
   ).toHaveCount(1);

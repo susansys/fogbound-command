@@ -6,7 +6,7 @@ test('an unconfirmed pause retains its pending label and retries the identical o
       return new Proxy(worker,{get(target,key){const value=Reflect.get(target,key,target);if(key==='postMessage')return(input:{kind?:string;envelope?:{intent?:{kind?:string}}})=>{if(input.envelope?.intent?.kind==='pause')inputs.push(structuredClone(input.envelope));target.postMessage(input);};return typeof value==='function'?value.bind(target):value;},set(target,key,value){if(key==='onmessage'){target.onmessage=(event:MessageEvent)=>{if(!dropped&&event.data.receipt?.kind==='pause'){dropped=true;value(new MessageEvent('message',{data:{request_id:event.data.request_id,ok:false,code:'CHANNEL_UNCERTAIN'}}));}else value(event);};return true;}return Reflect.set(target,key,value,target);}});
     }});
   });
-  await page.goto('/');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'暂停',exact:true}).click();
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'暂停',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('暂未收到确认');await expect(page.getByRole('button',{name:'暂停待确认',exact:true})).toBeVisible();
   expect(await page.locator('.clock').innerText()).not.toContain('已暂停');
   await page.getByRole('button',{name:'重试原控制',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
@@ -34,7 +34,7 @@ test('a nested private field in a transport response is rejected, preserving the
       });
     }});
   });
-  await page.goto('/');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.goto('/');await page.getByLabel('时间方式').selectOption('research');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await page.getByRole('button',{name:'定位联络点T',exact:true}).click();await page.getByRole('button',{name:'查看通行预案',exact:true}).click();await page.getByRole('button',{name:'下达通行命令',exact:true}).click();await page.getByRole('button',{name:'确认下达',exact:true}).click();await expect(page.getByText('命令已登记，尚未收到编组接令回报',{exact:true})).toBeVisible();
   await page.getByLabel('推进至秒').fill('6');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.locator('.clock strong')).toHaveText('00:06');
   await page.getByLabel('推进至秒').fill('7');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.getByRole('alert')).toContainText('暂未收到确认');

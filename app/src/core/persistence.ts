@@ -1,7 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type { State } from "./state";
 import { GameError } from "../contracts";
-import {state_hash} from './snapshot';
+import {state_hash,validate_state} from './snapshot';
 class Database extends Dexie {
   runs!: Table<State, string>;
   snapshots!: Table<{ key: string; run_id: string; state: State }, string>;
@@ -76,7 +76,7 @@ export class Persistence {
           revision: state.revision,
           sim_time: state.sim_time,
         });
-        if (expected === null)
+        if (expected === null) {
           await this.db.operations.put({
             key: `create:${operation_id}`,
             run_id: state.run_id,
@@ -85,6 +85,10 @@ export class Persistence {
             revision: state.revision,
             sim_time: state.sim_time,
           });
+          const created=((await this.db.metadata.get('creation-counter'))?.value??0)+1;
+          await this.db.metadata.put({key:'creation-counter',value:created});
+          await this.db.metadata.put({key:`created:${state.run_id}`,value:created});
+        }
         if(expected===null&&state.source_run!==null){
           const source=await this.db.runs.get(state.source_run);
           if(!source||await this.db.metadata.get(`readonly:${state.source_run}`))throw new GameError('HISTORY_READ_ONLY');
@@ -107,12 +111,20 @@ export class Persistence {
     return (await this.db.snapshots.get(`${run}:${revision}`))?.state;
   }
   async list_runs() {
-    return (await this.db.runs.toArray()).map((x) => ({
+    const entries=await this.db.runs.toArray();
+    for(const state of entries)await validate_state(state);
+    const ranked=await Promise.all(entries.map(async state=>({state,created:(await this.db.metadata.get(`created:${state.run_id}`))?.value??0,read_only:await this.is_read_only(state.run_id)})));
+    ranked.sort((a,b)=>b.created-a.created||Number(a.read_only)-Number(b.read_only)||b.state.revision-a.state.revision);
+    const latest=new Map<string,(typeof ranked)[number]>();
+    for(const entry of ranked)if(!latest.has(entry.state.definition_hash))latest.set(entry.state.definition_hash,entry);
+    return [...latest.values()].map(({state:x,read_only}) => ({
       run_id: x.run_id,
       sim_time: x.sim_time,
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
+      scenario_kind: x.schema===5?'record' as const:'move' as const,
+      read_only,
     }));
   }
   async delete(): Promise<void> {

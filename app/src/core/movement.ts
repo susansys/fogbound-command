@@ -5,6 +5,7 @@ export function register_move(
   state: State,
   intent: Extract<Intent, { kind: "issue" }>,
 ) {
+  if('kind' in intent.plan)throw new GameError('INVALID_INPUT');
   const issued = state.sim_time,
     link = intent.plan.link_ms,
     start = issued + link,
@@ -56,9 +57,32 @@ export function register_move(
     evidence: intent.command_id,
   });
 }
+export function register_record(
+  state: State,
+  intent: Extract<Intent, { kind: "issue" }>,
+) {
+  if(!('kind' in intent.plan))throw new GameError('INVALID_INPUT');
+  const issued=state.sim_time,link=intent.plan.link_ms,start=issued+link,recordStart=start+intent.plan.setup_ms,complete=recordStart+intent.plan.estimated_record_ms;
+  state.order={command_id:intent.command_id,issued,expiry:issued+state.movement_rules.task_expiry_ms,accepted:null,plan:structuredClone(intent.plan),...(intent.reason!==undefined?{reason:intent.reason}:{})};
+  state.status='queued';
+  state.generation++;
+  state.schedule=state.schedule.filter(x=>x.kind!=='deadline');
+  state.world.hq_energy=(state.world.hq_energy??0)-1;
+  state.world.hq_wear=(state.world.hq_wear??0)-1;
+  state.known.resources={...structuredClone(state.known.resources),hq_energy:state.world.hq_energy,hq_wear:state.world.hq_wear,confirmed_at:issued};
+  const event=(kind:MoveEvent['kind'],at:number,index?:number)=>({id:`${intent.command_id}:${kind}:${index??0}`,at,phase:kind.endsWith('receipt')?20:10,generation:state.generation,kind,...(index===undefined?{}:{index})});
+  state.schedule.push(event('accept',start),event('accepted_receipt',start+link),event('fix',recordStart,1),event('fix_receipt',recordStart+link,1),event('complete',complete),event('complete_receipt',complete+link),{...event('deadline',state.public_rules.authority.to),phase:30});
+  state.schedule.sort((a,b)=>a.at-b.at||a.phase-b.phase||a.id.localeCompare(b.id));
+  state.log.push({id:`${intent.command_id}:issued`,at:issued,kind:'issued',text:'记录任务草案已签发；等待记录组接令。',evidence:intent.command_id});
+}
 function locate(state: State, at: number) {
   if (state.order?.accepted === null || !state.order || state.world.stopped)
     return;
+  if('kind' in state.order.plan){
+    const start=state.order.accepted+state.order.plan.setup_ms;
+    state.world.record_work=Math.max(0,Math.min(state.order.plan.work,(at-start)/(state.order.plan.estimated_record_ms/state.order.plan.work)));
+    return;
+  }
   const { H, T } = state.public_rules.geometry,
     d = state.order.plan.estimated_move_ms,
     elapsed = Math.max(0, Math.min(d, at - state.order.accepted));
@@ -87,8 +111,14 @@ function send(
       equipment_energy: state.world.equipment_energy,
       equipment_wear: state.world.equipment_wear,
       movement_energy: state.world.movement_energy,
+      ...(state.world.record_energy===undefined?{}:{record_energy:state.world.record_energy}),
+      ...(state.world.record_wear===undefined?{}:{record_wear:state.world.record_wear}),
+      ...(state.world.record_packs===undefined?{}:{record_packs:state.world.record_packs}),
+      ...(state.world.hq_energy===undefined?{}:{hq_energy:state.world.hq_energy}),
+      ...(state.world.hq_wear===undefined?{}:{hq_wear:state.world.hq_wear}),
       confirmed_at: delivery.at,
     },
+    ...(receiptKind==='complete_receipt'&&state.world.record_artifacts?.length?{artifacts: structuredClone(state.world.record_artifacts)}:{}),
     ...(withPosition
       ? {
           position: {
@@ -120,14 +150,25 @@ export function advance_move(state: State, to: number) {
       if(event.at>=state.public_rules.authority.to){state.schedule=state.schedule.filter(x=>x.kind!=='accepted_receipt');continue;}
       state.order.accepted = event.at;
       send(state, event, "accepted_receipt", false);
-    } else if (event.kind === "fix") send(state, event, "fix_receipt", true);
+    } else if (event.kind === "fix") {
+      if(state.order&&'kind' in state.order.plan){
+        state.world.record_wear=(state.world.record_wear??0)-state.order.plan.record_wear;
+        send(state,event,'fix_receipt',false);
+      } else send(state, event, "fix_receipt", true);
+    }
     else if (event.kind === "complete") {
+      if(!state.order)throw new GameError('ENGINE_UNCONFIRMED');
       if (event.at >= state.public_rules.authority.to) continue;
-      state.world.movement_energy -= Math.ceil(
-        state.order!.plan.distance / 100,
+      if('kind' in state.order.plan){
+        state.world.record_energy=(state.world.record_energy??0)-state.order.plan.record_energy;
+        state.world.record_packs=(state.world.record_packs??0)-state.order.plan.record_packs;
+        state.world.record_work=state.order.plan.work;
+        if(!state.world.record_artifacts?.length)state.world.record_artifacts=[{id:`artifact-${state.order.command_id}`,report_id:state.order.plan.report_id,delivery_id:state.order.plan.delivery_id,completed:event.at,verified:false,activity_id:`${state.order.command_id}.complete.0`}];
+      } else state.world.movement_energy -= Math.ceil(
+        state.order.plan.distance / 100,
       );
       state.world.completed = true;
-      send(state, event, "complete_receipt", true);
+      send(state, event, "complete_receipt", !('kind' in state.order.plan));
     } else if (event.kind === "deadline") {
       if (!state.order) {
         state.status = "deadline";
@@ -142,6 +183,14 @@ export function advance_move(state: State, to: number) {
         });
       } else if (!state.world.completed) {
         state.world.stopped = true;
+        if(state.order&&'kind' in state.order.plan){
+          state.schedule = state.schedule.filter(x=>!['complete','complete_receipt','fix','fix_receipt'].includes(x.kind));
+          if(state.order.accepted===null)state.schedule=state.schedule.filter(x=>!['accept','accepted_receipt'].includes(x.kind));
+          state.schedule.push({id:`${state.order.command_id}:deadline_receipt`,at:event.at+state.order.plan.link_ms,phase:20,generation:state.generation,kind:'deadline_receipt'});
+          send(state,event,'deadline_receipt',false);
+          state.schedule.sort((a,b)=>a.at-b.at||a.phase-b.phase||a.id.localeCompare(b.id));
+          continue;
+        }
         const { xn, d } = state.world.position;
         state.world.movement_energy -= Math.ceil(
           Math.abs(xn - state.public_rules.geometry.H[0] * d) / (d * 100),
@@ -169,6 +218,7 @@ export function advance_move(state: State, to: number) {
     } else {
       if (!event.payload) throw new GameError("ENGINE_UNCONFIRMED");
       state.known.resources = structuredClone(event.payload.resources);
+      if (event.payload.artifacts) state.known.artifacts = structuredClone(event.payload.artifacts);
       if (event.payload.position)
         state.known.position = structuredClone(event.payload.position);
       if (event.kind === "accepted_receipt") state.status = "executing";
@@ -188,7 +238,15 @@ export function advance_move(state: State, to: number) {
         at: event.at,
         kind: event.kind,
         text:
-          event.kind === "accepted_receipt"
+          'kind' in state.order!.plan
+            ? event.kind === "accepted_receipt"
+              ? `记录组接令：活动凭证 ${state.order!.command_id}.accept.0；送达/接受/生效 ${state.order!.accepted} ms；签发 ${state.order!.issued} ms。`
+              : event.kind === "fix_receipt"
+                ? `记录开始：活动凭证 ${state.order!.command_id}.record.0；观察 ${event.payload.observed} ms。`
+                : event.kind === "deadline_receipt"
+                  ? "记录任务截止：宽限只等待既有回报，不补做记录。"
+                  : `记录成果回报：活动凭证 ${state.order!.command_id}.complete.0；成果 artifact-${state.order!.command_id} · 未核验；完成 ${event.payload.observed} ms；总部确认 ${event.at} ms。`
+          : event.kind === "accepted_receipt"
             ? `收到接受反馈：送达/接受/生效 ${state.order!.accepted} ms；签发 ${state.order!.issued} ms。`
             : event.kind === "fix_receipt"
               ? `收到定位：观察 ${event.payload.observed} ms。`
@@ -196,6 +254,10 @@ export function advance_move(state: State, to: number) {
                 ? "收到截止反馈：未在截止前完成，grace不补作业。"
                 : `工程完成：实际完成 ${event.payload.observed} ms；总部确认 ${event.at} ms。`,
         observed: event.payload.observed,
+        ...('kind' in state.order!.plan&&event.kind!=='deadline_receipt'?{
+          sender:'记录组 R',
+          activity_id:event.kind==='accepted_receipt'?`${state.order!.command_id}.accept.0`:event.kind==='fix_receipt'?`${state.order!.command_id}.record.0`:`${state.order!.command_id}.complete.0`,
+        }:{}),
         evidence: event.id,
       });
     }

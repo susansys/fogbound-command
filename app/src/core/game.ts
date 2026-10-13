@@ -8,12 +8,12 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition,engineeringDefinition } from "./scenario";
+import { load_definition,definition_for_package,record_definition_for_package } from "./scenario";
 import type { State } from "./state";
 import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
-import { advance_move, register_move } from "./movement";
+import { advance_move, register_move, register_record } from "./movement";
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
 export class Game {
@@ -26,7 +26,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
-    return this.create(engineeringDefinition,source.mode,operation,source);
+    return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source);
   }
   async get_replay(run:string,to:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -60,22 +60,28 @@ export class Game {
     const definition = await load_definition(input);
     if (!["command", "research"].includes(mode) || !valid_id(operation))
       throw new GameError("INVALID_INPUT");
+    const creationFingerprint=source
+      ? `clone:${source.run_id}:${definition.id}:${definition.definition_hash}:${mode}`
+      : `create:${definition.id}:${definition.definition_hash}:${mode}`;
     const previous = await this.store.creation(operation);
     if (previous) {
-      if (previous.fingerprint !== (source?`clone:${source.run_id}:${mode}`:`create:${mode}`))
-        throw new GameError("OPERATION_CONFLICT");
       const snapshot = await this.store.snapshot(
         previous.run_id,
         previous.revision,
       );
       if (!snapshot) throw new GameError("STORAGE_UNCONFIRMED");
       await validate_state(snapshot);
+      const legacyFingerprint=source?`clone:${source.run_id}:${mode}`:`create:${mode}`;
+      if(snapshot.definition_hash!==definition.definition_hash||snapshot.mode!==mode||snapshot.source_run!==(source?.run_id??null)||
+        previous.fingerprint!==creationFingerprint&&!(snapshot.schema===4&&previous.fingerprint===legacyFingerprint))
+        throw new GameError('OPERATION_CONFLICT');
       return project_player_view(snapshot);
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
+    const recordParameters=definition.schema===5?record_definition_for_package(definition.schema,definition.definition_hash).profile.parameters:null;
     const state: State = {
       run_id,
       revision: 1,
@@ -96,6 +102,15 @@ export class Game {
         equipment_energy: definition.profile.parameters.equipment_energy,
         equipment_wear: definition.profile.parameters.equipment_wear,
         movement_energy: definition.profile.parameters.movement_energy,
+        ...(recordParameters?{
+          record_energy: recordParameters.record_energy,
+          record_wear: recordParameters.record_wear,
+          record_packs: recordParameters.record_packs,
+          hq_energy: recordParameters.hq_energy,
+          hq_wear: recordParameters.hq_wear,
+          record_work: 0,
+          record_artifacts: [],
+        }:{}),
         sends: 0,
         completed: false,
         stopped: false,
@@ -112,7 +127,8 @@ export class Game {
       inputs: [],
       movement_rules: {fix_ms:definition.profile.parameters.fix_ms,task_expiry_ms:definition.profile.parameters.task_expiry_ms},
       source_run: source?.run_id??null,
-      schema: 4,
+      schema: definition.schema as 4 | 5,
+      ...(definition.schema === 5 ? {scenario_kind:'record' as const} : {}),
       contract: "0.5.1",
       definition_hash: definition.definition_hash,
       hashes: definition.hashes,
@@ -150,12 +166,12 @@ export class Game {
           to: definition.catalogs.authority.to,
         },
         preview: {
-          distance: Math.hypot(
+          distance: (definition.schema===5?0:Math.hypot(
             definition.catalogs.geometry.T[0] -
               definition.catalogs.geometry.H[0],
             definition.catalogs.geometry.T[1] -
               definition.catalogs.geometry.H[1],
-          ) as 120,
+          )) as 120,
           estimated_move_ms: definition.profile.parameters.move_ms as 31800,
           link_ms: definition.profile.parameters.link_ms as 1000,
         },
@@ -168,16 +184,24 @@ export class Game {
           equipment_energy: definition.profile.parameters.equipment_energy,
           equipment_wear: definition.profile.parameters.equipment_wear,
           movement_energy: definition.profile.parameters.movement_energy,
+          ...(recordParameters?{
+            record_energy: recordParameters.record_energy,
+            record_wear: recordParameters.record_wear,
+            record_packs: recordParameters.record_packs,
+            hq_energy: recordParameters.hq_energy,
+            hq_wear: recordParameters.hq_wear,
+          }:{}),
           confirmed_at: 0,
         },
+        ...(definition.schema===5?{artifacts: []}:{}),
       },
       log: [
         {
           id: "initial-report",
           at: 0,
           kind: "report",
-          text: "原始工位报告已递交；R最后确认在H。",
-          evidence: "DELIVERY-T",
+          text: definition.schema === 5 ? "档案任务简报已递交；R最后确认在工位H。" : "原始工位报告已递交；R最后确认在H。",
+          evidence: definition.catalogs.delivery.id,
         },
       ],
     };
@@ -185,7 +209,7 @@ export class Game {
       state,
       null,
       operation,
-      source?`clone:${source.run_id}:${mode}`:`create:${mode}`,
+      creationFingerprint,
     );
     return project_player_view(state);
   }
@@ -236,6 +260,13 @@ export class Game {
     await validate_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
+    if(state.schema===5){
+      const definition=record_definition_for_package(state.schema,state.definition_hash),p=definition.profile.parameters;
+      return {kind:'record',run_id:run,revision,editing_seq,version:1,actor:'R',target:'A',station:'H',definition_hash:state.definition_hash,
+        report_id:view.report.id,delivery_id:view.delivery.id,setup_ms:p.setup_ms,work:p.record_work,
+        estimated_record_ms:p.record_work*p.record_ms_per_work,estimated_total_ms:p.setup_ms+p.record_work*p.record_ms_per_work+2*p.link_ms,
+        link_ms:1000,record_energy:p.record_energy_cost,record_wear:p.record_first_wear,record_packs:p.record_pack_cost,allowed:view.can_issue,gap:view.can_issue?'':view.gap};
+    }
     return {
       run_id: run,
       revision,
@@ -357,7 +388,8 @@ export class Game {
       )
         throw new GameError("STALE_PLAN");
       if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
-      register_move(candidate, intent);
+      if('kind' in intent.plan)register_record(candidate,intent);
+      else register_move(candidate, intent);
     } else if (envelope.intent.kind === "advance" || envelope.intent.kind==='tick') {
       if (state.mode !== (envelope.intent.kind==='tick'?'command':'research')) throw new GameError("MODE_LOCKED");
       if(envelope.intent.kind==='tick'&&state.paused)throw new GameError('CLOCK_PAUSED');

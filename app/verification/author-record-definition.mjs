@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+// Author-time expansion only. The runtime loads the complete, immutable JSON.
+const move=JSON.parse(fs.readFileSync('src/core/engineering.json','utf8'));
+const {definition_hash:ignoredDefinition,hashes:ignoredHashes,...payload}=structuredClone(move);
+payload.schema=5;
+payload.scenario_kind='record';
+payload.id='FB02-ENG-RECORD';
+payload.profile.id=payload.id;
+payload.profile.parameters={...payload.profile.parameters,setup_ms:5000,record_work:4,record_ms_per_work:10000,record_energy:20,record_wear:100,record_energy_cost:4,record_first_wear:3,record_packs:2,record_pack_cost:1,hq_energy:16,hq_wear:100,link_authority_to:610000,load_capacity:20,space_capacity:12,movement_energy:0};
+payload.profile.registry.push({id:'FB02 record.fixture',entry_version:1,owner_system:'S03',type_unit:'fixed author fixture/work,ms,energy,wear,item',value:'setup5000ms; record4work/40000ms; energy4; first wear3; pack1; three reports; HQ terminal16/100; strict completion before600000ms; receipt through610000ms',rule:'fictional entertainment; exact accumulated work; settle ceil once; no real calibration',source_ref:'FB02-ENG-RECORD/version1',source_type:'design_assumption',calibration_status:'uncalibrated'});
+payload.capabilities=['record','report_delivery','management_pause','resume_latest','known_replay','single_writer'];
+payload.rules={...payload.rules,version:'fb02-rules-1',record:'exact_rational_work_then_single_ceil_settlement',completion:'strictly_before_deadline',public_closing_obligations:[]};
+payload.catalogs.actor={id:'R',roles:['record_keeper','link_keeper'],load_capacity:20,space_capacity:12,equipment:['EQ-REC','EQ-LINK']};
+payload.catalogs.record_equipment={id:'EQ-REC',load:4,space:3,energy:20,wear:100};
+payload.catalogs.record_pack={id:'record_pack',count:2,load:1,space:1};
+payload.catalogs.hq_terminal={id:'HQ-TERM',energy:16,wear:100,energy_per_send:1,wear_per_send:1};
+payload.catalogs.geometry.T=[50,150];
+payload.catalogs.authority={...payload.catalogs.authority,action:'record',target:'A'};
+payload.catalogs.link_authority={subject:'R',recipient:'HQ',action:'state_change',from:0,to:610000};
+payload.catalogs.report={...payload.catalogs.report,id:'REPORT-A',target:'A',origin:'虚构档案登记册'};
+payload.catalogs.delivery={...payload.catalogs.delivery,id:'DELIVERY-A',report_id:'REPORT-A'};
+payload.catalogs.target={id:'A',workstation:'H',description:'在工位H记录档案A，并向总部递交完成回报'};
+const hash=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const hashes={profile:hash(payload.profile),capabilities:hash(payload.capabilities),rules:hash(payload.rules),catalogs:hash(payload.catalogs),media:hash([])};
+fs.writeFileSync('src/core/record-engineering.json',JSON.stringify({...payload,hashes,definition_hash:hash({...payload,hashes})},null,2)+'\n');
+console.log('Authored complete schema5 Record fixture; original Move definition is unchanged.');

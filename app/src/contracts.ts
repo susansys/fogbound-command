@@ -1,4 +1,5 @@
 export type Mode = "command" | "research";
+export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD';
 export type Position = {
   x: number;
   y: number;
@@ -28,9 +29,20 @@ export type LogEntry = {
   kind: string;
   text: string;
   observed?: number;
+  sender?: string;
+  activity_id?: string;
   evidence: string;
 };
+export type RecordArtifact = {
+  id: string;
+  report_id: string;
+  delivery_id: string;
+  completed: number;
+  verified: false;
+  activity_id: string;
+};
 export type PlayerView = {
+  scenario_kind?:'record';
   run_id: string;
   revision: number;
   sim_time: number;
@@ -60,10 +72,16 @@ export type PlayerView = {
     equipment_wear: number;
     movement_energy: number;
     confirmed_at: number;
+    record_energy?: number;
+    record_wear?: number;
+    record_packs?: number;
+    hq_energy?: number;
+    hq_wear?: number;
   };
+  artifacts?: RecordArtifact[];
   log: LogEntry[];
 };
-export type Plan = {
+export type MovePlan = {
   run_id: string;
   revision: number;
   editing_seq: number;
@@ -77,6 +95,13 @@ export type Plan = {
   allowed: boolean;
   gap: string;
 };
+export type RecordPlan = {
+  kind:'record';run_id:string;revision:number;editing_seq:number;version:1;
+  actor:'R';target:'A';station:'H';definition_hash:string;report_id:string;delivery_id:string;
+  setup_ms:number;work:number;estimated_record_ms:number;estimated_total_ms:number;link_ms:1000;
+  record_energy:number;record_wear:number;record_packs:number;allowed:boolean;gap:string;
+};
+export type Plan=MovePlan|RecordPlan;
 export type Intent =
   | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
   | { kind: "advance"; to: number }

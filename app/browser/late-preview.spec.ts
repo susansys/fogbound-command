@@ -43,7 +43,7 @@ test("cancelled preview discards a late Transport failure and preserves editable
   });
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   await page.getByRole("button", { name: "定位联络点T", exact: true }).click();
   await page.getByRole("button", { name: "查看通行预案", exact: true }).click();
   await expect(page.getByRole("heading", { name: "待下达预案" })).toBeVisible();
@@ -76,7 +76,7 @@ test("scrolling the legend and layer menu does not zoom the map", async ({
 }) => {
   await page.goto("/");
   await page.getByLabel("时间方式").selectOption("research");
-  await page.getByRole("button", { name: "开始演练", exact: true }).click();
+  await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole("button", { name: "开始演练", exact: true }).click();
   const map = page.getByRole("region", { name: "公开态势地图" });
   await expect(map.locator("canvas")).toHaveCount(1);
   await page.getByRole("button", { name: "图例 展开", exact: true }).click();

@@ -1,0 +1,31 @@
+import {test,expect} from '@playwright/test';
+
+test('FB02-S05/S06 real browser issues a fixed-station record task and receives the result by report',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('时间方式').selectOption('research');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByRole('button',{name:'拟定记录任务',exact:true}).click();
+  await page.getByRole('button',{name:'查看记录预案',exact:true}).click();
+  await page.getByRole('button',{name:'下达记录任务',exact:true}).click();
+  await page.getByRole('button',{name:'确认下达',exact:true}).click();
+  await expect(page.locator('.task-aside')).toContainText('记录任务已登记');
+  await page.getByLabel('推进至秒').fill('2');
+  await page.getByRole('button',{name:'推进时间',exact:true}).click();
+  await expect(page.locator('.bottom-log')).toContainText('记录组接令');
+  await page.getByLabel('推进至秒').fill('7');
+  await page.getByRole('button',{name:'推进时间',exact:true}).click();
+  await expect(page.locator('.bottom-log')).toContainText('记录开始');
+  await page.getByLabel('推进至秒').fill('47');
+  await page.getByRole('button',{name:'推进时间',exact:true}).click();
+  await expect(page.locator('.clock')).toContainText('任务完成');
+  await expect(page.locator('.bottom-log')).toContainText('记录成果回报');
+  await expect(page.locator('.bottom-log')).toContainText('记录组 R');
+  await expect(page.locator('.bottom-log')).toContainText('活动凭证');
+  await page.getByRole('button',{name:'返回态势地图',exact:true}).click();
+  await expect(page.getByText('记录能量 16 / 20',{exact:false})).toBeVisible();
+  await expect(page.getByText('联络器电量 13 / 16',{exact:false})).toBeVisible();
+  await expect(page.getByText('总部电量 15 / 16',{exact:false})).toBeVisible();
+  const resources = page.locator('section').filter({hasText:'已收到的装备状态'});
+  await expect(resources).toContainText('成果 artifact-');
+  await expect(resources).toContainText('未核验');
+});
