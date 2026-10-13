@@ -10,6 +10,14 @@ Record task preview is intentionally unavailable until T02 and the public call r
 
 This fictional engineering slice is not the complete game, the original 244 acceptance tests, a human experience study, or a real military model.
 
+## FB02 T02 — record original and cancellable draft (#12)
+
+2026-10-13: fixed-station Record preview now exposes a separate Record plan without sending an order. The player can read the archive original and delivery, keep the unknown source-event time distinct, open the task workspace, preview fixed H/A record work, enter an optional reason, cancel the draft and preview again without advancing the clock or changing the committed package. Record issue remains intentionally unavailable until the later execution ticket; Game rejects even a legal RecordPlan at the issue boundary with no state change.
+
+Full local regression passes: 45 core tests, strict TypeScript/import boundary, and all 32 headed Chrome155.0.8059.39 browser tests with one worker and zero retries. The T02 browser path covers original report display, fixed H/A task form, cancellation, reason preservation and the absence of Move distance text. The tested app image config is `73d68fe1faecda3a8f2912022b7e81251c64722c547035affc037b69734c48ec`; Worker `worker-DVeNxRdW.js`. Independent Spec re-review confirmed its two blockers were fixed. Independent Standards review found no blocker and only non-blocking smells around repeated UI branches, naked preview constants and the current Move/Record plan discriminator; reviewers did not rerun tests.
+
+Record execution, work progress, resource settlement, failures, save/resume, final visual matching, final SHA remote CI and main acceptance remain pending. Local results are not release evidence; original 244AT remains not_run.
+
 ## T01 — safe start (#2)
 
 - Baseline: `6df6a8a6a8c64a23902978beff53db26f4a5c5b1`; independent Standards/Spec review included all new files via staged diff, not an empty HEAD-only comparison.

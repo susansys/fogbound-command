@@ -33,11 +33,13 @@ test('FB02-S02 does not offer a package whose registry hash is corrupted even if
   } finally {await source.delete();await store.delete();}
 });
 
-test('FB02-S01 safely refuses the unsupported old Move preview in Record without faulting subsequent saves',async()=>{
+test('FB02-S01 safely refuses an old Move plan in Record without faulting subsequent saves',async()=>{
   const store=new Persistence('fb02-safe-preview'),game=new Game(store);
   try {
     const record=await game.create_run(recordDefinition,'research','record');
-    await expect(game.preview_plan(record.run_id,record.revision,1)).rejects.toThrow('INVALID_INPUT');
+    const move=await game.create_run(engineeringDefinition,'research','move');
+    const oldPlan=await game.preview_plan(move.run_id,move.revision,1);
+    await expect(game.issue_order({run_id:record.run_id,operation_id:'old-plan',expected_revision:record.revision,intent:{kind:'issue',command_id:'old-command',plan:oldPlan}})).rejects.toThrow('STALE_PLAN');
     const saved=await game.save({run_id:record.run_id,operation_id:'save-after-preview',expected_revision:record.revision,intent:{kind:'save'}});
     expect(saved.receipt.result).toBe('committed');
     expect(saved.view.report.target).toBe('A');

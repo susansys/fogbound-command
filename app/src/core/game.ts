@@ -8,7 +8,7 @@ import type {
 } from "../contracts";
 import { GameError } from "../contracts";
 import { Persistence } from "./persistence";
-import { load_definition,definition_for_package } from "./scenario";
+import { load_definition,definition_for_package,record_definition_for_package } from "./scenario";
 import type { State } from "./state";
 import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
@@ -242,7 +242,13 @@ export class Game {
     await validate_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
-    if(state.schema===5)throw new GameError('INVALID_INPUT');
+    if(state.schema===5){
+      const definition=record_definition_for_package(state.schema,state.definition_hash),p=definition.profile.parameters;
+      return {kind:'record',run_id:run,revision,editing_seq,version:1,actor:'R',target:'A',station:'H',definition_hash:state.definition_hash,
+        report_id:view.report.id,delivery_id:view.delivery.id,setup_ms:p.setup_ms,work:p.record_work,
+        estimated_record_ms:p.record_work*p.record_ms_per_work,estimated_total_ms:p.setup_ms+p.record_work*p.record_ms_per_work+2*p.link_ms,
+        link_ms:1000,record_energy:p.record_energy_cost,record_wear:p.record_first_wear,record_packs:p.record_pack_cost,allowed:view.can_issue,gap:view.can_issue?'':view.gap};
+    }
     return {
       run_id: run,
       revision,
@@ -352,6 +358,7 @@ export class Game {
     }
     if (envelope.intent.kind === "issue") {
       const intent = envelope.intent;
+      if ('kind' in intent.plan) throw new GameError("INVALID_INPUT");
       if (state.order) throw new GameError("ORDER_EXISTS");
       const expected = await this.preview_plan(
         state.run_id,

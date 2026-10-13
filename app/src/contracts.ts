@@ -65,7 +65,7 @@ export type PlayerView = {
   };
   log: LogEntry[];
 };
-export type Plan = {
+export type MovePlan = {
   run_id: string;
   revision: number;
   editing_seq: number;
@@ -79,6 +79,13 @@ export type Plan = {
   allowed: boolean;
   gap: string;
 };
+export type RecordPlan = {
+  kind:'record';run_id:string;revision:number;editing_seq:number;version:1;
+  actor:'R';target:'A';station:'H';definition_hash:string;report_id:string;delivery_id:string;
+  setup_ms:number;work:number;estimated_record_ms:number;estimated_total_ms:number;link_ms:1000;
+  record_energy:number;record_wear:number;record_packs:number;allowed:boolean;gap:string;
+};
+export type Plan=MovePlan|RecordPlan;
 export type Intent =
   | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
   | { kind: "advance"; to: number }

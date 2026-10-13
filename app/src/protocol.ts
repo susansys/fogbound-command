@@ -103,7 +103,11 @@ export function valid_envelope(value: unknown): value is Envelope {
       (intent.reason === undefined ||
         (typeof intent.reason === "string" && intent.reason.length <= 2000)) &&
       record(intent.plan) &&
-      fields(intent.plan, [
+      (intent.plan.kind==='record'
+        ? fields(intent.plan,['kind','run_id','revision','editing_seq','version','actor','target','station','definition_hash','report_id','delivery_id','setup_ms','work','estimated_record_ms','estimated_total_ms','link_ms','record_energy','record_wear','record_packs','allowed','gap'])&&
+          intent.plan.target==='A'&&intent.plan.station==='H'&&typeof intent.plan.definition_hash==='string'&&/^[a-f0-9]{64}$/.test(intent.plan.definition_hash)&&valid_id(intent.plan.report_id)&&valid_id(intent.plan.delivery_id)&&
+          intent.plan.setup_ms===5000&&intent.plan.work===4&&intent.plan.estimated_record_ms===40000&&intent.plan.estimated_total_ms===47000&&intent.plan.record_energy===4&&intent.plan.record_wear===3&&intent.plan.record_packs===1
+        : fields(intent.plan, [
         "run_id",
         "revision",
         "editing_seq",
@@ -116,10 +120,10 @@ export function valid_envelope(value: unknown): value is Envelope {
         "link_ms",
         "allowed",
         "gap",
-      ]) &&
+      ])&&intent.plan.target==='T'&&intent.plan.path==='H-T'&&intent.plan.distance===120&&intent.plan.estimated_move_ms===31800) &&
       valid_id(intent.plan.run_id) &&
       typeof intent.plan.revision==='number'&&Number.isSafeInteger(intent.plan.revision)&&intent.plan.revision>=1&&
-      intent.plan.version===1&&intent.plan.actor==='R'&&intent.plan.target==='T'&&intent.plan.path==='H-T'&&intent.plan.distance===120&&intent.plan.estimated_move_ms===31800&&intent.plan.link_ms===1000&&typeof intent.plan.allowed==='boolean'&&typeof intent.plan.gap==='string'&&intent.plan.gap.length<=300&&
+      intent.plan.version===1&&intent.plan.actor==='R'&&intent.plan.link_ms===1000&&typeof intent.plan.allowed==='boolean'&&typeof intent.plan.gap==='string'&&intent.plan.gap.length<=300&&
       typeof intent.plan.editing_seq === "number" &&
       Number.isSafeInteger(intent.plan.editing_seq) &&
       intent.plan.editing_seq >= 0

@@ -70,7 +70,7 @@ export type State = {
   known: Pick<PlayerView, "position" | "report" | "delivery" | "resources">;
   public_rules: Pick<PlayerView, "geometry" | "authority"> & {
     preview: Pick<
-      import("../contracts").Plan,
+      import("../contracts").MovePlan,
       "distance" | "estimated_move_ms" | "link_ms"
     >;
   };

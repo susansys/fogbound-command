@@ -7,6 +7,12 @@ import { Dialog } from "./dialog";
 import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
 import ms from 'milsymbol';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
+function isRecordPlan(plan: Plan | null | undefined): plan is Extract<Plan,{kind:'record'}> {
+  return !!plan && 'kind' in plan;
+}
+function isMovePlan(plan: Plan | null | undefined): plan is Exclude<Plan,Extract<Plan,{kind:'record'}>> {
+  return !!plan && !('kind' in plan);
+}
 const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
@@ -230,6 +236,11 @@ export function Workbench() {
   }
   async function issueChecked() {
     if (!view || !plan) return;
+    if (isRecordPlan(plan)) {
+      setConfirm(false);
+      setError('INVALID_INPUT');
+      return;
+    }
     if(view.mode==='command'&&!pendingOrder.current){
       const shown=plan,chosenReason=reason;
       for(let attempt=0;attempt<3;attempt++){
@@ -237,7 +248,7 @@ export function Workbench() {
         const checked=await transport.request({kind:'preview',run_id:current.run_id,revision:current.revision,editing_seq:shown.editing_seq});
         if(!checked.ok){if(checked.code==='STALE_REVISION')continue;setError(checked.code);return;}
         const latest=checked.plan;
-        if(!latest||!latest.allowed||['actor','target','path','distance','estimated_move_ms','link_ms'].some(key=>shown[key as keyof Plan]!==latest[key as keyof Plan])){
+        if(!isMovePlan(latest)||!latest.allowed||['actor','target','path','distance','estimated_move_ms','link_ms'].some(key=>shown[key as keyof typeof shown]!==latest[key as keyof typeof latest])){
           if(latest)setPlan(latest);setConfirm(false);setReceiptNote('情况或任务条件已变化，请重新核对预案。');return;
         }
         pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:{kind:'issue',command_id:crypto.randomUUID(),plan:latest,...(chosenReason?{reason:chosenReason}:{})}};
@@ -387,7 +398,7 @@ export function Workbench() {
                 <MapTrifold size={24} />
                 <span>态势地图</span>
               </button>
-              <button disabled={view.scenario_kind==='record'} className={workspace==='tasks'?'active':''} onClick={()=>setWorkspace('tasks')}><Stack size={24}/><span>任务调度</span></button>
+              <button className={workspace==='tasks'?'active':''} onClick={()=>setWorkspace('tasks')}><Stack size={24}/><span>任务调度</span></button>
               <button
                 className={workspace === "report" ? "active" : ""}
                 onClick={() => setWorkspace("report")}
@@ -447,21 +458,21 @@ export function Workbench() {
                     }
                   />
                 ) : workspace==='tasks'?(
-                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>本次只向联络组下达一项通行任务。指令发出后仍要等确认。</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>联络组 · R</h3><span>{view.gap}</span></div><p>由总部H沿固定通道抵达联络点T。</p><button disabled={history||!view.can_issue} onClick={()=>setSelected('T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>联络组 · R</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>通行至联络点</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>联络点 T · 登记地点</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。</p><button className="primary" disabled={busy||history||storageFault||view.scenario_kind==='record'||!view.can_issue} onClick={()=>{setSelected('T');void preview();}}>查看通行预案</button>{plan&&<section className="plan"><h3>待下达预案</h3><label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>下达通行命令</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
+                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>{view.scenario_kind==='record'?'本次只向记录组下达一项固定工位记录任务。预览不会执行。':'本次只向联络组下达一项通行任务。指令发出后仍要等确认。'}</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</h3><span>{view.gap}</span></div><p>{view.scenario_kind==='record'?'记录组固定在工位H，预案对象限定为档案A。':'由总部H沿固定通道抵达联络点T。'}</p><button disabled={history||!view.can_issue} onClick={()=>setSelected(view.scenario_kind==='record'?'H':'T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录档案':'通行至联络点'}</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'工位 H · 档案 A':'联络点 T · 登记地点'}</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>{view.scenario_kind==='record'?'固定工位 · 预计准备5秒、记录40秒；单向消息1秒。':'120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。'}</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected(view.scenario_kind==='record'?'H':'T');void preview();}}>{view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}</button>{plan&&<section className="plan"><h3>待下达预案</h3>{isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒；假设全程约{plan.estimated_total_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>R → T · {plan.distance}图上米<br/>预计通行{plan.estimated_move_ms/1000}秒，单向消息{plan.link_ms/1000}秒</p>}<label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button>{isMovePlan(plan)?<button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>下达通行命令</button>:<button disabled>记录下达由后续任务开放</button>}</div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>{view.scenario_kind==='record'?'尚未下达。当前只显示草案条件、假设耗时与假设消耗。':'等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。'}</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
                 ) : workspace==='log'?(
                   <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><time>{clock(entry.at)}</time><p>{log_copy(entry)}</p></section>)}</article>
                 ) : workspace==='review'?(
                   <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p><label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p><p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><p key={entry.id}><time>{clock(entry.at)}</time> · {log_copy(entry)}</p>)}</article>
                 ) : (
-                  <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>登记联络点 T</strong><p>关联地点 T · 原始工位报告</p></button></aside><article className="report-detail">
-                    <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select('T')}>定位联络点T <ArrowRight/></button></div>
-                    <h2>登记联络点 T</h2>
+                  <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>{view.scenario_kind==='record'?'档案 A':'登记联络点 T'}</strong><p>{view.scenario_kind==='record'?'关联工位 H · 原始档案报告':'关联地点 T · 原始工位报告'}</p></button></aside><article className="report-detail">
+                    <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select(view.scenario_kind==='record'?'H':'T')}>{view.scenario_kind==='record'?'定位工位H':'定位联络点T'} <ArrowRight/></button></div>
+                    <h2>{view.scenario_kind==='record'?'档案 A':'登记联络点 T'}</h2>
                     <p className="byline">来源：{view.report.origin}</p>
                     <p className="report-excerpt">
-                      联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。
+                      {view.scenario_kind==='record'?'档案A已送达总部登记口径。总部可以拟定一次固定工位记录任务；是否开始和完成，均以收到的记录组回报为准。':'联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。'}
                     </p>
                     <div className="time-grid"><div><span>观察时间</span><strong>{clock(view.report.observed.value)}</strong></div><div><span>报出时间</span><strong>{clock(view.report.reported.value)}</strong></div><div><span>总部收到</span><strong>{clock(view.delivery.received.value)}</strong></div><div><span>事情发生的时间</span><strong>未知</strong></div></div>
-                    <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history||view.scenario_kind==='record'} onClick={()=>setWorkspace('tasks')}>拟定通行任务</button></section>
+                    <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history} onClick={()=>setWorkspace('tasks')}>{view.scenario_kind==='record'?'拟定记录任务':'拟定通行任务'}</button></section>
                   </article></div>
                 )}
                 <aside className="inspector">
@@ -506,23 +517,23 @@ export function Workbench() {
                     <p>{view.gap}</p>
                     <button
                       className="primary full"
-                      disabled={busy || history || storageFault || view.scenario_kind==='record' || selected !== "T" || !view.can_issue}
+                      disabled={busy || history || storageFault || (view.scenario_kind==='record' ? selected !== "H" : selected !== "T") || !view.can_issue}
                       onClick={() => void preview()}
                     >
-                      查看通行预案
+                      {view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}
                     </button>
                   </section>
                   {plan && workspace!=='tasks' && (
                     <section className="plan">
                       <h3>待下达预案</h3>
-                      <p>
+                      {isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>
                         R → T · {plan.distance}图上米
                         <br />
                         预计通行{plan.estimated_move_ms / 1000}秒，单向消息
                         {plan.link_ms / 1000}秒
                         <br />
                         指挥授权截至10:00，届时不再下达新命令
-                      </p>
+                      </p>}
                       <label>
                         指挥意图（选填）
                         <textarea
@@ -545,14 +556,14 @@ export function Workbench() {
                       >
                         取消预案
                       </button>
-                      <button
+                      {isMovePlan(plan)&&<button
                         className="primary"
                         disabled={busy || history || storageFault || !plan.allowed || !view.can_issue}
                         onClick={() => setConfirm(true)}
                       >
                         <PaperPlaneTilt />
                         下达通行命令
-                      </button>
+                      </button>}
                     </section>
                   )}
                   <section>
@@ -576,7 +587,7 @@ export function Workbench() {
                       </button>
                     </section>
                   )}
-                  <div className="inspector-bottom"><p>先核对情报，再选择编组与地点；下达后等待小组回报。</p><button disabled={view.scenario_kind==='record'&&!view.finished} className="primary full" onClick={()=>setWorkspace(view.finished?'review':'tasks')}>{view.finished?'查看行动复盘':'拟定任务'} <ArrowRight/></button></div>
+                  <div className="inspector-bottom"><p>先核对情报，再选择编组与地点；下达后等待小组回报。</p><button className="primary full" onClick={()=>setWorkspace(view.finished?'review':'tasks')}>{view.finished?'查看行动复盘':view.scenario_kind==='record'?'拟定记录任务':'拟定任务'} <ArrowRight/></button></div>
                 </aside>
               </div>
               <footer className={`bottom-log ${collapsed ? "collapsed" : ""}`}>
@@ -591,7 +602,7 @@ export function Workbench() {
             </main>
           </div>
           <footer className="global-footer"><span>虚构娱乐 · 地形与行动均为演练</span><span>总部位置依据回报，非现场实时画面</span></footer>
-          {confirm && plan && (
+          {confirm && isMovePlan(plan) && (
             <Dialog
               title="确认下达通行命令"
               onClose={() => {

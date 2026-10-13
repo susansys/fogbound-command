@@ -9,6 +9,10 @@ export function definition_for_package(schema:unknown,definitionHash:unknown):De
   if(!found)throw new GameError('INVALID_SAVE');
   return found;
 }
+export function record_definition_for_package(schema:unknown,definitionHash:unknown):typeof recordDefinition {
+  if(schema!==recordDefinition.schema||definitionHash!==recordDefinition.definition_hash)throw new GameError('INVALID_SAVE');
+  return recordDefinition;
+}
 export async function hash(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest(
     "SHA-256",

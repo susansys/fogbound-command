@@ -5,6 +5,7 @@ export function register_move(
   state: State,
   intent: Extract<Intent, { kind: "issue" }>,
 ) {
+  if('kind' in intent.plan)throw new GameError('INVALID_INPUT');
   const issued = state.sim_time,
     link = intent.plan.link_ms,
     start = issued + link,
@@ -59,6 +60,7 @@ export function register_move(
 function locate(state: State, at: number) {
   if (state.order?.accepted === null || !state.order || state.world.stopped)
     return;
+  if('kind' in state.order.plan)throw new GameError('INVALID_INPUT');
   const { H, T } = state.public_rules.geometry,
     d = state.order.plan.estimated_move_ms,
     elapsed = Math.max(0, Math.min(d, at - state.order.accepted));
@@ -122,6 +124,7 @@ export function advance_move(state: State, to: number) {
       send(state, event, "accepted_receipt", false);
     } else if (event.kind === "fix") send(state, event, "fix_receipt", true);
     else if (event.kind === "complete") {
+      if(!state.order||'kind' in state.order.plan)throw new GameError('ENGINE_UNCONFIRMED');
       if (event.at >= state.public_rules.authority.to) continue;
       state.world.movement_energy -= Math.ceil(
         state.order!.plan.distance / 100,
