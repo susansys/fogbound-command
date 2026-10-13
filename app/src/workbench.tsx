@@ -303,6 +303,8 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
+  const selectedPoint=view?.geometry[selected==='T'?'T':'H'];
+  const lastActionReport=[...(view?.log??[])].reverse().find(entry=>entry.kind.endsWith('_receipt'));
   return (
     <div className="app crisis-app">
       <header className="topbar">
@@ -477,16 +479,16 @@ export function Workbench() {
                 )}
                 <aside className="inspector">
                   <div className="panel-heading">当前选择：{selected}</div>
-                  <div className="unit-title"><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
+                  <div className="unit-title">{selected==='R'?<img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/>:<MapTrifold aria-label="公开地点" size={25}/>}<div><h2>
                     {selected === "R"
                       ? view.scenario_kind==='record'?"记录组 R":"联络组 R"
                       : selected === "T"
                         ? "联络点 T"
                         : view.scenario_kind==='record'?"工位 H":"总部 H"}
-                  </h2><p>{view.scenario_kind==='record'?{ready:'待命，尚未下达',queued:'等待接令回报',executing:view.log.some(x=>x.kind==='fix_receipt')?'已开始记录，待成果回报':'已接令，待开始回报',finished:'成果已收到 · 未核验',deadline:'时限已到，未完成记录'}[view.status]:status_copy(view)} / {clock(view.position.received)}</p></div></div>
-                  <dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
+                  </h2><p>{selected==='R'?`${status_copy(view)} · 任务回报 ${lastActionReport?clock(lastActionReport.at):'尚无'}`:'公开地图登记地点'}</p></div></div>
+                  {selected==='R'?<dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置观察</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到位置</dt><dd>{clock(view.position.received)}</dd></div></dl>:<dl className="facts"><div><dt>地点类型</dt><dd>{selected==='T'?'通道联络点':view.scenario_kind==='record'?'固定工位':'总部驻地'}</dd></div><div><dt>地点坐标</dt><dd>{selectedPoint?.[0].toFixed(2)}, {selectedPoint?.[1].toFixed(2)}</dd></div><div><dt>依据</dt><dd>公开地图登记</dd></div></dl>}
                   <section>
-                    <h3>总部最后确认位置</h3>
+                    <h3>{selected==='R'?'总部最后确认位置':'关联编组 R · 总部最后确认位置'}</h3>
                     <p data-testid="position">
                       {view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}
                     </p>
@@ -567,7 +569,7 @@ export function Workbench() {
                     </section>
                   )}
                   <section>
-                    <h3>已收到的装备状态</h3>
+                    <h3>{selected==='R'?'已收到的装备状态':'关联编组 R · 已收到的装备状态'}</h3>
                     {view.scenario_kind==='record'?<p>
                       记录能量 {view.resources.record_energy ?? 0} / 20<br/>记录耐用度 {view.resources.record_wear ?? 0} / 100<br/>记录用品 {view.resources.record_packs ?? 0} / 2<br/>已确认预约：记录能量 {view.resources.record_energy_reserved ?? 0}、用品 {view.resources.record_packs_reserved ?? 0}<br/>联络器电量 {view.resources.equipment_energy} / 16<br/>联络器耐用度 {view.resources.equipment_wear} / 100<br/>总部电量 {view.resources.hq_energy ?? 0} / 16<br/>总部耐用度 {view.resources.hq_wear ?? 0} / 100
                     </p>:<p>
@@ -576,7 +578,7 @@ export function Workbench() {
                     <small>依据 {clock(view.resources.confirmed_at)} 收到的回报更新</small>
                     {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 · 未核验</p>}
                   </section>
-                  {receiptNote && <p role="status">{receiptNote}</p>}
+                  {receiptNote && !history && <p role="status">{receiptNote}</p>}
                   {!history&&pendingOrder.current && error && (
                     <section>
                       <button onClick={() => void queryReceipt()}>

@@ -1,5 +1,13 @@
 # FB01 engineering verification
 
+## FB03 T01 — object ownership and historical notification (#20)
+
+2026-10-13: registered place coordinates are shown separately from the explicitly associated R position/equipment reports; place titles no longer display R's execution state or unit symbol. R's action-confirmation time is identified separately from its position-observation/delivery time. Current operation notifications are suppressed in all historical views; returning current still retrieves the actual current view.
+
+CR01 real headed CFT155 browser test failed on the old place facts before the change, then passed. CR02 first exposed a harness ordering error (editing the advance field before the issue receipt arrived); after waiting for the actual queued receipt, it failed on the later current notification in the historical view, then passed. Two new browser contracts and four relevant existing Record/map/replay/focus contracts passed; final place-symbol revision was rebuilt and the two new contracts passed again. Node22.23.3, TypeScript and import boundaries pass; the existing authored Knowledge privacy-pair contract passes. The Worker remains `worker-e6Ih7Mjy.js`; final T01 public main entry is `index-DJB0w2Yu.js`.
+
+No FB03 replacement runtime, one-hour sample, final branch CI/PR/main, full visual acceptance, original 244AT or formal human experience is claimed at this checkpoint. N-specific object regression follows registration of the new FB03 scenario. Independent fixed-SHA review follows this local checkpoint; reviewers are strictly read-only.
+
 The earlier FB02 ticket entries below are historical checkpoints. Their final-acceptance claim was withdrawn on 2026-10-13: two prior reviewers performed implementation/delivery work, and a fresh review found missing Record accounting, package-validation and UI evidence. Preserve those commits and results as history; use the corrective FB02 section at the end for current acceptance. Issues #10 and #16 were reopened without changing approved issue bodies.
 
 ## FB02 T01 — dual engineering entry (#11)
