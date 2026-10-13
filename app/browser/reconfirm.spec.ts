@@ -1,0 +1,21 @@
+import { test, expect } from '@playwright/test';
+test('a definitively rejected old plan can be checked again and explicitly issued with a new frozen command', async ({page})=>{
+  await page.goto('/');
+  await page.getByLabel('时间方式').selectOption('research');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByRole('button',{name:'定位联络点T',exact:true}).click();
+  await page.getByRole('button',{name:'查看通行预案',exact:true}).click();
+  await page.getByLabel('指挥意图（选填）').fill('先核对再下达');
+  await page.getByLabel('推进至秒').fill('1');
+  await page.getByRole('button',{name:'推进时间',exact:true}).click();
+  await expect(page.locator('.clock strong')).toHaveText('00:01');
+  await page.getByRole('button',{name:'下达通行命令',exact:true}).click();
+  await page.getByRole('button',{name:'确认下达',exact:true}).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByRole('button',{name:'返回预案',exact:true}).click();
+  await expect(page.getByLabel('指挥意图（选填）')).toHaveValue('先核对再下达');
+  await page.getByRole('button',{name:'查看通行预案',exact:true}).click();
+  await page.getByRole('button',{name:'下达通行命令',exact:true}).click();
+  await page.getByRole('button',{name:'确认下达',exact:true}).click();
+  await expect(page.getByText('命令已登记，尚未收到编组接令回报',{exact:true})).toBeVisible();
+});

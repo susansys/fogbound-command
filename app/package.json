@@ -1,0 +1,31 @@
+{
+  "name": "fogbound-command-fb01",
+  "version": "0.5.1-fb01.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "lint": "node verification/boundaries.mjs",
+    "browser": "playwright test"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "dexie": "4.2.1",
+    "milsymbol": "3.0.4",
+    "pixi.js": "8.22.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "22.19.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "fake-indexeddb": "6.2.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "4.1.0"
+  }
+}

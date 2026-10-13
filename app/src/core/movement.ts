@@ -1,0 +1,207 @@
+import type { State, MoveEvent } from "./state";
+import type { Intent } from "../contracts";
+import { GameError } from "../contracts";
+export function register_move(
+  state: State,
+  intent: Extract<Intent, { kind: "issue" }>,
+) {
+  const issued = state.sim_time,
+    link = intent.plan.link_ms,
+    start = issued + link,
+    duration = intent.plan.estimated_move_ms;
+  state.order = {
+    command_id: intent.command_id,
+    issued,
+    expiry: issued + state.movement_rules.task_expiry_ms,
+    accepted: null,
+    plan: structuredClone(intent.plan),
+    ...(intent.reason !== undefined ? { reason: intent.reason } : {}),
+  };
+  state.status = "queued";
+  state.generation++;
+  state.schedule = state.schedule.filter((x) => x.kind !== "deadline");
+  const event = (kind: MoveEvent["kind"], at: number, index?: number) => ({
+    id: `${intent.command_id}:${kind}:${index ?? 0}`,
+    at,
+    phase: kind.endsWith("receipt") ? 20 : 10,
+    generation: state.generation,
+    kind,
+    ...(index === undefined ? {} : { index }),
+  });
+  state.schedule.push(
+    event("accept", start),
+    event("accepted_receipt", start + link),
+  );
+  for (let index = 1; index * state.movement_rules.fix_ms < duration; index++)
+    state.schedule.push(
+      event("fix", start + index * state.movement_rules.fix_ms, index),
+      event("fix_receipt", start + index * state.movement_rules.fix_ms + link, index),
+    );
+  state.schedule.push(
+    event("complete", start + duration),
+    event("complete_receipt", start + duration + link),
+  );
+  state.schedule.push({
+    ...event("deadline", state.public_rules.authority.to),
+    phase: 30,
+  });
+  state.schedule.sort(
+    (a, b) => a.at - b.at || a.phase - b.phase || a.id.localeCompare(b.id),
+  );
+  state.log.push({
+    id: `${intent.command_id}:issued`,
+    at: issued,
+    kind: "issued",
+    text: "签发已登记；发送完成，等待接收反馈。",
+    evidence: intent.command_id,
+  });
+}
+function locate(state: State, at: number) {
+  if (state.order?.accepted === null || !state.order || state.world.stopped)
+    return;
+  const { H, T } = state.public_rules.geometry,
+    d = state.order.plan.estimated_move_ms,
+    elapsed = Math.max(0, Math.min(d, at - state.order.accepted));
+  state.world.position = {
+    xn: H[0] * d + (T[0] - H[0]) * elapsed,
+    yn: H[1] * d + (T[1] - H[1]) * elapsed,
+    d,
+  };
+}
+function send(
+  state: State,
+  event: MoveEvent,
+  receiptKind: MoveEvent["kind"],
+  withPosition: boolean,
+) {
+  state.world.equipment_energy--;
+  state.world.equipment_wear--;
+  state.world.sends++;
+  const delivery = state.schedule.find(
+    (x) => x.kind === receiptKind && x.index === event.index,
+  );
+  if (!delivery) throw new GameError("ENGINE_UNCONFIRMED");
+  delivery.payload = {
+    observed: event.at,
+    resources: {
+      equipment_energy: state.world.equipment_energy,
+      equipment_wear: state.world.equipment_wear,
+      movement_energy: state.world.movement_energy,
+      confirmed_at: delivery.at,
+    },
+    ...(withPosition
+      ? {
+          position: {
+            x:
+              Math.round(
+                (state.world.position.xn * 100) / state.world.position.d,
+              ) / 100,
+            y:
+              Math.round(
+                (state.world.position.yn * 100) / state.world.position.d,
+              ) / 100,
+            observed: event.at,
+            received: delivery.at,
+            evidence: delivery.id,
+          },
+        }
+      : {}),
+  };
+}
+export function advance_move(state: State, to: number) {
+  while (state.schedule.length && state.schedule[0].at <= to && !state.ended) {
+    const event = state.schedule.shift()!;
+    state.sim_time = event.at;
+    if (event.generation !== state.generation) continue;
+    locate(state, event.at);
+    if (event.kind === "accept") {
+      if (!state.order || event.at >= state.order.expiry)
+        throw new GameError("ENGINE_UNCONFIRMED");
+      if(event.at>=state.public_rules.authority.to){state.schedule=state.schedule.filter(x=>x.kind!=='accepted_receipt');continue;}
+      state.order.accepted = event.at;
+      send(state, event, "accepted_receipt", false);
+    } else if (event.kind === "fix") send(state, event, "fix_receipt", true);
+    else if (event.kind === "complete") {
+      if (event.at >= state.public_rules.authority.to) continue;
+      state.world.movement_energy -= Math.ceil(
+        state.order!.plan.distance / 100,
+      );
+      state.world.completed = true;
+      send(state, event, "complete_receipt", true);
+    } else if (event.kind === "deadline") {
+      if (!state.order) {
+        state.status = "deadline";
+        state.ended = true;
+        state.paused = true;
+        state.log.push({
+          id: event.id,
+          at: event.at,
+          kind: "deadline",
+          text: "公开截止已到，未签发工程任务。",
+          evidence: "objective-deadline",
+        });
+      } else if (!state.world.completed) {
+        state.world.stopped = true;
+        const { xn, d } = state.world.position;
+        state.world.movement_energy -= Math.ceil(
+          Math.abs(xn - state.public_rules.geometry.H[0] * d) / (d * 100),
+        );
+        state.schedule = state.schedule.filter(
+          (x) =>
+            !["complete", "complete_receipt", "fix", "fix_receipt"].includes(
+              x.kind,
+            ),
+        );
+        if(state.order.accepted===null)state.schedule=state.schedule.filter(x=>!['accept','accepted_receipt'].includes(x.kind));
+        state.schedule.push({
+          id: `${state.order.command_id}:deadline_receipt`,
+          at: event.at + state.order.plan.link_ms,
+          phase: 20,
+          generation: state.generation,
+          kind: "deadline_receipt",
+        });
+        send(state, event, "deadline_receipt", true);
+        state.schedule.sort(
+          (a, b) =>
+            a.at - b.at || a.phase - b.phase || a.id.localeCompare(b.id),
+        );
+      }
+    } else {
+      if (!event.payload) throw new GameError("ENGINE_UNCONFIRMED");
+      state.known.resources = structuredClone(event.payload.resources);
+      if (event.payload.position)
+        state.known.position = structuredClone(event.payload.position);
+      if (event.kind === "accepted_receipt") state.status = "executing";
+      if (event.kind === "complete_receipt") {
+        state.finished = true;
+        state.ended = true;
+        state.status = "finished";
+        state.paused = true;
+      }
+      if (event.kind === "deadline_receipt") {
+        state.status = "deadline";
+        state.ended = true;
+        state.paused = true;
+      }
+      state.log.push({
+        id: event.id,
+        at: event.at,
+        kind: event.kind,
+        text:
+          event.kind === "accepted_receipt"
+            ? `收到接受反馈：送达/接受/生效 ${state.order!.accepted} ms；签发 ${state.order!.issued} ms。`
+            : event.kind === "fix_receipt"
+              ? `收到定位：观察 ${event.payload.observed} ms。`
+              : event.kind === "deadline_receipt"
+                ? "收到截止反馈：未在截止前完成，grace不补作业。"
+                : `工程完成：实际完成 ${event.payload.observed} ms；总部确认 ${event.at} ms。`,
+        observed: event.payload.observed,
+        evidence: event.id,
+      });
+    }
+  }
+  if (!state.ended) {
+    state.sim_time = to;
+    locate(state, to);
+  }
+}
