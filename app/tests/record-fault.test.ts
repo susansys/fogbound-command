@@ -166,3 +166,19 @@ test('Record restore rejects time advancement without a committed input',async()
     expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });
+
+test('Record restore rejects an out-of-range adopted clock even when completion clips the resulting time',async()=>{
+  const store=new Persistence('record-invalid-clock-bound'),game=new Game(store);
+  try{
+    const start=await game.create_run(recordEngineeringDefinition,'command','create');
+    const plan=await game.preview_plan(start.run_id,start.revision,1);
+    const issued=await game.issue_order({run_id:start.run_id,operation_id:'issue',expected_revision:start.revision,intent:{kind:'issue',command_id:'record',plan}});
+    const completed=await game.save({run_id:start.run_id,operation_id:'save',expected_revision:issued.view.revision,intent:{kind:'save'}},610000);
+    expect(completed.view.sim_time).toBe(47000);
+    const bad=structuredClone((await store.read_committed(start.run_id))!);
+    bad.inputs.at(-1)!.clock_to=610001;
+    await writeState(store,bad);
+    await expect(new Game(store).restore(start.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
+    expect((await store.read_committed(start.run_id))?.integrity).toBe(bad.integrity);
+  }finally{await store.delete();}
+});

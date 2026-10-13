@@ -14,7 +14,7 @@ function replay_inputs(initial:State,inputs:State['inputs'],to:number|null):Stat
     const intent=input.envelope.intent;
     const originalTime=state.sim_time,originalPaused=state.paused;
     if(state.schema===5){
-      if(input.clock_to!==undefined&&(state.mode!=='command'||originalPaused||input.clock_to<originalTime))throw new GameError('INVALID_SAVE');
+      if(input.clock_to!==undefined&&(state.mode!=='command'||originalPaused||input.clock_to<originalTime||input.clock_to>610000))throw new GameError('INVALID_SAVE');
       if(input.clock_to!==undefined&&!['pause','continue','rate','save'].includes(intent.kind))throw new GameError('INVALID_SAVE');
       if(intent.kind==='tick'&&(state.mode!=='command'||originalPaused)||intent.kind==='advance'&&state.mode!=='research')throw new GameError('INVALID_SAVE');
       if((intent.kind==='tick'||intent.kind==='advance')&&(state.ended||intent.to<=originalTime))throw new GameError('INVALID_SAVE');
