@@ -22,6 +22,7 @@ export function project_player_view(state: State): PlayerView {
     delivery: structuredClone(state.known.delivery),
     resources: structuredClone(state.known.resources),
     ...(state.schema===5?{artifacts: structuredClone(state.known.artifacts??[])}:{}),
+    ...(state.schema===5?{replay_nodes:[{revision:1,label:'开局登记后'},...state.inputs.map((input,index)=>({revision:input.revision,label:input.envelope.intent.kind==='issue'?'任务登记后':`${{advance:'时间推进后',tick:'时间推进后',pause:'暂停确认后',continue:'继续确认后',rate:'速率确认后',save:'保存确认后',restore:'接手确认后',mode:'时间方式确认后'}[input.envelope.intent.kind]} · 记录 ${index+1}`}))]}:{}),
     geometry: structuredClone(state.public_rules.geometry),
     authority: structuredClone(state.public_rules.authority),
     can_issue,

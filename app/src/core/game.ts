@@ -14,6 +14,7 @@ import { project_player_view,reconstruct_known } from "./knowledge";
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move, register_record } from "./movement";
+import {initial_record_accounts} from './record-accounting';
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
 export class Game {
@@ -28,13 +29,30 @@ export class Game {
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await validate_state(source);
     return this.create(definition_for_package(source.schema,source.definition_hash),source.mode,operation,source);
   }
-  async get_replay(run:string,to:number):Promise<Game>{
+  async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
     const latest=await this.store.read_committed(run),initial=await this.store.snapshot(run,1);
     if(!latest||!initial)throw new GameError('RUN_NOT_FOUND');
     await validate_state(latest);await validate_state(initial);
     if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
-    const context=new Game(this.store);context.history=replay_state(initial,latest.inputs,to);return context;
+    const context=new Game(this.store);
+    if(nodeRevision!==undefined){
+      if(latest.schema!==5||!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
+      const node=await this.store.snapshot(run,nodeRevision);
+      await validate_state(node);
+      if(node?.run_id!==run||node.revision!==nodeRevision)throw new GameError('INVALID_SAVE');
+      context.history=node;return context;
+    }
+    if(latest.schema===5){
+      // A real same-time commit takes precedence over effects of a later advance.
+      const candidates=latest.inputs.filter(input=>input.at===to&&input.clock_to===undefined&&!['advance','tick'].includes(input.envelope.intent.kind)).reverse();
+      for(const input of candidates){
+        const node=await this.store.snapshot(run,input.revision);
+        await validate_state(node);
+        if(node?.sim_time===to){context.history=node;return context;}
+      }
+    }
+    context.history=replay_state(initial,latest.inputs,to);return context;
   }
   private async writer() {
     if (this.epoch === null) this.epoch = await this.store.claim_writer();
@@ -102,15 +120,7 @@ export class Game {
         equipment_energy: definition.profile.parameters.equipment_energy,
         equipment_wear: definition.profile.parameters.equipment_wear,
         movement_energy: definition.profile.parameters.movement_energy,
-        ...(recordParameters?{
-          record_energy: recordParameters.record_energy,
-          record_wear: recordParameters.record_wear,
-          record_packs: recordParameters.record_packs,
-          hq_energy: recordParameters.hq_energy,
-          hq_wear: recordParameters.hq_wear,
-          record_work: 0,
-          record_artifacts: [],
-        }:{}),
+        ...(recordParameters?initial_record_accounts(recordParameters):{}),
         sends: 0,
         completed: false,
         stopped: false,
@@ -188,6 +198,8 @@ export class Game {
             record_energy: recordParameters.record_energy,
             record_wear: recordParameters.record_wear,
             record_packs: recordParameters.record_packs,
+            record_energy_reserved:0,
+            record_packs_reserved:0,
             hq_energy: recordParameters.hq_energy,
             hq_wear: recordParameters.hq_wear,
           }:{}),
@@ -214,7 +226,7 @@ export class Game {
     return project_player_view(state);
   }
   async get_view(run: string): Promise<PlayerView> {
-    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');return reconstruct_known(this.history);}
+    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=reconstruct_known(this.history);return this.history.schema===5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await validate_state(state);

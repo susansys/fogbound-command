@@ -1,7 +1,7 @@
 import {test,expect} from 'vitest';
 import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
-import {engineeringDefinition} from '../src/core/scenario';
+import {engineeringDefinition,recordEngineeringDefinition} from '../src/core/scenario';
 import {valid_response} from '../src/dto';
 test('the outbound whitelist rejects private, nested extra and malformed unknown-time fields',async()=>{
   const store=new Persistence('dto-whitelist'),game=new Game(store);
@@ -27,4 +27,19 @@ test('outbound vectors and lists reject attached private array properties and sp
   const runs=Object.assign([{run_id:view.run_id,revision:1,sim_time:0,mode:'research',finished:false}],{private_canary:'ENGINE_ONLY'});
   expect(valid_response({request_id:'dto',ok:true,runs})).toBe(false);
   expect(valid_response({request_id:'dto',ok:true,view:{...view,geometry:{...view.geometry,H:new Array(2)}}})).toBe(false);await store.delete();
+});
+
+test('DTOs require the complete Record fields and reject Record fields added to a Move view',async()=>{
+  const store=new Persistence('dto-scene-fields'),game=new Game(store);
+  try{
+    const move=await game.create_run(engineeringDefinition,'research','move');
+    expect(valid_response({request_id:'dto',ok:true,view:{...move,resources:{...move.resources,record_energy:20}}})).toBe(false);
+    expect(valid_response({request_id:'dto',ok:true,view:{...move,artifacts:[]}})).toBe(false);
+    const record=await game.create_run(recordEngineeringDefinition,'research','record');
+    expect(valid_response({request_id:'dto',ok:true,view:record})).toBe(true);
+    const {record_energy,...incomplete}=record.resources;
+    expect(valid_response({request_id:'dto',ok:true,view:{...record,resources:incomplete}})).toBe(false);
+    const {artifacts,...noArtifacts}=record;
+    expect(valid_response({request_id:'dto',ok:true,view:noArtifacts})).toBe(false);
+  }finally{await store.delete();}
 });

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef } from "./contracts";
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
-import { clock,error_copy,log_copy } from "./player-copy";
+import { clock,error_copy,log_copy,status_copy,activity_copy } from "./player-copy";
 import { Dialog } from "./dialog";
 import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
 import ms from 'milsymbol';
@@ -22,6 +22,8 @@ export function Workbench() {
   const pendingOrder = useRef<Envelope | null>(null);
   const orderConfirmed=useRef<string|null>(null);
   const historyActive=useRef(false),restartOperation=useRef(crypto.randomUUID()),liveView=useRef<PlayerView|null>(null);
+  const [reviewNode,setReviewNode]=useState('');
+  const replayNodes=useRef<PlayerView['replay_nodes']>([]);
   const [history,setHistory]=useState(false),[reviewTo,setReviewTo]=useState('6'),[restartConfirm,setRestartConfirm]=useState(false);
   const [previousLimit,setPreviousLimit]=useState<number|null>(null);
   const pendingControl = useRef<Envelope | null>(null);
@@ -46,6 +48,7 @@ export function Workbench() {
     [runs, setRuns] = useState<RunSummary[]>([]),
     [busy, setBusy] = useState(false);
   currentView.current = view;
+  useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:PlayerView){setView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);}
   useEffect(()=>transport.subscribe(response=>{
     if(response.ok&&response.view&&response.request_id.startsWith('clock-')){liveView.current=response.view;if(!historyActive.current)adoptView(response.view);}
@@ -126,25 +129,26 @@ export function Workbench() {
   }
   async function replay(){
     if(!view||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'replay',run_id:view.run_id,to:Math.round(Number(reviewTo)*1000)});if(result.ok&&result.view){if(!historyActive.current)liveView.current=view;historyActive.current=true;setHistory(true);editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
+    if(!history)replayNodes.current=view.replay_nodes;
+    try{const result=await transport.request({kind:'replay',run_id:view.run_id,to:reviewNode?0:Math.round(Number(reviewTo)*1000),...(reviewNode?{node_revision:Number(reviewNode)}:{})});if(result.ok&&result.view){if(!historyActive.current)liveView.current=view;historyActive.current=true;setHistory(true);editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function returnCurrent(){
     if(!view)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setPreviousLimit(null);editing.current++;setPlan(null);if(!liveView.current){setView(null);const listed=await transport.request({kind:'list'});if(listed.ok)setRuns(listed.runs??[]);else setError(listed.code);}else{setView(result.view);liveView.current=result.view;}}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setReviewNode("");setPreviousLimit(null);editing.current++;setPlan(null);if(!liveView.current){setView(null);const listed=await transport.request({kind:'list'});if(listed.ok)setRuns(listed.runs??[]);else setError(listed.code);}else{setView(result.view);liveView.current=result.view;}}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function readRetained(run:RunSummary){
     if(busy||sceneChanging)return;setBusy(true);setError('');
     try{
       const result=await transport.request({kind:'replay',run_id:run.run_id,to:run.sim_time});
-      if(result.ok&&result.view){liveView.current=null;historyActive.current=true;setHistory(true);setPreviousLimit(run.sim_time);setReviewTo(String(run.sim_time/1000));setView(result.view);setWorkspace('review');}
+      if(result.ok&&result.view){liveView.current=null;replayNodes.current=result.view.replay_nodes;historyActive.current=true;setHistory(true);setPreviousLimit(run.sim_time);setReviewTo(String(run.sim_time/1000));setView(result.view);setWorkspace('review');}
       else if(!result.ok)setError(result.code);
     }catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function previous(){
     if(!view||history||busy||controlPending||pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'previous',run_id:view.run_id});if(result.ok&&result.view){liveView.current=view;historyActive.current=true;setHistory(true);setPreviousLimit(result.view.sim_time);setReviewTo(String(result.view.sim_time/1000));editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'previous',run_id:view.run_id});if(result.ok&&result.view){liveView.current=view;replayNodes.current=result.view.replay_nodes;historyActive.current=true;setHistory(true);setPreviousLimit(result.view.sim_time);setReviewTo(String(result.view.sim_time/1000));editing.current++;setPlan(null);setConfirm(false);setView(result.view);}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function restart(){
@@ -307,7 +311,7 @@ export function Workbench() {
           <strong>玄枢行动</strong>
           <span className="brand-sub">联合任务指挥部</span>
         </span>
-        <span className="demo-badge">联络演练</span>
+        <span className="demo-badge">{(view?.scenario_kind==="record"||!view&&definitionRef==="FB02-ENG-RECORD")?"记录演练":"联络演练"}</span>
         <div className="clock">
           <span>
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
@@ -454,11 +458,11 @@ export function Workbench() {
                     }
                   />
                 ) : workspace==='tasks'?(
-                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>{view.scenario_kind==='record'?'本次只向记录组下达一项固定工位记录任务。预览不会执行。':'本次只向联络组下达一项通行任务。指令发出后仍要等确认。'}</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</h3><span>{view.gap}</span></div><p>{view.scenario_kind==='record'?'记录组固定在工位H，预案对象限定为档案A。':'由总部H沿固定通道抵达联络点T。'}</p><button disabled={history||!view.can_issue} onClick={()=>setSelected(view.scenario_kind==='record'?'H':'T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录档案':'通行至联络点'}</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'工位 H · 档案 A':'联络点 T · 登记地点'}</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>{view.scenario_kind==='record'?'固定工位 · 预计准备5秒、记录40秒；单向消息1秒。':'120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。'}</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected(view.scenario_kind==='record'?'H':'T');void preview();}}>{view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}</button>{plan&&<section className="plan"><h3>待下达预案</h3>{isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒；假设全程约{plan.estimated_total_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>R → T · {plan.distance}图上米<br/>预计通行{plan.estimated_move_ms/1000}秒，单向消息{plan.link_ms/1000}秒</p>}<label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>{isRecordPlan(plan)?'下达记录任务':'下达通行命令'}</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>{view.scenario_kind==='record'?'尚未下达。当前只显示草案条件、假设耗时与假设消耗。':'等待编组接令、位置及抵达回报。总部收到的情况可能落后于现场。'}</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
+                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>{view.scenario_kind==='record'?'本次只向记录组下达一项固定工位记录任务。预览不会执行。':'本次只向联络组下达一项通行任务。指令发出后仍要等确认。'}</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</h3><span>{view.gap}</span></div><p>{view.scenario_kind==='record'?'记录组固定在工位H，预案对象限定为档案A。':'由总部H沿固定通道抵达联络点T。'}</p><button disabled={history||!view.can_issue} onClick={()=>setSelected(view.scenario_kind==='record'?'H':'T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录档案':'通行至联络点'}</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'工位 H · 档案 A':'联络点 T · 登记地点'}</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>{view.scenario_kind==='record'?'固定工位 · 预计准备5秒、记录40秒；单向消息1秒。':'120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。'}</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected(view.scenario_kind==='record'?'H':'T');void preview();}}>{view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}</button>{plan&&<section className="plan"><h3>待下达预案</h3>{isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒；假设全程约{plan.estimated_total_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>R → T · {plan.distance}图上米<br/>预计通行{plan.estimated_move_ms/1000}秒，单向消息{plan.link_ms/1000}秒</p>}<label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>{isRecordPlan(plan)?'下达记录任务':'下达通行命令'}</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>{status_copy(view)}</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
                 ) : workspace==='log'?(
                   <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><time>{clock(entry.at)}</time><p>{log_copy(entry)}</p></section>)}</article>
                 ) : workspace==='review'?(
-                  <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p><label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p><p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><p key={entry.id}><time>{clock(entry.at)}</time> · {log_copy(entry)}</p>)}</article>
+                  <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p>{view.scenario_kind==='record'&&<label>回看节点 <select aria-label="回看节点" value={reviewNode} onChange={e=>setReviewNode(e.target.value)}><option value="">按时刻回看</option>{(history?replayNodes.current:view.replay_nodes)?.map(node=><option key={node.revision} value={node.revision}>{node.label}</option>)}</select></label>}<label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p><p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><p key={entry.id}><time>{clock(entry.at)}</time> · {log_copy(entry)}</p>)}</article>
                 ) : (
                   <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>{view.scenario_kind==='record'?'档案 A':'登记联络点 T'}</strong><p>{view.scenario_kind==='record'?'关联工位 H · 原始档案报告':'关联地点 T · 原始工位报告'}</p></button></aside><article className="report-detail">
                     <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select(view.scenario_kind==='record'?'H':'T')}>{view.scenario_kind==='record'?'定位工位H':'定位联络点T'} <ArrowRight/></button></div>
@@ -473,13 +477,13 @@ export function Workbench() {
                 )}
                 <aside className="inspector">
                   <div className="panel-heading">当前选择：{selected}</div>
-                  <div className="unit-title"><img alt="虚构联络组" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
+                  <div className="unit-title"><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
                     {selected === "R"
                       ? view.scenario_kind==='record'?"记录组 R":"联络组 R"
                       : selected === "T"
                         ? "联络点 T"
                         : view.scenario_kind==='record'?"工位 H":"总部 H"}
-                  </h2><p>{{ready:'待命',queued:'等待接令回报',executing:'行动中，等待抵达回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status]} / {clock(view.position.received)}</p></div></div>
+                  </h2><p>{view.scenario_kind==='record'?{ready:'待命，尚未下达',queued:'等待接令回报',executing:view.log.some(x=>x.kind==='fix_receipt')?'已开始记录，待成果回报':'已接令，待开始回报',finished:'成果已收到 · 未核验',deadline:'时限已到，未完成记录'}[view.status]:status_copy(view)} / {clock(view.position.received)}</p></div></div>
                   <dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
                   <section>
                     <h3>总部最后确认位置</h3>
@@ -565,12 +569,12 @@ export function Workbench() {
                   <section>
                     <h3>已收到的装备状态</h3>
                     {view.scenario_kind==='record'?<p>
-                      记录能量 {view.resources.record_energy ?? 0} / 20<br/>记录耐用度 {view.resources.record_wear ?? 0} / 100<br/>记录用品 {view.resources.record_packs ?? 0} / 2<br/>联络器电量 {view.resources.equipment_energy} / 16<br/>联络器耐用度 {view.resources.equipment_wear} / 100<br/>总部电量 {view.resources.hq_energy ?? 0} / 16<br/>总部耐用度 {view.resources.hq_wear ?? 0} / 100
+                      记录能量 {view.resources.record_energy ?? 0} / 20<br/>记录耐用度 {view.resources.record_wear ?? 0} / 100<br/>记录用品 {view.resources.record_packs ?? 0} / 2<br/>已确认预约：记录能量 {view.resources.record_energy_reserved ?? 0}、用品 {view.resources.record_packs_reserved ?? 0}<br/>联络器电量 {view.resources.equipment_energy} / 16<br/>联络器耐用度 {view.resources.equipment_wear} / 100<br/>总部电量 {view.resources.hq_energy ?? 0} / 16<br/>总部耐用度 {view.resources.hq_wear ?? 0} / 100
                     </p>:<p>
                       联络器电量 {view.resources.equipment_energy} / 16<br/>器材耐用度 {view.resources.equipment_wear} / 100<br/>行进储备 {view.resources.movement_energy} / 20
                     </p>}
                     <small>依据 {clock(view.resources.confirmed_at)} 收到的回报更新</small>
-                    {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 {view.artifacts[0].id} · 未核验</p>}
+                    {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 · 未核验</p>}
                   </section>
                   {receiptNote && <p role="status">{receiptNote}</p>}
                   {!history&&pendingOrder.current && error && (
@@ -596,7 +600,7 @@ export function Workbench() {
                     {collapsed ? "展开记录" : "收起记录"}
                   </button>
                 </div>
-                {!collapsed&&<div className="log-lines">{[...view.log].reverse().slice(0,3).map(entry=><div key={entry.id}><time>{clock(entry.at)}</time><span>{entry.sender??(entry.kind==='report'?'联络席':'联络组 R')}</span><p>{log_copy(entry)}</p><small>{entry.activity_id?`活动凭证 ${entry.activity_id}`:'回报'}</small></div>)}</div>}
+                {!collapsed&&<div className="log-lines">{[...view.log].reverse().slice(0,3).map(entry=><div key={entry.id}><time>{clock(entry.at)}</time><span>{entry.sender??(['issued','sent'].includes(entry.kind)?'总部指挥席':entry.kind==='report'?'联络席':view.scenario_kind==='record'?'记录组 R':'联络组 R')}</span><p>{log_copy(entry)}</p><small data-activity-reference={entry.activity_id}>{activity_copy(entry)}</small></div>)}</div>}
               </footer>
             </main>
           </div>
@@ -615,7 +619,7 @@ export function Workbench() {
                 <p>
                   {isRecordPlan(plan)?`预计准备 ${plan.setup_ms/1000} 秒，记录 ${plan.estimated_record_ms/1000} 秒；结果只能依据收到的回报更新。`:`预计通行 ${plan.estimated_move_ms / 1000} 秒；总部位置与完成只能依据收到的回报更新。`}
                 </p>
-                {view.mode==='command'&&<p>确认时将按当前已收到的情况再次核对。通行参数或授权发生变化时，将返回预案重新确认。</p>}
+                {view.mode==='command'&&<p>确认时将按当前已收到的情况再次核对。任务参数或授权发生变化时，将返回预案重新确认。</p>}
               </div>
               <footer className="dialog-actions">
                 <button disabled={busy} onClick={() => setConfirm(false)}>

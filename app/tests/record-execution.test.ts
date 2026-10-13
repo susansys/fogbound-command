@@ -11,7 +11,7 @@ test('FB02-S05/S06 record order accepts, starts, completes and reveals resources
     view=(await game.issue_order({run_id:view.run_id,operation_id:'issue',expected_revision:view.revision,intent:{kind:'issue',command_id:'record',plan}})).view;
     expect(view.status).toBe('queued');
     expect(view.sim_time).toBe(0);
-    expect(view.resources).toMatchObject({hq_energy:15,hq_wear:99,record_energy:20,record_wear:100,record_packs:2,equipment_energy:16,equipment_wear:100});
+    expect(view.resources).toMatchObject({hq_energy:16,hq_wear:100,record_energy:20,record_wear:100,record_packs:2,equipment_energy:16,equipment_wear:100});
     const advance=async(to:number)=>{view=(await game.control_clock({run_id:view.run_id,operation_id:`advance-${to}`,expected_revision:view.revision,intent:{kind:'advance',to}})).view;return view;};
     expect((await advance(1000)).status).toBe('queued');
     expect(view.log.some(x=>x.kind==='accepted_receipt')).toBe(false);
@@ -20,9 +20,9 @@ test('FB02-S05/S06 record order accepts, starts, completes and reveals resources
     expect((await advance(6000)).log.some(x=>x.kind==='fix_receipt')).toBe(false);
     expect((await advance(7000)).resources).toMatchObject({equipment_energy:14,equipment_wear:98,record_energy:20,record_wear:97,record_packs:2});
     expect((await advance(17001)).resources.record_energy).toBe(20);
-    expect((await store.read_committed(view.run_id))?.world.record_work).toBeCloseTo(1.1001);
+    expect((await store.read_committed(view.run_id))?.world.record_work).toEqual({numerator:11001,denominator:10000,unit:'record_work'});
     expect((await advance(26000)).resources.record_energy).toBe(20);
-    expect((await store.read_committed(view.run_id))?.world.record_work).toBe(2);
+    expect((await store.read_committed(view.run_id))?.world.record_work).toEqual({numerator:2,denominator:1,unit:'record_work'});
     expect((await advance(46000)).finished).toBe(false);
     expect(view.log.some(x=>x.kind==='complete_receipt')).toBe(false);
     expect(view.artifacts).toEqual([]);
@@ -60,7 +60,7 @@ test('FB02-S08 record completion must be strictly before deadline and grace neve
   expect(exact.log.some(x=>x.kind==='complete_receipt')).toBe(false);
   const partial=await run(574999,'record-deadline-partial');
   expect(partial.status).toBe('deadline');
-  expect(partial.resources.record_energy).toBe(20);
-  expect(partial.resources.record_packs).toBe(2);
+  expect(partial.resources.record_energy).toBe(18);
+  expect(partial.resources.record_packs).toBe(1);
   expect(partial.resources.record_wear).toBe(97);
 });

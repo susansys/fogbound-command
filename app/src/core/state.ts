@@ -1,10 +1,12 @@
 import type { Mode, PlayerView, LogEntry, Envelope, Plan, RecordArtifact } from "../contracts";
+import type {ExactQuantity} from './record-accounting';
 export type MoveEvent = {
   id: string;
   at: number;
   phase: number;
   generation: number;
   kind:
+    | "command_send"
     | "accept"
     | "accepted_receipt"
     | "fix"
@@ -45,12 +47,18 @@ export type State = {
     equipment_energy: number;
     equipment_wear: number;
     movement_energy: number;
-    record_energy?: number;
+    record_energy?: ExactQuantity;
+    record_energy_used?: ExactQuantity;
+    record_energy_reserved?: ExactQuantity;
+    record_packs_used?: number;
+    record_packs_accrued?:ExactQuantity;
+    record_packs_reserved?: number;
+    record_causes?: string[];
     record_wear?: number;
     record_packs?: number;
     hq_energy?: number;
     hq_wear?: number;
-    record_work?: number;
+    record_work?: ExactQuantity;
     record_artifacts?: RecordArtifact[];
     sends: number;
     completed: boolean;

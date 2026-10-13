@@ -75,10 +75,13 @@ export type PlayerView = {
     record_energy?: number;
     record_wear?: number;
     record_packs?: number;
+    record_energy_reserved?:number;
+    record_packs_reserved?:number;
     hq_energy?: number;
     hq_wear?: number;
   };
   artifacts?: RecordArtifact[];
+  replay_nodes?:Array<{revision:number;label:string}>;
   log: LogEntry[];
 };
 export type MovePlan = {

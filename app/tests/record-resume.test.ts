@@ -43,6 +43,7 @@ test.each([17001,26000])('record saved at %sms restores the same run paused with
     expect(restored.view.artifacts).toEqual([]);
     expect(restored.view.resources.record_energy).toBe(20);
     expect(await store.read_committed(view.run_id)).toMatchObject({world:{record_artifacts:beforeSaveState?.world.record_artifacts}});
+    expect((await store.read_committed(view.run_id))?.world).toEqual(beforeSaveState?.world);
     view=(await fresh.control_clock({run_id:view.run_id,operation_id:`finish-${point}`,expected_revision:restored.view.revision,intent:{kind:'advance',to:47000}})).view;
     expect(view.sim_time).toBe(47000);
     expect(view.artifacts).toHaveLength(1);
@@ -119,6 +120,24 @@ test('record restore rejects a mismatched Record package hash without migration'
     await expect(new Game(store).restore(view.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
     expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
     expect(await game.get_receipt(view.run_id,'restore')).toBeNull();
+  }finally{await store.delete();}
+});
+
+test('FB02-S13 an explicit registration commit stays distinct from a later send at the same SimTime',async()=>{
+  const {store,game,view:registered}=await issueRecord('record-same-time-nodes');
+  try{
+    const sent=(await game.control_clock({run_id:registered.run_id,operation_id:'advance',expected_revision:registered.revision,intent:{kind:'advance',to:999}})).view;
+    const registration=await game.get_replay(registered.run_id,0,registered.revision);
+    const known=await registration.get_view(registered.run_id);
+    expect(known.resources.hq_energy).toBe(16);
+    expect(known.log.some(entry=>entry.kind==='sent')).toBe(false);
+    const afterSend=await game.get_replay(registered.run_id,0,sent.revision);
+    expect((await afterSend.get_view(registered.run_id)).resources.hq_energy).toBe(15);
+    expect((await afterSend.get_view(registered.run_id)).sim_time).toBe(999);
+    const byTime=await game.get_replay(registered.run_id,0);
+    expect((await byTime.get_view(registered.run_id)).resources.hq_energy).toBe(16);
+    await expect(game.get_replay(registered.run_id,0,sent.revision+1)).rejects.toThrow('INVALID_INPUT');
+    expect(await game.get_view(registered.run_id)).toEqual(sent);
   }finally{await store.delete();}
 });
 

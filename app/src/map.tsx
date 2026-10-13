@@ -251,7 +251,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
           />
         </svg>
       )}
-      <svg className="plan-route" aria-hidden="true">
+      {!recording&&<svg className="plan-route" aria-hidden="true">
         {sites.map((id) => {
           const [x, y] = view.geometry[id];
           return (
@@ -264,8 +264,9 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
             />
           );
         })}
-      </svg>
+      </svg>}
       <div className="world-overlay">
+        {recording&&<span className="record-leader" style={point(...view.geometry.H)} aria-hidden="true"/>}
         {sites.map((id) => {
           const [x, y] = view.geometry[id];
           return (
@@ -274,7 +275,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
               aria-label={recording?'工位H':id === "T" ? "联络点T" : "起点H"}
               data-marker={id}
               className={`site-marker ${selected === id ? "selected" : ""}`}
-              style={{ ...point(x, y), marginTop: -44 }}
+              style={{ ...point(x, y), marginTop: recording?'-3.2em':-44 }}
               onClick={(e) => {
                 if (e.detail === 0) onSelect(id);
               }}

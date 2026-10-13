@@ -50,7 +50,7 @@ export function valid_request(
       fields(value, ["kind", "request_id", "envelope"]) &&
       valid_envelope(value.envelope) && !['tick','restore'].includes(value.envelope.intent.kind)
     );
-  if(value.kind==='replay')return fields(value,['kind','run_id','to','request_id'])&&valid_id(value.run_id)&&typeof value.to==='number'&&Number.isSafeInteger(value.to)&&value.to>=0;
+  if(value.kind==='replay')return fields(value,['kind','run_id','to','request_id',...(value.node_revision===undefined?[]:['node_revision'])])&&(value.node_revision===undefined||typeof value.node_revision==='number'&&Number.isSafeInteger(value.node_revision)&&value.node_revision>=1)&&valid_id(value.run_id)&&typeof value.to==='number'&&Number.isSafeInteger(value.to)&&value.to>=0;
   if (value.kind === "receipt" || value.kind==='takeover'||value.kind==='restart')
     return (
       fields(value, ["kind", "request_id", "run_id", "operation_id"]) &&

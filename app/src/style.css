@@ -13,6 +13,9 @@
   --amber: #d2b87e;
   color-scheme: dark;
 }
+.brand strong { color:#e5ebe6; }
+.task-main h3 { line-height:1.5; }
+.record-leader { position:absolute; width:1px; height:3.2em; margin-top:-3.2em; background:#aabbb6; }
 * {
   box-sizing: border-box;
 }
@@ -1001,6 +1004,6 @@ dialog > header > button {
 .report-detail section button {
   margin-right: 8px;
 }
-.report-detail{margin:0;max-width:none}.report-detail h2{margin:0}.report-detail .report-excerpt{border-left:2px solid #7598a5;padding:18px 22px;margin:25px 0;background:#1c2f37;line-height:1.95;color:#d3deda;font-size:15px}
+.report-detail h2{margin:0}.report-detail .report-excerpt{border-left:2px solid #7598a5;padding:18px 22px;margin:25px 0;background:#1c2f37;line-height:1.95;color:#d3deda;font-size:15px}
 
 .report-detail .byline{font-size:12px}
