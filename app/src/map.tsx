@@ -277,7 +277,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
               key={id}
               aria-label={recording?'工位H':id==='N'?'近联络点N':id === "T" ? "联络点T" : "起点H"}
               data-marker={id}
-              className={`site-marker ${selected === id ? "selected" : ""}`}
+              className={`site-marker ${view.geometry.N?'prestart-site':''} ${selected === id ? "selected" : ""}`}
               style={{ ...point(x, y), marginTop: recording?'-3.2em':id==='N'?-90:-44 }}
               onClick={(e) => {
                 if (e.detail === 0) onSelect(id);

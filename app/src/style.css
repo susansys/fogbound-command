@@ -350,6 +350,13 @@ small {
 .world-overlay .site-marker:active {
   transform: translate(-14px, -14px);
 }
+.world-overlay .prestart-site[data-marker="H"] {
+  width: 28px;
+}
+.world-overlay .prestart-site[data-marker="H"] b {
+  position: absolute;
+  right: calc(100% + 10px);
+}
 .world-overlay .unit-marker,
 .world-overlay .unit-marker:active {
   transform: translate(-18px, -18px);
