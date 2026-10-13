@@ -41,6 +41,8 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      - name: Install the window manager required for native focus transitions
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y openbox
       - name: Build the tested static image
         run: docker build --iidfile image-id.txt -t fogbound-fb01:ci .
       - name: Serve the same image
@@ -48,7 +50,7 @@ jobs:
       - name: Record public build fingerprint
         run: node verification/fingerprint.mjs
       - name: Run browser contracts with virtual display focus changes
-        run: xvfb-run --auto-servernum npm run browser
+        run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; npm run browser'
         env:
           FB01_HEADED: '1'
       - name: Failure evidence only
