@@ -123,7 +123,7 @@ export class Persistence {
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
-      scenario_kind: x.schema===5?'record' as const:'move' as const,
+      scenario_kind: x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
       read_only,
     }));
   }

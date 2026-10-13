@@ -7,7 +7,7 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record';
+  scenario_kind?: 'move'|'record'|'prestart_move';
   read_only?:boolean;
 };
 export type Request =

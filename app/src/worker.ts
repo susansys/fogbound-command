@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
-import { engineeringDefinition,recordEngineeringDefinition,load_definition } from "./core/scenario";
+import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,load_definition } from "./core/scenario";
 import { GameError, type PlayerView } from "./contracts";
 import type { Request, Response } from "./transport";
 import { valid_request, correlation } from "./protocol";
@@ -90,7 +90,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
         const created=await game.create_run(definition,input.mode,input.operation_id);

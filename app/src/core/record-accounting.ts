@@ -1,3 +1,4 @@
+import {is_record_plan} from '../contracts';
 import {GameError,type RecordPlan} from '../contracts';
 import type {State} from './state';
 import {record_definition_for_package} from './scenario';
@@ -22,7 +23,7 @@ export function record_cause(state:State,cause:string):void {
 }
 export function account_record_progress(state:State,at:number,settle=false):void {
   const order=state.order;
-  if(!order||!('kind' in order.plan)||order.accepted===null)return;
+  if(!order||!(is_record_plan(order.plan))||order.accepted===null)return;
   const plan=order.plan,world=state.world;
   const work=record_work_at(plan,order.accepted,at);
   const spent=quantity(work.numerator*plan.record_energy,work.denominator*plan.work,'record_energy');

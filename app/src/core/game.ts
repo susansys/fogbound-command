@@ -1,3 +1,4 @@
+import {is_record_plan} from '../contracts';
 import type {
   Mode,
   PlayerView,
@@ -17,6 +18,7 @@ import { advance_move, register_move, register_record } from "./movement";
 import {initial_record_accounts} from './record-accounting';
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
+import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
@@ -43,9 +45,9 @@ export class Game {
       if(node?.run_id!==run||node.revision!==nodeRevision)throw new GameError('INVALID_SAVE');
       context.history=node;return context;
     }
-    if(latest.schema===5){
+    if(latest.schema>=5){
       // A real same-time commit takes precedence over effects of a later advance.
-      const candidates=latest.inputs.filter(input=>input.at===to&&input.clock_to===undefined&&!['advance','tick'].includes(input.envelope.intent.kind)).reverse();
+      const candidates=latest.inputs.filter(input=>input.at===to&&!['advance','tick'].includes(input.envelope.intent.kind)).reverse();
       for(const input of candidates){
         const node=await this.store.snapshot(run,input.revision);
         await validate_state(node);
@@ -137,8 +139,9 @@ export class Game {
       inputs: [],
       movement_rules: {fix_ms:definition.profile.parameters.fix_ms,task_expiry_ms:definition.profile.parameters.task_expiry_ms},
       source_run: source?.run_id??null,
-      schema: definition.schema as 4 | 5,
+      schema: definition.schema as 4 | 5 | 6,
       ...(definition.schema === 5 ? {scenario_kind:'record' as const} : {}),
+      ...(definition.schema === 6 ? {scenario_kind:'prestart_move' as const} : {}),
       contract: "0.5.1",
       definition_hash: definition.definition_hash,
       hashes: definition.hashes,
@@ -217,6 +220,15 @@ export class Game {
         },
       ],
     };
+    if(definition.schema===6){
+      const geometry=definition.catalogs.geometry;
+      if(!('N' in geometry))throw new GameError('INVALID_DEFINITION');
+      state.public_rules.geometry.N=geometry.N as [number,number];
+      state.world.hq_energy=16;state.world.hq_wear=100;
+      state.known.resources.hq_energy=16;state.known.resources.hq_wear=100;
+      state.world.movement_energy_reserved=0;state.known.resources.movement_energy_reserved=0;
+      state.prestart=initial_prestart_data(state.public_rules.authority.to);state.schedule=[];
+    }
     await this.commit(
       state,
       null,
@@ -226,7 +238,7 @@ export class Game {
     return project_player_view(state);
   }
   async get_view(run: string): Promise<PlayerView> {
-    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=reconstruct_known(this.history);return this.history.schema===5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
+    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=reconstruct_known(this.history);return this.history.schema>=5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await validate_state(state);
@@ -272,6 +284,7 @@ export class Game {
     await validate_state(state);
     const view = project_player_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
+    if(state.schema===6)return preview_prestart(state,editing_seq,view.can_issue,view.gap);
     if(state.schema===5){
       const definition=record_definition_for_package(state.schema,state.definition_hash),p=definition.profile.parameters;
       return {kind:'record',run_id:run,revision,editing_seq,version:1,actor:'R',target:'A',station:'H',definition_hash:state.definition_hash,
@@ -388,7 +401,7 @@ export class Game {
     }
     if (envelope.intent.kind === "issue") {
       const intent = envelope.intent;
-      if (state.order) throw new GameError("ORDER_EXISTS");
+      if (state.order&&state.schema!==6) throw new GameError("ORDER_EXISTS");
       const expected = await this.preview_plan(
         state.run_id,
         state.revision,
@@ -400,7 +413,8 @@ export class Game {
       )
         throw new GameError("STALE_PLAN");
       if (!expected.allowed) throw new GameError("AUTHORITY_EXPIRED");
-      if('kind' in intent.plan)register_record(candidate,intent);
+      if(state.schema===6)register_prestart(candidate,intent);
+      else if(is_record_plan(intent.plan))register_record(candidate,intent);
       else register_move(candidate, intent);
     } else if (envelope.intent.kind === "advance" || envelope.intent.kind==='tick') {
       if (state.mode !== (envelope.intent.kind==='tick'?'command':'research')) throw new GameError("MODE_LOCKED");

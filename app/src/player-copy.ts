@@ -25,6 +25,7 @@ const errors:Record<string,string>={
 };
 export function error_copy(code:string):string {return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';}
 export function log_copy(entry:LogEntry):string {
+  if(entry.text.startsWith('准备期'))return entry.observed===undefined?entry.text:`${entry.text} 观察 ${clock(entry.observed)} · 总部收到 ${clock(entry.at)}。`;
   if(entry.text.startsWith('档案任务'))return '档案简报已送达，记录组 R 最后确认位于工位 H。';
   if(entry.text.startsWith('记录')){
     if(entry.kind==='issued')return '记录任务已签发登记，尚未发送；等待总部发送。';
@@ -51,8 +52,9 @@ export function status_copy(view:PlayerView):string {
     if(view.status==='deadline')return '已收到截止情况，未完成记录';
     return view.log.some(entry=>entry.kind==='fix_receipt')?'已收到开始记录回报，等待记录成果回报':'记录组已接令，等待开始记录回报';
   }
-  return {ready:'待命',queued:'等待接令回报',executing:'行动中，等待抵达回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status];
+  return {ready:'待命',queued:'等待接令回报',preparing:'已收到准备阶段回报',executing:'行动中，等待抵达回报',terminating:'等待指令结果与收尾回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status];
 }
 export function activity_copy(entry:LogEntry):string {
+  if(entry.text.startsWith('准备期'))return entry.activity_id?`活动凭证 · 本次通行任务 · ${{accepted_receipt:'接令及准备',replace_receipt:'替代确认',start_receipt:'开始移动',fix_receipt:'位置回报',complete_receipt:'抵达'}[entry.kind]??'任务回报'}`:'回报';
   return entry.activity_id?`活动凭证 · 本次记录任务 · ${{accepted_receipt:'接令',fix_receipt:'开始记录',complete_receipt:'完成记录'}[entry.kind]??'记录回报'}`:'回报';
 }
