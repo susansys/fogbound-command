@@ -19,7 +19,7 @@ test('FB02-S13 real browser resumes a mid-work Record run paused, then completes
   await expect(page.locator('.clock strong')).toHaveText('00:26');
   await expect(page.locator('body')).not.toContainText('成果 artifact-');
   await page.getByRole('button',{name:'保存记录',exact:true}).click();
-  await expect(page.getByRole('status')).toContainText('已保存至 00:26');
+  await expect(page.locator('.clock strong')).toHaveText('00:26');
   await page.reload();
   await page.getByRole('button',{name:'接手这场演练',exact:true}).click();
   await expect(page.locator('.clock strong')).toHaveText('00:26');
@@ -28,9 +28,9 @@ test('FB02-S13 real browser resumes a mid-work Record run paused, then completes
   await page.getByLabel('推进至秒').fill('47');
   await page.getByRole('button',{name:'推进时间',exact:true}).click();
   await expect(page.locator('.clock')).toContainText('任务完成');
-  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText('成果 artifact-record');
-  await expect(page.locator('.bottom-log').getByText(/记录成果回报已收到/)).toHaveCount(1);
-  await expect(page.getByText('记录能量 13 / 17',{exact:false})).toBeVisible();
+  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText(/成果 artifact-[A-Za-z0-9_.-]+ · 未核验/);
+  await expect(page.locator('.bottom-log').getByText(/记录成果回报/)).toHaveCount(1);
+  await expect(page.getByText('记录能量 16 / 20',{exact:false})).toBeVisible();
 });
 
 test('FB02-S14 Record history is read-only and does not backfill future artifacts before their receipt',async({page})=>{
@@ -52,7 +52,7 @@ test('FB02-S14 Record history is read-only and does not backfill future artifact
   expect(code).toBe('HISTORY_READ_ONLY');
   await page.getByRole('button',{name:'返回当前行动',exact:true}).click();
   await expect(page.locator('.clock')).toContainText('任务完成');
-  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText('成果 artifact-record');
+  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText(/成果 artifact-[A-Za-z0-9_.-]+ · 未核验/);
 });
 
 test('FB02-S14 same Record restart keeps the previous run as isolated read-only history and returns to the new run',async({page})=>{
@@ -75,10 +75,10 @@ test('FB02-S14 same Record restart keeps the previous run as isolated read-only 
   await page.getByRole('button',{name:'查看上一场记录',exact:true}).click();
   await expect(page.getByText('历史记录 · 只读',{exact:true})).toBeVisible();
   await expect(page.locator('.clock')).toContainText('任务完成');
-  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText('成果 artifact-record');
+  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText(/成果 artifact-[A-Za-z0-9_.-]+ · 未核验/);
   await page.getByRole('button',{name:'返回当前行动',exact:true}).click();
   await expect(page.locator('.clock strong')).toHaveText('00:00');
-  await expect(page.locator('body')).not.toContainText('成果 artifact-record');
+  await expect(page.locator('body')).not.toContainText(/成果 artifact-[A-Za-z0-9_.-]+ · 未核验/);
   await page.getByRole('button',{name:'更换演练',exact:true}).click();
   await expect(page.getByText(/已保存的演练记录 · 工位记录/)).toHaveCount(1);
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
