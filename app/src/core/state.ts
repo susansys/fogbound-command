@@ -1,5 +1,6 @@
 import type { Mode, PlayerView, LogEntry, Envelope, Plan, RecordArtifact } from "../contracts";
 import type {ExactQuantity} from './record-accounting';
+import type {PrestartData} from './prestart-move';
 export type MoveEvent = {
   id: string;
   at: number;
@@ -24,6 +25,7 @@ export type MoveEvent = {
   };
 };
 export type State = {
+  prestart?:PrestartData;
   integrity?:string;
   run_id: string;
   revision: number;
@@ -47,6 +49,7 @@ export type State = {
     equipment_energy: number;
     equipment_wear: number;
     movement_energy: number;
+    movement_energy_reserved?:number;
     record_energy?: ExactQuantity;
     record_energy_used?: ExactQuantity;
     record_energy_reserved?: ExactQuantity;
@@ -68,8 +71,8 @@ export type State = {
   movement_rules: {fix_ms:number;task_expiry_ms:number};
   inputs: Array<{ envelope: Envelope; at: number; revision: number;clock_to?:number }>;
   source_run: string | null;
-  schema: 4 | 5;
-  scenario_kind?: 'record';
+  schema: 4 | 5 | 6;
+  scenario_kind?: 'record'|'prestart_move';
   contract: "0.5.1";
   definition_hash: string;
   hashes: Record<string, string>;
@@ -83,7 +86,7 @@ export type State = {
   };
   generation: number;
   phase: "committed";
-  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources" | "artifacts">;
+  known: Pick<PlayerView, "position" | "report" | "delivery" | "resources" | "artifacts" | "replacement"> & {prestart?:{report_sequence:number;terminal?:{kind:'finished'|'deadline';received_at:number};cleanup_deadline?:number}};
   public_rules: Pick<PlayerView, "geometry" | "authority"> & {
     preview: Pick<
       import("../contracts").MovePlan,

@@ -1,5 +1,7 @@
 export type Mode = "command" | "research";
-export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD';
+export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE';
+export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
+export type PrestartCaseRef=typeof prestart_case_refs[number];
 export type Position = {
   x: number;
   y: number;
@@ -23,6 +25,7 @@ export type ReportDelivery = {
   report_id: string;
   received: { value: number; evidence: string };
 };
+export type TaskRefusalReason='window_closed'|'authority_closed'|'request_expired';
 export type LogEntry = {
   id: string;
   at: number;
@@ -31,6 +34,8 @@ export type LogEntry = {
   observed?: number;
   sender?: string;
   activity_id?: string;
+  rejection?:TaskRefusalReason;
+  request_kind?:'task'|'replacement';
   evidence: string;
 };
 export type RecordArtifact = {
@@ -42,7 +47,8 @@ export type RecordArtifact = {
   activity_id: string;
 };
 export type PlayerView = {
-  scenario_kind?:'record';
+  scenario_kind?:'record'|'prestart_move';
+  scenario_case?:PrestartCaseRef;
   run_id: string;
   revision: number;
   sim_time: number;
@@ -51,13 +57,14 @@ export type PlayerView = {
   paused: boolean;
   finished: boolean;
   source_run: string | null;
-  status: "ready" | "queued" | "executing" | "finished" | "deadline";
+  status: "ready" | "queued" | "preparing" | "executing" | "terminating" | "finished" | "deadline";
   position: Position;
   report: OriginalReport;
   delivery: ReportDelivery;
   geometry: {
     H: [number, number];
     T: [number, number];
+    N?:[number,number];
     extent: [number, number];
     corridor_width: number;
     plain: [number, number, number, number];
@@ -71,6 +78,7 @@ export type PlayerView = {
     equipment_energy: number;
     equipment_wear: number;
     movement_energy: number;
+    movement_energy_reserved?:number;
     confirmed_at: number;
     record_energy?: number;
     record_wear?: number;
@@ -81,7 +89,9 @@ export type PlayerView = {
     hq_wear?: number;
   };
   artifacts?: RecordArtifact[];
-  replay_nodes?:Array<{revision:number;label:string}>;
+  replacement?:{original_command_id:string;replacement_command_id:string;accepted_at:number;received_at:number;evidence:string};
+  issued_orders: Array<{command_id:string;issued:number;plan:Plan;reason?:string}>;
+  replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   log: LogEntry[];
 };
 export type MovePlan = {
@@ -104,9 +114,12 @@ export type RecordPlan = {
   setup_ms:number;work:number;estimated_record_ms:number;estimated_total_ms:number;link_ms:1000;
   record_energy:number;record_wear:number;record_packs:number;allowed:boolean;gap:string;
 };
-export type Plan=MovePlan|RecordPlan;
+export type PrestartPlan={kind:'prestart_move';run_id:string;revision:number;editing_seq:number;version:1;actor:'R';target:'N'|'T';path:'H-N'|'H-T';distance:60|120;estimated_move_ms:15900|31800;setup_ms:5000;link_ms:1000;definition_hash:string;allowed:boolean;gap:string;supersedes?:string};
+export type Plan=MovePlan|RecordPlan|PrestartPlan;
+export function is_record_plan(plan:Plan):plan is RecordPlan{return 'kind' in plan&&plan.kind==='record';}
 export type Intent =
   | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
+  | {kind:'replace_task';command_id:string;original_command_id:string;original_version:1;plan:PrestartPlan;reason?:string}
   | { kind: "advance"; to: number }
   | { kind: "tick"; to: number }
   | { kind: "pause"; reason: "manual" | "focus_lost" | "application_hidden" }
@@ -115,6 +128,14 @@ export type Intent =
   | { kind: "mode"; mode: Mode }
   | { kind: "save" }
   | {kind:'restore';snapshot_revision:number};
+export type TaskIntent=Extract<Intent,{kind:'issue'|'replace_task'}>;
+export function is_task_intent(intent:Intent):intent is TaskIntent{return intent.kind==='issue'||intent.kind==='replace_task';}
+export function task_intent(plan:Plan,command_id:string,reason?:string):TaskIntent{
+  const common={command_id,plan,...(reason===undefined?{}:{reason})};
+  return 'kind' in plan&&plan.kind==='prestart_move'&&plan.supersedes
+    ?{...common,kind:'replace_task',plan,original_command_id:plan.supersedes,original_version:plan.version}
+    :{...common,kind:'issue'};
+}
 export type Envelope = {
   run_id: string;
   operation_id: string;

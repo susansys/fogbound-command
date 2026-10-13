@@ -95,8 +95,8 @@ const corruptions=[
     for(const input of s.inputs)if(input.envelope.intent.kind==='advance')input.envelope.intent={kind:'tick',to:input.envelope.intent.to};
   }},
   {label:'crossed-record-reference',advance:999,apply:(s:State)=>{
-    if(s.order&&'kind' in s.order.plan)s.order.plan.report_id='MISSING';
-    for(const input of s.inputs)if(input.envelope.intent.kind==='issue'&&'kind' in input.envelope.intent.plan)input.envelope.intent.plan.report_id='MISSING';
+    if(s.order&&'kind' in s.order.plan&&s.order.plan.kind==='record')s.order.plan.report_id='MISSING';
+    for(const input of s.inputs)if(input.envelope.intent.kind==='issue'&&'kind' in input.envelope.intent.plan&&input.envelope.intent.plan.kind==='record')input.envelope.intent.plan.report_id='MISSING';
   }},
   {label:'missing-events',advance:999,apply:(s:State)=>{s.schedule=[];}},
   {label:'world-energy-conservation',advance:999,apply:(s:State)=>{s.world.record_energy={numerator:0,denominator:1,unit:'record_energy'};}},

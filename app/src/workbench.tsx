@@ -1,28 +1,35 @@
 import { useState, useEffect, useRef } from "react";
-import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef } from "./contracts";
+import type { Mode, PlayerView, Plan, Envelope, Intent,DefinitionRef,LogEntry } from "./contracts";
+import {is_task_intent,task_intent,prestart_case_refs,type PrestartCaseRef} from './contracts';
 import { Transport, type RunSummary } from "./transport";
 import { MapView } from "./map";
-import { clock,error_copy,log_copy,status_copy,activity_copy } from "./player-copy";
+import { clock,error_copy,status_copy,message_condition_copy } from "./player-copy";
 import { Dialog } from "./dialog";
+import {FrozenOrders} from './frozen-orders';
+import {RecordSummary,RecordDetail} from './readable-log';
+import {PlanDraft} from './plan-draft';
 import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
 import ms from 'milsymbol';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
 function isRecordPlan(plan: Plan | null | undefined): plan is Extract<Plan,{kind:'record'}> {
-  return !!plan && 'kind' in plan;
+  return !!plan && 'kind' in plan && plan.kind==='record';
 }
 function isMovePlan(plan: Plan | null | undefined): plan is Exclude<Plan,Extract<Plan,{kind:'record'}>> {
-  return !!plan && !('kind' in plan);
+  return !!plan && !isRecordPlan(plan);
 }
 const transport = new Transport();
 export function Workbench() {
   const createOperation = useRef(crypto.randomUUID());
   const [definitionRef,setDefinitionRef]=useState<DefinitionRef>('FB02-ENG-RECORD');
+  const [caseRef,setCaseRef]=useState<PrestartCaseRef>('normal');
   const [sceneChanging,setSceneChanging]=useState(false);
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
   const orderConfirmed=useRef<string|null>(null);
   const historyActive=useRef(false),restartOperation=useRef(crypto.randomUUID()),liveView=useRef<PlayerView|null>(null);
   const [reviewNode,setReviewNode]=useState('');
+  const [fullReplay,setFullReplay]=useState(false);
+  const [logDetail,setLogDetail]=useState<LogEntry|null>(null);
   const replayNodes=useRef<PlayerView['replay_nodes']>([]);
   const [history,setHistory]=useState(false),[reviewTo,setReviewTo]=useState('6'),[restartConfirm,setRestartConfirm]=useState(false);
   const [previousLimit,setPreviousLimit]=useState<number|null>(null);
@@ -94,6 +101,7 @@ export function Workbench() {
         kind: "create",
         mode,
         definition_ref:definitionRef,
+        ...(definitionRef==='ENG-PRESTART-REPLACE'?{case_ref:caseRef}:{}),
         operation_id: createOperation.current,
       });
       if (result.ok && result.view) adoptView(result.view);
@@ -158,6 +166,7 @@ export function Workbench() {
   }
   async function preview() {
     if (!view) return;
+    if(view.scenario_kind==='prestart_move'&&pendingOrder.current&&pendingOrder.current.operation_id===orderConfirmed.current){pendingOrder.current=null;orderConfirmed.current=null;setReason('');}
     const seq = ++editing.current;
     const context = { run_id: view.run_id, revision: view.revision };
     const isCurrent = () =>
@@ -212,9 +221,9 @@ export function Workbench() {
         adoptView(response.view);
         if(pendingControl.current?.operation_id===envelope.operation_id)pendingControl.current=null;
         setReceiptNote(
-          response.receipt.kind==='issue'?'命令已登记并发出，等待编组回报。':response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
+          is_task_intent(envelope.intent)?(response.view.scenario_kind==='prestart_move'?'通行指令已签发登记，实际发送和接受须看后续记录。':'命令已登记并发出，等待编组回报。'):response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
-        if (envelope.intent.kind === "issue") {
+        if (is_task_intent(envelope.intent)) {
           orderConfirmed.current=envelope.operation_id;
           setPlan(null);
           setConfirm(false);
@@ -222,7 +231,7 @@ export function Workbench() {
       } else if (!response.ok) {
         if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageFault(true);
         if(pendingControl.current?.operation_id===envelope.operation_id&&['STALE_REVISION','INVALID_INPUT','MODE_LOCKED','RUN_ENDED'].includes(response.code))pendingControl.current=null;
-        if (envelope.intent.kind === 'issue' && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS'].includes(response.code)) pendingOrder.current = null;
+        if (is_task_intent(envelope.intent) && ['STALE_REVISION','STALE_PLAN','INVALID_INPUT','AUTHORITY_EXPIRED','ORDER_EXISTS','REPLACEMENT_LIMIT'].includes(response.code)) pendingOrder.current = null;
         setError(response.code);
       }
       return response;
@@ -251,7 +260,7 @@ export function Workbench() {
         if(!latest||isRecordPlan(shown)!==isRecordPlan(latest)||!latest.allowed||keys.some(key=>shown[key as keyof typeof shown]!==latest[key as keyof typeof latest])){
           if(latest)setPlan(latest);setConfirm(false);setReceiptNote('情况或任务条件已变化，请重新核对预案。');return;
         }
-        pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:{kind:'issue',command_id:crypto.randomUUID(),plan:latest,...(chosenReason?{reason:chosenReason}:{})}};
+        pendingOrder.current={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:task_intent(latest,crypto.randomUUID(),chosenReason||undefined)};
         const result=await operate(pendingOrder.current);
         if(!result||result.ok||!['STALE_REVISION','STALE_PLAN'].includes(result.code))return;
       }
@@ -262,12 +271,7 @@ export function Workbench() {
         run_id: view.run_id,
         operation_id: crypto.randomUUID(),
         expected_revision: view.revision,
-        intent: {
-          kind: "issue",
-          command_id: crypto.randomUUID(),
-          plan: structuredClone(plan),
-          ...(reason ? { reason } : {}),
-        },
+        intent:task_intent(structuredClone(plan),crypto.randomUUID(),reason||undefined),
       };
     await operate(pendingOrder.current);
   }
@@ -280,10 +284,10 @@ export function Workbench() {
       operation_id: original.operation_id,
     });
     if (response.ok) {
-      if(response.receipt&&original.intent.kind==='issue')orderConfirmed.current=original.operation_id;
+      if(response.receipt&&is_task_intent(original.intent))orderConfirmed.current=original.operation_id;
       setReceiptNote(
         response.receipt
-          ? original.intent.kind==='issue'?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
+          ? is_task_intent(original.intent)?'原命令已登记，请查看编组回报。':'原控制已登记，请查看当前时间与暂停状态。'
           : "尚未查到原命令的登记结果，请保留原命令，再查询或重试。",
       );
       if (response.receipt) {
@@ -293,7 +297,7 @@ export function Workbench() {
         });
         if (current.ok && current.view) {
           adoptView(current.view);
-          if(original.intent.kind==='issue'){setPlan(null);setConfirm(false);}
+          if(is_task_intent(original.intent)){setPlan(null);setConfirm(false);}
           setError("");
           if(pendingControl.current?.operation_id===original.operation_id){pendingControl.current=null;setControlPending(false);
             if(deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;void control(pause);}
@@ -303,6 +307,10 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
+  const prestart=view?.scenario_kind==='prestart_move';
+  const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
+  const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];
+  const lastActionReport=[...(view?.log??[])].reverse().find(entry=>entry.kind.endsWith('_receipt'));
   return (
     <div className="app crisis-app">
       <header className="topbar">
@@ -344,15 +352,16 @@ export function Workbench() {
       )}
       {!view ? (
         <main className="start">
-          <span className="outline-tag">{definitionRef==='FB02-ENG-RECORD'?'记录演练 / 固定工位 / 一项任务':'联络演练 / 固定通道 / 一项任务'}</span>
-          <h2>{definitionRef==='FB02-ENG-RECORD'?'记录档案，等待编组完成回报':'下达命令，等待编组抵达回报'}</h2>
+          <span className="outline-tag">{definitionRef==='FB02-ENG-RECORD'?'记录演练 / 固定工位 / 一项任务':definitionRef==='ENG-PRESTART-REPLACE'?'替代演练 / 固定通道 / 一次准备期替代':'联络演练 / 固定通道 / 一项任务'}</span>
+          <h2>{definitionRef==='FB02-ENG-RECORD'?'记录档案，等待编组完成回报':definitionRef==='ENG-PRESTART-REPLACE'?'先派往近点 N，准备期内可请求改到 T':'下达命令，等待编组抵达回报'}</h2>
           <p>
-            {definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
+            {definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':definitionRef==='ENG-PRESTART-REPLACE'?'目标：先安排R前往近联络点N；可请求一次改到远点T。只有联络组尚未开始移动时能接受替代；总部以收到的回报判断情况。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
           </p>
           <p>
             本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>setDefinitionRef(event.target.value as DefinitionRef)}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option></select></label>
+          {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}
             <select
@@ -376,7 +385,7 @@ export function Workbench() {
           </button>
           {runs.map((run) => (
             <p key={run.run_id}>
-              已保存的演练记录 · {run.scenario_kind==='record'?'工位记录':'走廊移动'} · {clock(run.sim_time)}
+              已保存的演练记录 · {run.scenario_kind==='record'?'工位记录':run.scenario_kind==='prestart_move'?'准备期替代':'走廊移动'} · {clock(run.sim_time)}
               {!run.read_only&&<button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>}
               <button disabled={busy} onClick={()=>void readRetained(run)}>查看记录</button>
             </p>
@@ -386,8 +395,9 @@ export function Workbench() {
         <>
           <div className="contextbar">
             <strong>{view.scenario_kind==='record'?'固定工位 H':'联络通道 H—T'}</strong>
-            <span>{view.scenario_kind==='record'?'记录组 R · 目标档案 A':'联络组 R · 目标联络点 T'}</span>
+            <span>{view.scenario_kind==='record'?'记录组 R · 目标档案 A':prestart?'联络组 R · 近点 N / 远点 T':'联络组 R · 目标联络点 T'}</span>
             <small>{view.scenario_kind==='record'?'固定作业 · 虚构区域':'120米 · 固定通道 · 虚构区域'}</small>
+            {view.scenario_case&&<small>消息条件：{message_condition_copy[view.scenario_case]}</small>}
           </div>
           <div className="shell">
             <nav className="rail">
@@ -455,21 +465,21 @@ export function Workbench() {
                     onSelect={select}
                     planned={
                       !!plan || view.log.some((x) => x.kind === "issued")
-                    }
+                    } plannedTarget={(plan?.target??view.issued_orders.at(-1)?.plan.target)==='N'?'N':'T'}
                   />
                 ) : workspace==='tasks'?(
-                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>{view.scenario_kind==='record'?'本次只向记录组下达一项固定工位记录任务。预览不会执行。':'本次只向联络组下达一项通行任务。指令发出后仍要等确认。'}</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</h3><span>{view.gap}</span></div><p>{view.scenario_kind==='record'?'记录组固定在工位H，预案对象限定为档案A。':'由总部H沿固定通道抵达联络点T。'}</p><button disabled={history||!view.can_issue} onClick={()=>setSelected(view.scenario_kind==='record'?'H':'T')}>安排任务</button></section><div className="task-layout"><section className="task-main"><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录档案':'通行至联络点'}</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'工位 H · 档案 A':'联络点 T · 登记地点'}</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>{view.scenario_kind==='record'?'固定工位 · 预计准备5秒、记录40秒；单向消息1秒。':'120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。'}</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected(view.scenario_kind==='record'?'H':'T');void preview();}}>{view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}</button>{plan&&<section className="plan"><h3>待下达预案</h3>{isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒；假设全程约{plan.estimated_total_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>R → T · {plan.distance}图上米<br/>预计通行{plan.estimated_move_ms/1000}秒，单向消息{plan.link_ms/1000}秒</p>}<label>指挥意图（选填）<textarea aria-label="指挥意图（选填）" value={reason} disabled={history} onChange={e=>setReason(e.target.value)}/></label><div className="form-actions"><button onClick={()=>{editing.current++;setPlan(null);setBusy(false);}}>取消预案</button><button className="primary" disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} onClick={()=>setConfirm(true)}><PaperPlaneTilt/>{isRecordPlan(plan)?'下达记录任务':'下达通行命令'}</button></div></section>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>{status_copy(view)}</p><h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
+                  <div className="content-view"><div className="content-head"><div><h2>派谁、去哪里、做什么</h2><p>{view.scenario_kind==='record'?'本次只向记录组下达一项固定工位记录任务。预览不会执行。':prestart?'先向R签发N通行任务，可登记一次准备期改到T的请求。预览不会执行，是否接受仍须等待回报。':'本次只向联络组下达一项通行任务。指令发出后仍要等确认。'}</p></div><span className="outline-tag">总部授权任务</span></div><section className="team-task"><div><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><h3>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</h3><span>{view.gap}</span></div><p>{view.scenario_kind==='record'?'记录组固定在工位H，预案对象限定为档案A。':prestart?'近点N距H为60图上米；可请求一次改到远点T，已开始移动后不能替代。':'由总部H沿固定通道抵达联络点T。'}</p><button disabled={history||!view.can_issue} onClick={()=>setSelected(view.scenario_kind==='record'?'H':'T')}>安排任务</button></section><div className="task-layout"><section className="task-main">{view.issued_orders.length?<><FrozenOrders orders={view.issued_orders}/>{prestart&&view.can_issue&&<button className="primary" disabled={busy||history||storageFault||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>{setSelected("T");void preview();}}>请求改到T</button>}</>:<><h3>任务预案</h3><div className="form-grid"><label>编组<select aria-label="编组" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录组 · R':'联络组 · R'}</option></select></label><label>任务内容<select aria-label="任务内容" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'记录档案':'通行至联络点'}</option></select></label><label>目的地<select aria-label="目的地" disabled={history||!view.can_issue}><option>{view.scenario_kind==='record'?'工位 H · 档案 A':prestart?'近联络点 N · 登记地点':'联络点 T · 登记地点'}</option></select></label><label>授权<span>指挥部已授权，至10:00</span></label></div><p>{view.scenario_kind==='record'?'固定工位 · 预计准备5秒、记录40秒；单向消息1秒。':prestart?'近点N为60图上米，预计通行15.9秒；接受后准备5秒；单向消息1秒。':'120 图上米 · 固定通道 · 预计通行31.8秒；单向消息1秒。'}</p><button className="primary" disabled={busy||history||storageFault||!view.can_issue} onClick={()=>{setSelected(view.scenario_kind==='record'?'H':moveTarget);void preview();}}>{view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}</button></>}{plan&&<PlanDraft plan={plan} reason={reason} onReason={setReason} onCancel={()=>{editing.current++;setPlan(null);setBusy(false);}} onConfirm={()=>setConfirm(true)} disabled={busy||history||storageFault||!plan.allowed||!view.can_issue} history={history}/>}</section><aside className="task-aside"><h3>下达后的工作</h3><p>{status_copy(view)}</p>{view.replacement&&<p>替代已确认：原N任务改到T，重新准备。联络组接受 {clock(view.replacement.accepted_at)}，总部收到 {clock(view.replacement.received_at)}。</p>}<h3>尚缺条件</h3><p>{view.gap}</p><button onClick={()=>setWorkspace('map')}>返回态势地图 <ArrowRight/></button></aside></div></div>
                 ) : workspace==='log'?(
-                  <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><time>{clock(entry.at)}</time><p>{log_copy(entry)}</p></section>)}</article>
+                  <article className="content-view"><div className="content-head"><h2>指挥记录</h2><span className="outline-tag">总部已收到的记录</span></div>{view.log.map(entry=><section className="record" key={entry.id}><RecordSummary entry={entry} record={view.scenario_kind==='record'} onDetails={setLogDetail}/></section>)}</article>
                 ) : workspace==='review'?(
-                  <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p>{view.scenario_kind==='record'&&<label>回看节点 <select aria-label="回看节点" value={reviewNode} onChange={e=>setReviewNode(e.target.value)}><option value="">按时刻回看</option>{(history?replayNodes.current:view.replay_nodes)?.map(node=><option key={node.revision} value={node.revision}>{node.label}</option>)}</select></label>}<label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p><p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><p key={entry.id}><time>{clock(entry.at)}</time> · {log_copy(entry)}</p>)}</article>
+                  <article className="report-page"><span className="outline-tag">当时收到的信息</span><h2>回看行动经过</h2><p>只按当时已收到的回报查看，不把后来的结果填回历史。查看记录不会暂停正在进行的行动。</p>{<div className="replay-navigation"><label><input type="checkbox" checked={fullReplay} onChange={e=>setFullReplay(e.target.checked)}/>展开完整提交记录</label><label>回看节点 <select aria-label="回看节点" value={reviewNode} onChange={e=>setReviewNode(e.target.value)}><option value="">按时刻回看</option>{(history?replayNodes.current:view.replay_nodes)?.filter(node=>fullReplay||node.meaningful||String(node.revision)===reviewNode).map(node=><option key={node.revision} value={node.revision}>{clock(node.at)} · {node.label}</option>)}</select></label><p>默认只列新回报和指挥操作；完整记录保留每次时间推进。同刻的记录按各自序号分别查看。</p></div>}<label>回看时刻（秒） <input aria-label="回看时刻（秒）" type="number" min={0} max={(previousLimit??(liveView.current??view).sim_time)/1000} value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label>{!history&&view.source_run&&<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void previous()}>查看上一场记录</button>}<button disabled={busy||controlPending||!!pendingOrder.current&&orderConfirmed.current!==pendingOrder.current.operation_id} onClick={()=>void replay()}>查看当时情况</button><p>{history?'正在查看历史记录。':'仍在查看当前行动。'}</p>{history&&reviewNode&&<p>正在查看记录 {view.revision}。</p>}<p>总部最后确认：{view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}；依据观察 {clock(view.position.observed)}、递交 {clock(view.position.received)} 的回报。</p>{view.log.map(entry=><section className="record" key={entry.id}><RecordSummary entry={entry} record={view.scenario_kind==='record'} onDetails={setLogDetail}/></section>)}</article>
                 ) : (
-                  <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>{view.scenario_kind==='record'?'档案 A':'登记联络点 T'}</strong><p>{view.scenario_kind==='record'?'关联工位 H · 原始档案报告':'关联地点 T · 原始工位报告'}</p></button></aside><article className="report-detail">
-                    <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select(view.scenario_kind==='record'?'H':'T')}>{view.scenario_kind==='record'?'定位工位H':'定位联络点T'} <ArrowRight/></button></div>
-                    <h2>{view.scenario_kind==='record'?'档案 A':'登记联络点 T'}</h2>
+                  <div className="intel-layout"><aside className="report-list"><div className="content-head"><div><h2>情报收件箱</h2><p>原始消息与递交凭证分别保留</p></div></div><button className="report-row selected" aria-pressed="true"><div><span>{view.report.origin}</span><time>{clock(view.delivery.received.value)} 收到</time></div><strong>{view.scenario_kind==='record'?'档案 A':`登记联络点 ${view.report.target}`}</strong><p>{view.scenario_kind==='record'?'关联工位 H · 原始档案报告':`关联地点 ${view.report.target} · 原始工位报告`}</p></button></aside><article className="report-detail">
+                    <div className="report-toolbar"><span className="outline-tag">原始报告 · 尚未另行核实</span><button onClick={()=>select(view.scenario_kind==='record'?'H':prestart?'N':'T')}>{view.scenario_kind==='record'?'定位工位H':prestart?'定位近联络点N':'定位联络点T'} <ArrowRight/></button></div>
+                    <h2>{view.scenario_kind==='record'?'档案 A':`登记联络点 ${view.report.target}`}</h2>
                     <p className="byline">来源：{view.report.origin}</p>
                     <p className="report-excerpt">
-                      {view.scenario_kind==='record'?'档案A已送达总部登记口径。总部可以拟定一次固定工位记录任务；是否开始和完成，均以收到的记录组回报为准。':'联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。'}
+                      {view.scenario_kind==='record'?'档案A已送达总部登记口径。总部可以拟定一次固定工位记录任务；是否开始和完成，均以收到的记录组回报为准。':prestart?'近联络点N位于通道中段，T位于终点。可以先派R去N，再登记一次准备期改到T的请求；只有收到接受回报才能确认替代，不能用地图推断现场实时状态。':'联络点位于通道终点。总部可以向R下达一次通行命令；是否开始行动和抵达，均以收到的编组回报为准。'}
                     </p>
                     <div className="time-grid"><div><span>观察时间</span><strong>{clock(view.report.observed.value)}</strong></div><div><span>报出时间</span><strong>{clock(view.report.reported.value)}</strong></div><div><span>总部收到</span><strong>{clock(view.delivery.received.value)}</strong></div><div><span>事情发生的时间</span><strong>未知</strong></div></div>
                     <section><h3>核对任务条件</h3><p>原件和总部收到凭证分别保留。未知的事件时间不能由收到时间代替；尚未有另外的现场核实记录。</p><button className="primary" disabled={history} onClick={()=>setWorkspace('tasks')}>{view.scenario_kind==='record'?'拟定记录任务':'拟定通行任务'}</button></section>
@@ -477,16 +487,16 @@ export function Workbench() {
                 )}
                 <aside className="inspector">
                   <div className="panel-heading">当前选择：{selected}</div>
-                  <div className="unit-title"><img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/><div><h2>
+                  <div className="unit-title">{selected==='R'?<img alt={view.scenario_kind==='record'?'虚构记录组':'虚构联络组'} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(unitSymbol)}`}/>:<MapTrifold aria-label="公开地点" size={25}/>}<div><h2>
                     {selected === "R"
                       ? view.scenario_kind==='record'?"记录组 R":"联络组 R"
-                      : selected === "T"
+                      : selected === "N" ? "近联络点 N" : selected === "T"
                         ? "联络点 T"
                         : view.scenario_kind==='record'?"工位 H":"总部 H"}
-                  </h2><p>{view.scenario_kind==='record'?{ready:'待命，尚未下达',queued:'等待接令回报',executing:view.log.some(x=>x.kind==='fix_receipt')?'已开始记录，待成果回报':'已接令，待开始回报',finished:'成果已收到 · 未核验',deadline:'时限已到，未完成记录'}[view.status]:status_copy(view)} / {clock(view.position.received)}</p></div></div>
-                  <dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置回报</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到</dt><dd>{clock(view.position.received)}</dd></div></dl>
+                  </h2><p>{selected==='R'?`${status_copy(view)} · 任务回报 ${lastActionReport?clock(lastActionReport.at):'尚无'}`:'公开地图登记地点'}</p></div></div>
+                  {selected==='R'?<dl className="facts"><div><dt>职责</dt><dd>{view.scenario_kind==='record'?'在工位H记录档案A':'通行至联络点'}</dd></div><div><dt>最近位置观察</dt><dd>{clock(view.position.observed)}</dd></div><div><dt>总部收到位置</dt><dd>{clock(view.position.received)}</dd></div></dl>:<dl className="facts"><div><dt>地点类型</dt><dd>{selected==='N'?'通道近联络点':selected==='T'?'通道联络点':view.scenario_kind==='record'?'固定工位':'总部驻地'}</dd></div><div><dt>地点坐标</dt><dd>{selectedPoint?.[0].toFixed(2)}, {selectedPoint?.[1].toFixed(2)}</dd></div><div><dt>依据</dt><dd>公开地图登记</dd></div></dl>}
                   <section>
-                    <h3>总部最后确认位置</h3>
+                    <h3>{selected==='R'?'总部最后确认位置':'关联编组 R · 总部最后确认位置'}</h3>
                     <p data-testid="position">
                       {view.position.x.toFixed(2)}, {view.position.y.toFixed(2)}
                     </p>
@@ -505,7 +515,7 @@ export function Workbench() {
                       原始工位报告与收到凭证分别保留。<br/>观察、报出与收到时间均为00:00，各有开局登记记录。
                     </small>
                     <p>
-                      <button onClick={() => select(view.scenario_kind==='record'?'H':'T')}>{view.scenario_kind==='record'?'定位工位H':'定位联络点T'}</button>
+                      <button onClick={() => select(view.scenario_kind==='record'?'H':prestart?'N':'T')}>{view.scenario_kind==='record'?'定位工位H':prestart?'定位近联络点N':'定位联络点T'}</button>
                       <button onClick={() => setWorkspace("report")}>
                         查看原件
                       </button>
@@ -517,7 +527,7 @@ export function Workbench() {
                     <p>{view.gap}</p>
                     <button
                       className="primary full"
-                      disabled={busy || history || storageFault || (view.scenario_kind==='record' ? selected !== "H" : selected !== "T") || !view.can_issue}
+                      disabled={busy || history || storageFault || (view.scenario_kind==='record' ? selected !== "H" : selected !== moveTarget) || !view.can_issue}
                       onClick={() => void preview()}
                     >
                       {view.scenario_kind==='record'?'查看记录预案':'查看通行预案'}
@@ -527,7 +537,7 @@ export function Workbench() {
                     <section className="plan">
                       <h3>待下达预案</h3>
                       {isRecordPlan(plan)?<p>记录组R在工位H记录档案A。<br/>预计准备{plan.setup_ms/1000}秒、记录{plan.estimated_record_ms/1000}秒；单向消息{plan.link_ms/1000}秒。<br/>假设消耗：记录能量{plan.record_energy}、耐久{plan.record_wear}、用品{plan.record_packs}。</p>:<p>
-                        R → T · {plan.distance}图上米
+                        R → {plan.target} · {plan.distance}图上米
                         <br />
                         预计通行{plan.estimated_move_ms / 1000}秒，单向消息
                         {plan.link_ms / 1000}秒
@@ -567,16 +577,17 @@ export function Workbench() {
                     </section>
                   )}
                   <section>
-                    <h3>已收到的装备状态</h3>
+                    <h3>{selected==='R'?'已收到的装备状态':'关联编组 R · 已收到的装备状态'}</h3>
                     {view.scenario_kind==='record'?<p>
                       记录能量 {view.resources.record_energy ?? 0} / 20<br/>记录耐用度 {view.resources.record_wear ?? 0} / 100<br/>记录用品 {view.resources.record_packs ?? 0} / 2<br/>已确认预约：记录能量 {view.resources.record_energy_reserved ?? 0}、用品 {view.resources.record_packs_reserved ?? 0}<br/>联络器电量 {view.resources.equipment_energy} / 16<br/>联络器耐用度 {view.resources.equipment_wear} / 100<br/>总部电量 {view.resources.hq_energy ?? 0} / 16<br/>总部耐用度 {view.resources.hq_wear ?? 0} / 100
                     </p>:<p>
                       联络器电量 {view.resources.equipment_energy} / 16<br/>器材耐用度 {view.resources.equipment_wear} / 100<br/>行进储备 {view.resources.movement_energy} / 20
+                      {prestart&&<><br/>已确认行进预约 {view.resources.movement_energy_reserved}；准备阶段不扣行进能量。<br/>总部电量 {view.resources.hq_energy} / 16<br/>总部耐用度 {view.resources.hq_wear} / 100</>}
                     </p>}
                     <small>依据 {clock(view.resources.confirmed_at)} 收到的回报更新</small>
                     {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 · 未核验</p>}
                   </section>
-                  {receiptNote && <p role="status">{receiptNote}</p>}
+                  {receiptNote && !history && <p role="status">{receiptNote}</p>}
                   {!history&&pendingOrder.current && error && (
                     <section>
                       <button onClick={() => void queryReceipt()}>
@@ -600,7 +611,7 @@ export function Workbench() {
                     {collapsed ? "展开记录" : "收起记录"}
                   </button>
                 </div>
-                {!collapsed&&<div className="log-lines">{[...view.log].reverse().slice(0,3).map(entry=><div key={entry.id}><time>{clock(entry.at)}</time><span>{entry.sender??(['issued','sent'].includes(entry.kind)?'总部指挥席':entry.kind==='report'?'联络席':view.scenario_kind==='record'?'记录组 R':'联络组 R')}</span><p>{log_copy(entry)}</p><small data-activity-reference={entry.activity_id}>{activity_copy(entry)}</small></div>)}</div>}
+                {!collapsed&&<div className="log-lines">{[...view.log].reverse().slice(0,3).map(entry=><RecordSummary key={entry.id} entry={entry} record={view.scenario_kind==='record'} onDetails={setLogDetail}/>)}</div>}
               </footer>
             </main>
           </div>
@@ -614,7 +625,7 @@ export function Workbench() {
             >
               <div className="dialog-body">
                 <p>
-                  {isRecordPlan(plan)?'R → 工位H / 档案A。任务登记后仍须等待记录组回报；本次演练无法撤回或更改已下达的命令。':'R → 联络点T / 固定走廊。命令登记后仍须等待编组回报；本次演练无法撤回或更改已下达的命令。'}
+                  {isRecordPlan(plan)?'R → 工位H / 档案A。任务登记后仍须等待记录组回报；本次演练无法撤回或更改已下达的命令。':prestart?'先签发N任务，可登记一次改到T的替代请求。只有联络组尚未开始移动时能接受；原任务和消息保留，是否接受以收到的回报为准。':'R → 联络点T / 固定走廊。命令登记后仍须等待编组回报；本次演练无法撤回或更改已下达的命令。'}
                 </p>
                 <p>
                   {isRecordPlan(plan)?`预计准备 ${plan.setup_ms/1000} 秒，记录 ${plan.estimated_record_ms/1000} 秒；结果只能依据收到的回报更新。`:`预计通行 ${plan.estimated_move_ms / 1000} 秒；总部位置与完成只能依据收到的回报更新。`}
@@ -636,6 +647,7 @@ export function Workbench() {
             </Dialog>
           )}
           {restartConfirm&&<Dialog title="重开这场演练" onClose={()=>{if(!busy)setRestartConfirm(false);}}><div className="dialog-body"><p>新演练采用相同场景与起始条件，生成新的行动记录。原行动将保留为只读记录；已经获得的经验不会消失。</p></div><footer className="dialog-actions"><button disabled={busy} onClick={()=>setRestartConfirm(false)}>保留当前行动</button><button className="primary" disabled={busy} onClick={()=>void restart()}>确认重开</button></footer></Dialog>}
+          {logDetail&&<RecordDetail entry={logDetail} record={view.scenario_kind==='record'} onClose={()=>setLogDetail(null)}/>}
         </>
       )}
     </div>

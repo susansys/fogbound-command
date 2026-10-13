@@ -9,6 +9,7 @@ type Props = {
   selected: string;
   onSelect: (id: string) => void;
   planned: boolean;
+  plannedTarget?:'N'|'T';
 };
 const symbol = new ms.Symbol("SFGPU-----*****", {
   size: 30,
@@ -18,9 +19,11 @@ const symbol = new ms.Symbol("SFGPU-----*****", {
   outlineColor: "#e4eee2",
   outlineWidth: 2,
 }).asSVG();
-export function MapView({ view, selected, onSelect, planned }: Props) {
+export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }: Props) {
   const recording=view.scenario_kind==='record';
-  const sites=recording?(['H'] as const):(['H','T'] as const);
+  const sites=recording?(['H'] as const):view.geometry.N?(['H','N','T'] as const):(['H','T'] as const);
+  const site=(id:'H'|'N'|'T')=>view.geometry[id]??view.geometry.H;
+  const routeTarget=site(plannedTarget);
   const host = useRef<HTMLDivElement>(null),
     app = useRef<Application | null>(null),
     scene = useRef<Container | null>(null);
@@ -75,7 +78,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
   }
   function focusSelection(){
     const el=host.current;if(!el)return;
-    const position=selected==='R'?[view.position.x,view.position.y]:selected==='T'?view.geometry.T:view.geometry.H;
+    const position=selected==='R'?[view.position.x,view.position.y]:site(selected==='N'?'N':selected==='T'?'T':'H');
     camera.current.x=el.clientWidth/2-position[0]*camera.current.s;camera.current.y=el.clientHeight/2-position[1]*camera.current.s;apply();
   }
   useEffect(() => {
@@ -243,7 +246,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
       {planned && !recording && (
         <svg className="plan-route" aria-hidden="true">
           <path
-            d={`M${c.x + view.geometry.H[0] * c.s} ${c.y + view.geometry.H[1] * c.s} L${c.x + view.geometry.T[0] * c.s} ${c.y + view.geometry.T[1] * c.s}`}
+            d={`M${c.x + view.geometry.H[0] * c.s} ${c.y + view.geometry.H[1] * c.s} L${c.x + routeTarget[0] * c.s} ${c.y + routeTarget[1] * c.s}`}
             stroke="#d2b87e"
             strokeWidth="3"
             strokeDasharray="8 6"
@@ -253,11 +256,11 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
       )}
       {!recording&&<svg className="plan-route" aria-hidden="true">
         {sites.map((id) => {
-          const [x, y] = view.geometry[id];
+          const [x, y] = site(id);
           return (
             <path
               key={id}
-              d={`M${c.x + x * c.s} ${c.y + y * c.s} v-44`}
+              d={`M${c.x + x * c.s} ${c.y + y * c.s} v${id==='N'?-90:-44}`}
               stroke="#aabbb6"
               strokeWidth="1"
               fill="none"
@@ -268,20 +271,20 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
       <div className="world-overlay">
         {recording&&<span className="record-leader" style={point(...view.geometry.H)} aria-hidden="true"/>}
         {sites.map((id) => {
-          const [x, y] = view.geometry[id];
+          const [x, y] = site(id);
           return (
             <button
               key={id}
-              aria-label={recording?'工位H':id === "T" ? "联络点T" : "起点H"}
+              aria-label={recording?'工位H':id==='N'?'近联络点N':id === "T" ? "联络点T" : "起点H"}
               data-marker={id}
-              className={`site-marker ${selected === id ? "selected" : ""}`}
-              style={{ ...point(x, y), marginTop: recording?'-3.2em':-44 }}
+              className={`site-marker ${view.geometry.N?'prestart-site':''} ${selected === id ? "selected" : ""}`}
+              style={{ ...point(x, y), marginTop: recording?'-3.2em':id==='N'?-90:-44 }}
               onClick={(e) => {
                 if (e.detail === 0) onSelect(id);
               }}
             >
               <span className="site-shape">{id}</span>
-              {labels && <b>{recording?'工位H · 档案A':id === "T" ? "目标联络点" : "总部起点"}</b>}
+              {labels && <b>{recording?'工位H · 档案A':id==='N'?'近联络点':id === "T" ? view.geometry.N?'远联络点':'目标联络点' : "总部起点"}</b>}
             </button>
           );
         })}
@@ -358,7 +361,7 @@ export function MapView({ view, selected, onSelect, planned }: Props) {
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:100*c.s}}/>100 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:100*c.s}}/>100 图上米</span></div>
     </div>
   );
 }

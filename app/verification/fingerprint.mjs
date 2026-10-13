@@ -17,7 +17,7 @@ const main=await asset(entry),workerPath=main.bytes.toString().match(/\/assets\/
 if(!workerPath)throw Error('missing worker entry');
 const worker=await asset(workerPath),styles=[];
 const definitions=[];
-for(const path of ['src/core/engineering.json','src/core/record-engineering.json']){
+for(const path of ['src/core/engineering.json','src/core/record-engineering.json','src/core/prestart-engineering.json']){
   const bytes=await fs.readFile(path),definition=JSON.parse(bytes),{definition_hash,...body}=definition;
   if(sha(JSON.stringify(body))!==definition_hash||!worker.bytes.includes(Buffer.from(definition_hash)))throw Error('definition fingerprint does not match the served worker');
   for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.stringify(definition[key]))!==definition.hashes[key])throw Error('registered definition hash mismatch');

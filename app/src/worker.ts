@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
-import { engineeringDefinition,recordEngineeringDefinition,load_definition } from "./core/scenario";
-import { GameError, type PlayerView } from "./contracts";
+import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,load_definition,prestart_case } from "./core/scenario";
+import { GameError,is_task_intent, type PlayerView } from "./contracts";
 import type { Request, Response } from "./transport";
 import { valid_request, correlation } from "./protocol";
 import {valid_response} from './dto';
@@ -90,10 +90,11 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
-        const created=await game.create_run(definition,input.mode,input.operation_id);
+        const created=await game.create_run(definition,input.mode,input.operation_id,input.case_ref);
         const view=original?await game.get_view(created.run_id):created;
         if(original)rememberResult=active?.run_id===view.run_id;
         response={request_id:input.request_id,ok:true,view};
@@ -140,7 +141,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       else if (input.kind === "operate" && locked) {
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
-          input.envelope.intent.kind === "issue"
+          is_task_intent(input.envelope.intent)
             ? await game.issue_order(input.envelope)
             : input.envelope.intent.kind==='save'?await game.save(input.envelope,clock_to)
             : await game.control_clock(input.envelope,clock_to);

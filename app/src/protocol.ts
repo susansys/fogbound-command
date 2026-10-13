@@ -1,5 +1,6 @@
 import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
+import {prestart_case_refs} from './contracts';
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -20,8 +21,10 @@ export function valid_request(
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (
-      fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref'])]) &&
-      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD') &&
+      fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref']),...(value.case_ref===undefined?[]:['case_ref'])]) &&
+      (value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&
+      (value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE')&&
+      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );
@@ -91,19 +94,24 @@ export function valid_envelope(value: unknown): value is Envelope {
       intent.to >= 0 &&
       intent.to <= 610000
     );
-  if (intent.kind === "issue")
+  if (intent.kind === "issue"||intent.kind==='replace_task')
     return (
       fields(intent, [
         "kind",
         "command_id",
         "plan",
+        ...(intent.kind==='replace_task'?['original_command_id','original_version']:[]),
         ...(intent.reason === undefined ? [] : ["reason"]),
       ]) &&
       valid_id(intent.command_id) &&
       (intent.reason === undefined ||
         (typeof intent.reason === "string" && intent.reason.length <= 2000)) &&
       record(intent.plan) &&
-      (intent.plan.kind==='record'
+      (intent.kind!=='replace_task'||intent.plan.kind==='prestart_move'&&intent.plan.target==='T'&&valid_id(intent.original_command_id)&&intent.original_command_id===intent.plan.supersedes&&intent.original_version===1)&&
+      (intent.plan.kind==='prestart_move'
+        ? fields(intent.plan,['kind','run_id','revision','editing_seq','version','actor','target','path','distance','estimated_move_ms','setup_ms','link_ms','definition_hash','allowed','gap',...(intent.plan.supersedes===undefined?[]:['supersedes'])])&&
+          (intent.plan.target==='N'&&intent.plan.path==='H-N'&&intent.plan.distance===60&&intent.plan.estimated_move_ms===15900&&intent.plan.supersedes===undefined||intent.plan.target==='T'&&intent.plan.path==='H-T'&&intent.plan.distance===120&&intent.plan.estimated_move_ms===31800&&valid_id(intent.plan.supersedes))&&intent.plan.setup_ms===5000&&typeof intent.plan.definition_hash==='string'&&/^[a-f0-9]{64}$/.test(intent.plan.definition_hash)
+        :intent.plan.kind==='record'
         ? fields(intent.plan,['kind','run_id','revision','editing_seq','version','actor','target','station','definition_hash','report_id','delivery_id','setup_ms','work','estimated_record_ms','estimated_total_ms','link_ms','record_energy','record_wear','record_packs','allowed','gap'])&&
           intent.plan.target==='A'&&intent.plan.station==='H'&&typeof intent.plan.definition_hash==='string'&&/^[a-f0-9]{64}$/.test(intent.plan.definition_hash)&&valid_id(intent.plan.report_id)&&valid_id(intent.plan.delivery_id)&&
           intent.plan.setup_ms===5000&&intent.plan.work===4&&intent.plan.estimated_record_ms===40000&&intent.plan.estimated_total_ms===47000&&intent.plan.record_energy===4&&intent.plan.record_wear===3&&intent.plan.record_packs===1

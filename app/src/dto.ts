@@ -1,4 +1,5 @@
 import type {Response} from './transport';
+import {prestart_case_refs} from './contracts';
 import {record,valid_id,valid_envelope} from './protocol';
 type Check=(value:unknown)=>boolean;
 const text:Check=v=>typeof v==='string'&&v.length<=2000;
@@ -19,29 +20,32 @@ const vector=(length:number):Check=>v=>Array.isArray(v)&&v.length===length&&list
 const evidenceTime:Check=v=>shape(v,{value:time,evidence:text});
 const sourceTime:Check=v=>shape(v,{kind:oneOf(['unknown'])})||shape(v,{kind:oneOf(['known']),value:time,evidence:text});
 export const position:Check=v=>shape(v,{x:number,y:number,observed:time,received:time,evidence:text});
-export const resources:Check=v=>shape(v,{equipment_energy:time,equipment_wear:time,movement_energy:time,confirmed_at:time},{record_energy:time,record_wear:time,record_packs:time,record_energy_reserved:time,record_packs_reserved:time,hq_energy:time,hq_wear:time});
+export const resources:Check=v=>shape(v,{equipment_energy:time,equipment_wear:time,movement_energy:time,confirmed_at:time},{movement_energy_reserved:time,record_energy:time,record_wear:time,record_packs:time,record_energy_reserved:time,record_packs_reserved:time,hq_energy:time,hq_wear:time});
 const report:Check=v=>shape(v,{id:text,origin:text,target:text,source_event_time:sourceTime,observed:evidenceTime,reported:evidenceTime});
 const delivery:Check=v=>shape(v,{id:text,report_id:text,received:evidenceTime});
-const log:Check=v=>shape(v,{id:text,at:time,kind:oneOf(['report','issued','sent','accepted_receipt','fix_receipt','complete_receipt','deadline','deadline_receipt']),text,evidence:text},{observed:time,sender:text,activity_id:valid_id});
+const log:Check=v=>shape(v,{id:text,at:time,kind:oneOf(['report','issued','sent','accepted_receipt','replace_receipt','rejected_receipt','expired','control_unconfirmed','request_window_ended','start_receipt','fix_receipt','complete_receipt','deadline','deadline_receipt']),text,evidence:text},{observed:time,sender:text,activity_id:valid_id,rejection:oneOf(['window_closed','authority_closed','request_expired']),request_kind:oneOf(['task','replacement'])});
 const artifact:Check=v=>shape(v,{id:valid_id,report_id:valid_id,delivery_id:valid_id,completed:time,verified:oneOf([false]),activity_id:valid_id});
 const common_player_view:Check=v=>shape(v,{
-  run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:oneOf(['command','research']),rate:oneOf([1,2,4]),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:oneOf(['ready','queued','executing','finished','deadline']),
+  run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:oneOf(['command','research']),rate:oneOf([1,2,4]),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:oneOf(['ready','queued','preparing','executing','terminating','finished','deadline']),
   position,report,delivery,resources,
-  geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)}),
+  geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)},{N:vector(2)}),
   authority:v=>shape(v,{from:time,to:time}),can_issue:bool,next_action:text,gap:text,
   log:list(log),
-},{scenario_kind:oneOf(['record']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,label:text}))});
+  issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan},{reason:text})),
+},{replacement:v=>shape(v,{original_command_id:valid_id,replacement_command_id:valid_id,accepted_at:time,received_at:time,evidence:text}),scenario_case:oneOf(prestart_case_refs),scenario_kind:oneOf(['record','prestart_move']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
   if(!common_player_view(v)||!record(v)||!record(v.resources))return false;
   const keys=['record_energy','record_wear','record_packs','record_energy_reserved','record_packs_reserved','hq_energy','hq_wear'];
+  if(v.scenario_kind==='prestart_move')return Object.hasOwn(v,'scenario_case')&& keys.slice(0,5).every(key=>!Object.hasOwn(v.resources as object,key))&&['hq_energy','hq_wear'].every(key=>Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes')&&record(v.geometry)&&Object.hasOwn(v.geometry,'N')&&Object.hasOwn(v.resources,'movement_energy_reserved');
+  if(Object.hasOwn(v,'scenario_case')||Object.hasOwn(v,'replacement')||record(v.geometry)&&Object.hasOwn(v.geometry,'N')||Object.hasOwn(v.resources,'movement_energy_reserved'))return false;
   return v.scenario_kind==='record'
     ?keys.every(key=>Object.hasOwn(v.resources as object,key))&&Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes')
-    :keys.every(key=>!Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&!Object.hasOwn(v,'replay_nodes');
+    :keys.every(key=>!Object.hasOwn(v.resources as object,key))&&!Object.hasOwn(v,'artifacts')&&Object.hasOwn(v,'replay_nodes');
 };
 const plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
-const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
-const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record']),read_only:bool});
-const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','ORDER_EXISTS','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
+const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
+const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move']),read_only:bool});
+const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
   if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)});
