@@ -1,8 +1,8 @@
-import {GameError,is_task_intent,type TaskIntent,type PrestartPlan,type PlayerView} from '../contracts';
+import {GameError,is_task_intent,type TaskIntent,type PrestartPlan,type PlayerView,type TaskRefusalReason} from '../contracts';
 import type {State} from './state';
 import {prestart_parameters,prestart_case} from './scenario';
 type ReportKind='accepted_receipt'|'replace_receipt'|'rejected_receipt'|'start_receipt'|'fix_receipt'|'complete_receipt'|'deadline_receipt';
-type Rejection='window_closed'|'authority_closed'|'request_expired';
+type Rejection=TaskRefusalReason;
 type ReportPayload={kind:ReportKind;observed:number;sequence:number;activity_id:string;target:'N'|'T';supersedes?:string;rejection?:Rejection;position?:PlayerView['position'];resources:Pick<PlayerView['resources'],'equipment_energy'|'equipment_wear'|'movement_energy'|'movement_energy_reserved'|'confirmed_at'>};
 type Request={command_id:string;issued:number;expiry:number;plan:PrestartPlan;reason?:string;sent_at?:number;delivered_at?:number;accepted_at?:number;rejected_at?:number;rejection?:Rejection;expired_at?:number;effective_at?:number};
 type Activity={id:string;command_id:string;generation:number;phase:'preparing'|'moving'|'completed'|'superseded'|'stopped';accepted:number;starts:number;completes:number;reserved:number;settled:boolean};
@@ -74,7 +74,11 @@ function pending_replacement(state:State):boolean{
 function end_known(state:State,unconfirmed=false){
   const terminal=state.known.prestart!.terminal;
   state.status=terminal?.kind??'deadline';state.finished=terminal?.kind==='finished';state.ended=true;state.paused=true;
-  if(unconfirmed)state.log.push({id:'control-cleanup',at:state.sim_time,kind:'control_unconfirmed',text:'准备期替代结果未确认；收尾上限已到，保留已经收到的原任务事实，不推断远端接受或拒绝。',sender:'总部指挥席',evidence:'public-cleanup-limit'});
+  if(unconfirmed){
+    const issued=state.inputs.filter(input=>is_task_intent(input.envelope.intent)).length;
+    const text=issued===0?'准备期通行任务：尚未签发任务，公开窗口及回报宽限已结束。':issued===1?'准备期通行任务结果未确认；公开等待上限已到，只保留已收到的事实，不推断远端完成。':'准备期替代结果未确认；收尾上限已到，保留已经收到的原任务事实，不推断远端接受或拒绝。';
+    state.log.push({id:'control-cleanup',at:state.sim_time,kind:'control_unconfirmed',text,sender:'总部指挥席',evidence:'public-cleanup-limit'});
+  }
 }
 function settle_hq(state:State){
   const known=state.known.prestart!;if(!known.terminal)return;
@@ -99,7 +103,7 @@ function deliver(state:State,event:Event){
   }
   const refusal=payload.rejection==='authority_closed'?'授权窗口已关闭，未开始新任务':payload.rejection==='request_expired'?'请求到达时已过期，未接受新任务':'替代窗口已关闭，原任务继续';
   const verb={accepted_receipt:'接令及准备',replace_receipt:'替代确认及重新准备',rejected_receipt:refusal,start_receipt:'开始移动',fix_receipt:'位置',complete_receipt:'抵达',deadline_receipt:'截止未抵达，已停止作业并结算截止前耗用'}[payload.kind];
-  state.log.push({id:event.id,at:event.at,kind:payload.kind,text:`准备期通行任务：联络组 R 对目标 ${payload.target} 的${verb}回报已收到。`,sender:'联络组 R',observed:payload.observed,activity_id:payload.activity_id,evidence:event.id});
+  state.log.push({id:event.id,at:event.at,kind:payload.kind,text:`准备期通行任务：联络组 R 对目标 ${payload.target} 的${verb}回报已收到。`,sender:'联络组 R',observed:payload.observed,activity_id:payload.activity_id,evidence:event.id,...(payload.rejection?{rejection:payload.rejection}:{})});
   if(payload.kind==='complete_receipt')state.known.prestart!.terminal={kind:'finished',received_at:event.at};
   if(payload.kind==='deadline_receipt')state.known.prestart!.terminal={kind:'deadline',received_at:event.at};
   if(payload.kind==='rejected_receipt'&&payload.target==='N'&&payload.rejection==='authority_closed')state.known.prestart!.terminal={kind:'deadline',received_at:event.at};
@@ -132,6 +136,7 @@ export function advance_prestart(state:State,to:number){
     if(!request)throw new GameError('ENGINE_UNCONFIRMED');
     if(event.kind==='expire_command'){
       if(request.sent_at===undefined){request.expired_at=event.at;state.log.push({id:event.id,at:event.at,kind:'expired',text:'准备期替代请求未发送且已过期；原任务事实保留。',sender:'总部指挥席',evidence:event.id});settle_hq(state);}
+      else if(request.plan.supersedes&&pending_replacement(state))state.log.push({id:`${request.command_id}:window-ended`,at:event.at,kind:'request_window_ended',text:'准备期替代请求有效期已结束，已发送请求的结果未确认；不据有效期推断远端是否接受。',sender:'总部指挥席',evidence:event.id});
       continue;
     }
     if(event.kind==='receive_command'){request.delivered_at=event.at;record_phase(state,request,'delivered',event.at);accept(state,request,event.at);sort();continue;}

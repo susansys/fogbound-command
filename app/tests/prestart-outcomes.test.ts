@@ -197,3 +197,29 @@ test('CR16 a task delivered at the authority endpoint cannot start preparation o
     expect(view.log.find(entry=>entry.kind==='rejected_receipt')?.text).toContain('授权窗口已关闭');expect(view.log.some(entry=>entry.kind==='start_receipt')).toBe(false);expect(await game.get_view(view.run_id)).toEqual(view);
   }finally{await store.delete();}
 });
+
+test.each([false,true])('CR15 public receipt-limit ending with original issued=%s never invents an unregistered replacement',async(issued)=>{
+  const store=new Persistence(`prestart-no-replacement-${issued}`),game=new Game(store);
+  try{
+    let view=await game.create_run(definition,'research','create','reports_unconfirmed');
+    if(issued){const plan=await game.preview_plan(view.run_id,view.revision,1);view=(await game.issue_order({run_id:view.run_id,operation_id:'original',expected_revision:view.revision,intent:{kind:'issue',command_id:'N',plan}})).view;}
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'cutoff',expected_revision:view.revision,intent:{kind:'advance',to:600000}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'public-limit',expected_revision:view.revision,intent:{kind:'advance',to:610000}})).view;
+    expect(view.gap).not.toContain('替代');expect(view.log.some(entry=>entry.text.includes('替代结果未确认'))).toBe(false);
+    expect(view).toMatchObject({finished:false,status:'deadline',position:{x:50},resources:{hq_energy:issued?15:16,equipment_energy:16,movement_energy:20}});expect(await game.get_view(view.run_id)).toEqual(view);
+    expect(view.replay_nodes.at(-1)?.meaningful).toBe(true);
+  }finally{await store.delete();}
+});
+
+test('CR15 a sent replacement visibly distinguishes its expired request window from an unknown remote acceptance',async()=>{
+  const store=new Persistence('prestart-sent-window-ended'),game=new Game(store);
+  try{
+    let view=await game.create_run(definition,'research','create','hq_result_unconfirmed');let plan=await game.preview_plan(view.run_id,view.revision,1);
+    view=(await game.issue_order({run_id:view.run_id,operation_id:'original',expected_revision:view.revision,intent:{kind:'issue',command_id:'N',plan}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'replace-time',expected_revision:view.revision,intent:{kind:'advance',to:2000}})).view;
+    plan=await game.preview_plan(view.run_id,view.revision,2);view=(await game.issue_order({run_id:view.run_id,operation_id:'replacement',expected_revision:view.revision,intent:task_intent(plan,'T')})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'window-ended',expected_revision:view.revision,intent:{kind:'advance',to:122000}})).view;
+    expect(view.gap).toContain('有效期已结束');expect(view.gap).toContain('结果未确认');
+    expect(view.log.some(entry=>entry.kind==='expired')).toBe(false);expect(view.resources).toMatchObject({hq_energy:14,equipment_energy:10});expect(await game.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});

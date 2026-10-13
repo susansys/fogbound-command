@@ -25,6 +25,7 @@ export type ReportDelivery = {
   report_id: string;
   received: { value: number; evidence: string };
 };
+export type TaskRefusalReason='window_closed'|'authority_closed'|'request_expired';
 export type LogEntry = {
   id: string;
   at: number;
@@ -33,6 +34,7 @@ export type LogEntry = {
   observed?: number;
   sender?: string;
   activity_id?: string;
+  rejection?:TaskRefusalReason;
   evidence: string;
 };
 export type RecordArtifact = {
