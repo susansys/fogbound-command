@@ -1,6 +1,7 @@
 import type { State, MoveEvent } from "./state";
 import type { Intent } from "../contracts";
 import { GameError } from "../contracts";
+import {account_record_progress,record_cause} from './record-accounting';
 export function register_move(
   state: State,
   intent: Extract<Intent, { kind: "issue" }>,
@@ -67,11 +68,8 @@ export function register_record(
   state.status='queued';
   state.generation++;
   state.schedule=state.schedule.filter(x=>x.kind!=='deadline');
-  state.world.hq_energy=(state.world.hq_energy??0)-1;
-  state.world.hq_wear=(state.world.hq_wear??0)-1;
-  state.known.resources={...structuredClone(state.known.resources),hq_energy:state.world.hq_energy,hq_wear:state.world.hq_wear,confirmed_at:issued};
   const event=(kind:MoveEvent['kind'],at:number,index?:number)=>({id:`${intent.command_id}:${kind}:${index??0}`,at,phase:kind.endsWith('receipt')?20:10,generation:state.generation,kind,...(index===undefined?{}:{index})});
-  state.schedule.push(event('accept',start),event('accepted_receipt',start+link),event('fix',recordStart,1),event('fix_receipt',recordStart+link,1),event('complete',complete),event('complete_receipt',complete+link),{...event('deadline',state.public_rules.authority.to),phase:30});
+  state.schedule.push(event('command_send',issued),event('accept',start),event('accepted_receipt',start+link),event('fix',recordStart,1),event('fix_receipt',recordStart+link,1),event('complete',complete),event('complete_receipt',complete+link),{...event('deadline',state.public_rules.authority.to),phase:30});
   state.schedule.sort((a,b)=>a.at-b.at||a.phase-b.phase||a.id.localeCompare(b.id));
   state.log.push({id:`${intent.command_id}:issued`,at:issued,kind:'issued',text:'记录任务草案已签发；等待记录组接令。',evidence:intent.command_id});
 }
@@ -79,8 +77,7 @@ function locate(state: State, at: number) {
   if (state.order?.accepted === null || !state.order || state.world.stopped)
     return;
   if('kind' in state.order.plan){
-    const start=state.order.accepted+state.order.plan.setup_ms;
-    state.world.record_work=Math.max(0,Math.min(state.order.plan.work,(at-start)/(state.order.plan.estimated_record_ms/state.order.plan.work)));
+    if(!state.world.completed)account_record_progress(state,at);
     return;
   }
   const { H, T } = state.public_rules.geometry,
@@ -111,7 +108,7 @@ function send(
       equipment_energy: state.world.equipment_energy,
       equipment_wear: state.world.equipment_wear,
       movement_energy: state.world.movement_energy,
-      ...(state.world.record_energy===undefined?{}:{record_energy:state.world.record_energy}),
+      ...(state.world.record_energy===undefined?{}:{record_energy:state.world.record_energy.numerator/state.world.record_energy.denominator,record_energy_reserved:state.world.record_energy_reserved!.numerator/state.world.record_energy_reserved!.denominator,record_packs_reserved:state.world.record_packs_reserved}),
       ...(state.world.record_wear===undefined?{}:{record_wear:state.world.record_wear}),
       ...(state.world.record_packs===undefined?{}:{record_packs:state.world.record_packs}),
       ...(state.world.hq_energy===undefined?{}:{hq_energy:state.world.hq_energy}),
@@ -144,14 +141,25 @@ export function advance_move(state: State, to: number) {
     state.sim_time = event.at;
     if (event.generation !== state.generation) continue;
     locate(state, event.at);
-    if (event.kind === "accept") {
+    if(event.kind==='command_send'){
+      state.world.hq_energy=(state.world.hq_energy??0)-1;
+      state.world.hq_wear=(state.world.hq_wear??0)-1;
+      state.known.resources={...state.known.resources,hq_energy:state.world.hq_energy,hq_wear:state.world.hq_wear,confirmed_at:event.at};
+      state.log.push({id:event.id,at:event.at,kind:'sent',text:'记录任务已发送，等待记录组接令回报。',sender:'总部指挥席',evidence:event.id});
+    } else if (event.kind === "accept") {
       if (!state.order || event.at >= state.order.expiry)
         throw new GameError("ENGINE_UNCONFIRMED");
       if(event.at>=state.public_rules.authority.to){state.schedule=state.schedule.filter(x=>x.kind!=='accepted_receipt');continue;}
       state.order.accepted = event.at;
+      if('kind' in state.order.plan){
+        record_cause(state,`${state.order.command_id}.reserve`);
+        account_record_progress(state,event.at);
+      }
       send(state, event, "accepted_receipt", false);
     } else if (event.kind === "fix") {
       if(state.order&&'kind' in state.order.plan){
+        if(event.at>=state.public_rules.authority.to)continue;
+        record_cause(state,`${state.order.command_id}.wear`);
         state.world.record_wear=(state.world.record_wear??0)-state.order.plan.record_wear;
         send(state,event,'fix_receipt',false);
       } else send(state, event, "fix_receipt", true);
@@ -160,9 +168,7 @@ export function advance_move(state: State, to: number) {
       if(!state.order)throw new GameError('ENGINE_UNCONFIRMED');
       if (event.at >= state.public_rules.authority.to) continue;
       if('kind' in state.order.plan){
-        state.world.record_energy=(state.world.record_energy??0)-state.order.plan.record_energy;
-        state.world.record_packs=(state.world.record_packs??0)-state.order.plan.record_packs;
-        state.world.record_work=state.order.plan.work;
+        account_record_progress(state,event.at,true);
         if(!state.world.record_artifacts?.length)state.world.record_artifacts=[{id:`artifact-${state.order.command_id}`,report_id:state.order.plan.report_id,delivery_id:state.order.plan.delivery_id,completed:event.at,verified:false,activity_id:`${state.order.command_id}.complete.0`}];
       } else state.world.movement_energy -= Math.ceil(
         state.order.plan.distance / 100,
@@ -184,6 +190,7 @@ export function advance_move(state: State, to: number) {
       } else if (!state.world.completed) {
         state.world.stopped = true;
         if(state.order&&'kind' in state.order.plan){
+          account_record_progress(state,event.at,true);
           state.schedule = state.schedule.filter(x=>!['complete','complete_receipt','fix','fix_receipt'].includes(x.kind));
           if(state.order.accepted===null)state.schedule=state.schedule.filter(x=>!['accept','accepted_receipt'].includes(x.kind));
           state.schedule.push({id:`${state.order.command_id}:deadline_receipt`,at:event.at+state.order.plan.link_ms,phase:20,generation:state.generation,kind:'deadline_receipt'});

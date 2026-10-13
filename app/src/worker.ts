@@ -109,7 +109,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         const source=await game.get_view(current.source_run);history=await game.get_replay(source.run_id,source.sim_time);
         response={request_id:input.request_id,ok:true,view:await history.get_view(source.run_id)};
       } else if(input.kind==='replay'){
-        history=await game.get_replay(input.run_id,input.to);
+        history=await game.get_replay(input.run_id,input.to,input.node_revision);
         response={request_id:input.request_id,ok:true,view:await history.get_view(input.run_id)};
       } else if(input.kind==='current'){
         const view=await game.get_view(input.run_id);history=null;

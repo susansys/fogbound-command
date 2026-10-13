@@ -66,7 +66,7 @@ test('FB02-S11 private artifact fields in a record transport response are reject
   await page.getByRole('button',{name:'返回态势地图',exact:true}).click();
   await page.getByRole('button',{name:'查询原命令结果',exact:true}).click();
   await expect(page.locator('.clock')).toContainText('任务完成');
-  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText('成果 artifact-');
+  await expect(page.locator('section').filter({hasText:'已收到的装备状态'})).toContainText('成果 · 未核验');
 });
 
 test('FB02-S10 a second page cannot write a live Record run until explicit takeover restores it paused',async({page,context})=>{

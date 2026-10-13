@@ -39,7 +39,7 @@ test('record frozen operation retry reuses the original receipt and conflicting 
     changed.intent.command_id='record-other';
     await expect(game.issue_order(changed)).rejects.toThrow('OPERATION_CONFLICT');
     expect(await game.get_view(view.run_id)).toEqual(view);
-    expect(await store.read_committed(view.run_id)).toMatchObject({revision:view.revision,world:{hq_energy:15,hq_wear:99,record_artifacts:[]}});
+    expect(await store.read_committed(view.run_id)).toMatchObject({revision:view.revision,world:{hq_energy:16,hq_wear:100,record_artifacts:[]}});
   }finally{await store.delete();}
 });
 
@@ -82,7 +82,18 @@ test('record explicit takeover pauses the same run and fences the older writer g
 });
 
 const corruptions=[
-  {label:'record-work',advance:17001,apply:(s:State)=>{s.world.record_work=4;}},
+  {label:'crossed-record-reference',advance:999,apply:(s:State)=>{
+    if(s.order&&'kind' in s.order.plan)s.order.plan.report_id='MISSING';
+    for(const input of s.inputs)if(input.envelope.intent.kind==='issue'&&'kind' in input.envelope.intent.plan)input.envelope.intent.plan.report_id='MISSING';
+  }},
+  {label:'missing-events',advance:999,apply:(s:State)=>{s.schedule=[];}},
+  {label:'world-energy-conservation',advance:999,apply:(s:State)=>{s.world.record_energy={numerator:0,denominator:1,unit:'record_energy'};}},
+  {label:'known-energy-evidence',advance:2000,apply:(s:State)=>{s.known.resources.record_energy=999;}},
+  {label:'wrong-quantity-unit',advance:17001,apply:(s:State)=>{s.world.record_work!.unit='record_energy';}},
+  {label:'non-reduced-quantity',advance:26000,apply:(s:State)=>{s.world.record_work={numerator:4,denominator:2,unit:'record_work'};}},
+  {label:'lost-reservation',advance:26000,apply:(s:State)=>{s.world.record_energy_reserved={numerator:0,denominator:1,unit:'record_energy'};}},
+  {label:'duplicate-consumption-cause',advance:47000,apply:(s:State)=>{s.world.record_causes!.push('record.settle');}},
+  {label:'record-work',advance:17001,apply:(s:State)=>{s.world.record_work={numerator:4,denominator:1,unit:'record_work'};}},
   {label:'artifact-reference',advance:47000,apply:(s:State)=>{s.world.record_artifacts![0].report_id='MISSING';s.known.artifacts![0].report_id='MISSING';}},
   {label:'receipt-artifact-on-start',advance:1000,apply:(s:State)=>{s.schedule.find(x=>x.kind==='accepted_receipt')!.payload={...s.schedule.find(x=>x.kind==='accepted_receipt')!.payload!,artifacts:[{id:'artifact-record',report_id:'REPORT-A',delivery_id:'DELIVERY-A',completed:1000,verified:false,activity_id:'record.accept.0'}]};}},
   {label:'event-phase',advance:2000,apply:(s:State)=>{s.schedule.find(x=>x.kind==='fix')!.phase=20;}},
@@ -108,8 +119,8 @@ test('private record world variants with the same legal known evidence do not ch
     const atStart=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:7000}})).view;
     const committed=(await store.read_committed(view.run_id))!;
     const variant=structuredClone(committed);
-    variant.world.record_work=3.5;
-    variant.world.record_energy=1;
+    variant.world.record_work={numerator:7,denominator:2,unit:'record_work'};
+    variant.world.record_energy={numerator:1,denominator:1,unit:'record_energy'};
     variant.world.record_artifacts=[{id:'artifact-private',report_id:'REPORT-A',delivery_id:'DELIVERY-A',completed:6999,verified:false,activity_id:'private.complete.0'}];
     const projected=project_player_view(variant);
     expect(projected).toEqual(atStart satisfies PlayerView);

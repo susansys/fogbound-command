@@ -4,6 +4,8 @@ import {hash,load_definition,definition_for_package,record_definition_for_packag
 import {record,valid_id,fields,valid_envelope} from '../protocol';
 import {player_view,position,resources} from '../dto';
 import {project_player_view} from './knowledge';
+import {replay_state} from './replay';
+import {quantity,initial_record_accounts,record_work_at} from './record-accounting';
 export function canonical(value:unknown):unknown{
   if(Array.isArray(value))return value.map(canonical);
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,item])=>[key,canonical(item)]));
@@ -22,11 +24,30 @@ function json_data(value:unknown,seen=new WeakSet<object>()):boolean{
   seen.delete(value);return valid;
 }
 const integer=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
-const finite=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
+function exact_quantity(value:unknown,unit:'record_work'|'record_energy'|'record_pack'):boolean {
+  if(!record(value)||!fields(value,['numerator','denominator','unit'])||value.unit!==unit||!integer(value.numerator)||!integer(value.denominator)||value.denominator<1)return false;
+  return equal(value,quantity(value.numerator,value.denominator,unit));
+}
 function artifact(value:unknown):boolean{
   return record(value)&&fields(value,['id','report_id','delivery_id','completed','verified','activity_id'])&&valid_id(value.id)&&valid_id(value.report_id)&&valid_id(value.delivery_id)&&integer(value.completed)&&value.verified===false&&valid_id(value.activity_id);
 }
 function equal(a:unknown,b:unknown){return JSON.stringify(canonical(a))===JSON.stringify(canonical(b));}
+function record_history_matches(state:State):boolean {
+  if(state.schema!==5)return true;
+  const definition=record_definition_for_package(state.schema,state.definition_hash),p=definition.profile.parameters;
+  const initial=structuredClone(state);
+  const issues=state.inputs.filter(input=>input.envelope.intent.kind==='issue').length;
+  if(issues>1||state.generation<issues)return false;
+  initial.revision=1;initial.sim_time=0;initial.rate=1;initial.paused=state.mode==='research';
+  initial.finished=false;initial.ended=false;initial.status='ready';initial.order=null;initial.inputs=[];
+  initial.generation=state.generation-issues;
+  initial.world={position:{xn:definition.catalogs.position.x,yn:definition.catalogs.position.y,d:1},equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,...initial_record_accounts(p),sends:0,completed:false,stopped:false};
+  initial.known={position:structuredClone(definition.catalogs.position),report:structuredClone(definition.catalogs.report) as State['known']['report'],delivery:structuredClone(definition.catalogs.delivery),resources:{equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,record_energy:p.record_energy,record_wear:p.record_wear,record_packs:p.record_packs,record_energy_reserved:0,record_packs_reserved:0,hq_energy:p.hq_energy,hq_wear:p.hq_wear,confirmed_at:0},artifacts:[]};
+  initial.log=[{id:'initial-report',at:0,kind:'report',text:'档案任务简报已递交；R最后确认在工位H。',evidence:definition.catalogs.delivery.id}];
+  initial.schedule=[{id:'objective-deadline',at:p.deadline,phase:30,generation:initial.generation,kind:'deadline'}];
+  const expected=replay_state(initial,state.inputs,state.sim_time);
+  return (['world','known','log','schedule','order','status','finished','ended','paused','rate','generation','revision'] as const).every(key=>equal(state[key],expected[key]));
+}
 function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   const order=state.order,definition=definition_for_package(state.schema,state.definition_hash),parameters=definition.profile.parameters,geometry=definition.catalogs.geometry;
   const recordParameters=state.schema===5?record_definition_for_package(state.schema,state.definition_hash).profile.parameters:null;
@@ -41,7 +62,7 @@ function pending_delivery(state:State,event:State['schedule'][number]):boolean{
   const recordStart=order.issued+parameters.link_ms+(recordPlan&&recordParameters?recordParameters.setup_ms:0);
   const completeAt=recordPlan&&recordParameters?recordStart+recordParameters.record_work*recordParameters.record_ms_per_work:order.issued+parameters.link_ms+parameters.move_ms;
   if(!event.kind.endsWith('receipt')){
-    const at=event.kind==='deadline'?parameters.deadline:event.kind==='accept'?order.issued+parameters.link_ms:event.kind==='fix'?recordPlan?recordStart:order.issued+parameters.link_ms+event.index!*parameters.fix_ms:event.kind==='complete'?completeAt:NaN;
+    const at=event.kind==='command_send'&&recordPlan?order.issued:event.kind==='deadline'?parameters.deadline:event.kind==='accept'?order.issued+parameters.link_ms:event.kind==='fix'?recordPlan?recordStart:order.issued+parameters.link_ms+event.index!*parameters.fix_ms:event.kind==='complete'?completeAt:NaN;
     return event.payload===undefined&&event.at===at;
   }
   const observed=event.kind==='deadline_receipt'?parameters.deadline:event.kind==='accepted_receipt'?order.issued+parameters.link_ms:event.kind==='fix_receipt'?recordPlan?recordStart:order.issued+parameters.link_ms+event.index!*parameters.fix_ms:event.kind==='complete_receipt'?completeAt:NaN;
@@ -69,7 +90,7 @@ function references(state:State){
   if(state.schema===5&&state.scenario_kind!=='record')return false;
   if(!fields(state as unknown as Record<string,unknown>,['integrity','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','order','world','schedule','movement_rules','inputs','source_run','schema','contract','definition_hash','hashes','rng','generation','phase','known','public_rules','log',...(state.schema===5?['scenario_kind']:[])]))return false;
   if(!integer(state.sim_time)||state.sim_time>610000||!integer(state.revision)||state.revision<1||!integer(state.generation)||!record(state.world)||!record(state.rng)||!record(state.known)||!record(state.public_rules))return false;
-  const recordFields=state.schema===5?['record_energy','record_wear','record_packs','hq_energy','hq_wear','record_work','record_artifacts']:[];
+  const recordFields=state.schema===5?['record_energy','record_energy_used','record_energy_reserved','record_packs_reserved','record_packs_used','record_packs_accrued','record_causes','record_wear','record_packs','hq_energy','hq_wear','record_work','record_artifacts']:[];
   if(!fields(state.known,['position','report','delivery','resources',...(state.schema===5?['artifacts']:[])])||!fields(state.public_rules,['geometry','authority','preview'])||!fields(state.world,['position','equipment_energy','equipment_wear','movement_energy',...recordFields,'sends','completed','stopped'])||!fields(state.rng,['algorithm','version','seed','state','origin','used']))return false;
   if(state.rng.algorithm!=='xorshift32-v1'||state.rng.version!==1||state.rng.seed!==1||state.rng.state!==1||state.rng.used!==false||!valid_id(state.rng.origin))return false;
   if(state.source_run===null&&state.rng.origin!==state.run_id||state.source_run!==null&&!valid_id(state.source_run))return false;
@@ -77,17 +98,18 @@ function references(state:State){
   if(!equal(state.public_rules.geometry,{H:catalogs.geometry.H,T:catalogs.geometry.T,extent:parameters.extent,corridor_width:parameters.corridor_width,plain:catalogs.geometry.plain,rough:catalogs.geometry.rough})||!equal(state.public_rules.authority,{from:catalogs.authority.from,to:catalogs.authority.to})||!equal(state.public_rules.preview,{distance:state.schema===5?0:120,estimated_move_ms:parameters.move_ms,link_ms:parameters.link_ms}))return false;
   if(!record(state.world.position)||!fields(state.world.position,['xn','yn','d'])||![state.world.position.xn,state.world.position.yn,state.world.position.d].every(integer)||state.world.position.d<1||state.world.position.yn!==catalogs.geometry.H[1]*state.world.position.d||state.world.position.xn<catalogs.geometry.H[0]*state.world.position.d||state.world.position.xn>catalogs.geometry.T[0]*state.world.position.d)return false;
   if(!integer(state.world.equipment_energy)||state.world.equipment_energy>parameters.equipment_energy||!integer(state.world.equipment_wear)||state.world.equipment_wear>parameters.equipment_wear||!integer(state.world.movement_energy)||state.world.movement_energy>parameters.movement_energy||!integer(state.world.sends)||state.world.sends>8||typeof state.world.completed!=='boolean'||typeof state.world.stopped!=='boolean'||typeof state.ended!=='boolean')return false;
-  if(recordParameters&&(!integer(state.world.record_energy)||state.world.record_energy>recordParameters.record_energy||!integer(state.world.record_wear)||state.world.record_wear>recordParameters.record_wear||!integer(state.world.record_packs)||state.world.record_packs>recordParameters.record_packs||!integer(state.world.hq_energy)||state.world.hq_energy>recordParameters.hq_energy||!integer(state.world.hq_wear)||state.world.hq_wear>recordParameters.hq_wear||!finite(state.world.record_work)||state.world.record_work>recordParameters.record_work||!Array.isArray(state.world.record_artifacts)||state.world.record_artifacts.some(x=>!artifact(x))||!Array.isArray(state.known.artifacts)||state.known.artifacts.some(x=>!artifact(x))||!state.finished&&state.known.artifacts.length!==0))return false;
+  if(recordParameters&&(!exact_quantity(state.world.record_energy,'record_energy')||!exact_quantity(state.world.record_energy_used,'record_energy')||!exact_quantity(state.world.record_energy_reserved,'record_energy')||!integer(state.world.record_packs_reserved)||!integer(state.world.record_packs_used)||!exact_quantity(state.world.record_packs_accrued,'record_pack')||!Array.isArray(state.world.record_causes)||!integer(state.world.record_wear)||state.world.record_wear>recordParameters.record_wear||!integer(state.world.record_packs)||state.world.record_packs>recordParameters.record_packs||!integer(state.world.hq_energy)||state.world.hq_energy>recordParameters.hq_energy||!integer(state.world.hq_wear)||state.world.hq_wear>recordParameters.hq_wear||!exact_quantity(state.world.record_work,'record_work')||!Array.isArray(state.world.record_artifacts)||state.world.record_artifacts.some(x=>!artifact(x))||!Array.isArray(state.known.artifacts)||state.known.artifacts.some(x=>!artifact(x))||!state.finished&&state.known.artifacts.length!==0))return false;
   if(state.finished!==(state.status==='finished')||(state.status==='finished'||state.status==='deadline')&&(!state.ended||!state.paused)||state.finished&&!state.world.completed)return false;
   if(state.order){
     if(!fields(state.order,['command_id','issued','expiry','accepted','plan',...(state.order.reason===undefined?[]:['reason'])])||!integer(state.order.issued)||state.order.issued>state.sim_time||state.order.expiry!==state.order.issued+parameters.task_expiry_ms||state.order.accepted!==null&&(!integer(state.order.accepted)||state.order.accepted<state.order.issued+parameters.link_ms||state.order.accepted>=parameters.deadline||state.order.accepted>state.sim_time))return false;
     if(!valid_envelope({run_id:state.run_id,operation_id:'snapshot',expected_revision:state.revision,intent:{kind:'issue',command_id:state.order.command_id,plan:state.order.plan,...(state.order.reason===undefined?{}:{reason:state.order.reason})}})||state.order.plan.run_id!==state.run_id||state.order.plan.revision>state.revision)return false;
+    if(recordParameters&&(!('kind' in state.order.plan)||state.order.plan.definition_hash!==state.definition_hash||state.order.plan.report_id!==catalogs.report.id||state.order.plan.delivery_id!==catalogs.delivery.id))return false;
     if(recordParameters&&'kind' in state.order.plan&&state.order.plan.kind==='record'){
       const plan=state.order.plan;
       const start=(state.order.accepted??state.sim_time)+plan.setup_ms;
       const observedUntil=state.world.stopped?state.public_rules.authority.to:state.sim_time;
-      const expectedWork=state.world.completed?plan.work:state.order.accepted===null?0:Math.max(0,Math.min(plan.work,(observedUntil-start)/(plan.estimated_record_ms/plan.work)));
-      if(Math.abs((state.world.record_work??0)-expectedWork)>1e-9)return false;
+      const expectedWork=state.order.accepted===null?quantity(0,1,'record_work'):record_work_at(plan,state.order.accepted,observedUntil);
+      if(!equal(state.world.record_work,expectedWork))return false;
       const expectedArtifact={id:`artifact-${state.order.command_id}`,report_id:plan.report_id,delivery_id:plan.delivery_id,completed:start+plan.estimated_record_ms,verified:false,activity_id:`${state.order.command_id}.complete.0`};
       if(state.world.completed){
         if(!equal(state.world.record_artifacts,[expectedArtifact])||state.finished&&!equal(state.known.artifacts,[expectedArtifact])||!state.finished&&state.known.artifacts!.length!==0)return false;
@@ -108,11 +130,11 @@ function references(state:State){
   if(state.known.position.evidence!==catalogs.position.evidence&&!state.log.some(x=>x.id===state.known.position.evidence&&x.at===state.known.position.received&&x.observed===state.known.position.observed&&['fix_receipt','complete_receipt','deadline_receipt'].includes(x.kind)))return false;
   if(!Array.isArray(state.inputs)||state.inputs.length!==state.revision-1||new Set(state.inputs.map(x=>x.envelope.operation_id)).size!==state.inputs.length)return false;
   if(state.inputs.some((input,i)=>!record(input)||!fields(input,['envelope','at','revision',...(input.clock_to===undefined?[]:['clock_to'])])||!valid_envelope(input.envelope)||input.envelope.run_id!==state.run_id||input.revision!==i+2||input.envelope.expected_revision!==i+1||!integer(input.at)||input.at>state.sim_time||input.clock_to!==undefined&&(!integer(input.clock_to)||input.clock_to<input.at)))return false;
-  if(!Array.isArray(state.schedule)||state.schedule.some((event,i)=>!record(event)||!fields(event,['id','at','phase','generation','kind',...(event.index===undefined?[]:['index']),...(event.payload===undefined?[]:['payload'])])||typeof event.id!=='string'||!integer(event.at)||event.at<state.sim_time||event.generation!==state.generation||event.phase!==(event.kind==='deadline'?30:event.kind.endsWith('receipt')?20:10)||!['accept','accepted_receipt','fix','fix_receipt','complete','complete_receipt','deadline','deadline_receipt'].includes(event.kind)||i>0&&state.schedule[i-1].at>event.at))return false;
+  if(!Array.isArray(state.schedule)||state.schedule.some((event,i)=>!record(event)||!fields(event,['id','at','phase','generation','kind',...(event.index===undefined?[]:['index']),...(event.payload===undefined?[]:['payload'])])||typeof event.id!=='string'||!integer(event.at)||event.at<state.sim_time||event.generation!==state.generation||event.phase!==(event.kind==='deadline'?30:event.kind.endsWith('receipt')?20:10)||!['command_send','accept','accepted_receipt','fix','fix_receipt','complete','complete_receipt','deadline','deadline_receipt'].includes(event.kind)||i>0&&state.schedule[i-1].at>event.at))return false;
   if(state.schedule.some(event=>!pending_delivery(state,event)))return false;
   if(new Set(state.schedule.map(event=>event.id)).size!==state.schedule.length)return false;
   if(state.schedule.some((event,i)=>i>0&&(state.schedule[i-1].at-event.at||state.schedule[i-1].phase-event.phase||state.schedule[i-1].id.localeCompare(event.id))>0))return false;
-  return true;
+  return record_history_matches(state);
 }
 export async function validate_state(value:unknown):Promise<State>{
   try{

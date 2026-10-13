@@ -19,10 +19,10 @@ const vector=(length:number):Check=>v=>Array.isArray(v)&&v.length===length&&list
 const evidenceTime:Check=v=>shape(v,{value:time,evidence:text});
 const sourceTime:Check=v=>shape(v,{kind:oneOf(['unknown'])})||shape(v,{kind:oneOf(['known']),value:time,evidence:text});
 export const position:Check=v=>shape(v,{x:number,y:number,observed:time,received:time,evidence:text});
-export const resources:Check=v=>shape(v,{equipment_energy:time,equipment_wear:time,movement_energy:time,confirmed_at:time},{record_energy:time,record_wear:time,record_packs:time,hq_energy:time,hq_wear:time});
+export const resources:Check=v=>shape(v,{equipment_energy:time,equipment_wear:time,movement_energy:time,confirmed_at:time},{record_energy:time,record_wear:time,record_packs:time,record_energy_reserved:time,record_packs_reserved:time,hq_energy:time,hq_wear:time});
 const report:Check=v=>shape(v,{id:text,origin:text,target:text,source_event_time:sourceTime,observed:evidenceTime,reported:evidenceTime});
 const delivery:Check=v=>shape(v,{id:text,report_id:text,received:evidenceTime});
-const log:Check=v=>shape(v,{id:text,at:time,kind:oneOf(['report','issued','accepted_receipt','fix_receipt','complete_receipt','deadline','deadline_receipt']),text,evidence:text},{observed:time,sender:text,activity_id:valid_id});
+const log:Check=v=>shape(v,{id:text,at:time,kind:oneOf(['report','issued','sent','accepted_receipt','fix_receipt','complete_receipt','deadline','deadline_receipt']),text,evidence:text},{observed:time,sender:text,activity_id:valid_id});
 const artifact:Check=v=>shape(v,{id:valid_id,report_id:valid_id,delivery_id:valid_id,completed:time,verified:oneOf([false]),activity_id:valid_id});
 export const player_view:Check=v=>shape(v,{
   run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:oneOf(['command','research']),rate:oneOf([1,2,4]),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:oneOf(['ready','queued','executing','finished','deadline']),
@@ -30,7 +30,7 @@ export const player_view:Check=v=>shape(v,{
   geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)}),
   authority:v=>shape(v,{from:time,to:time}),can_issue:bool,next_action:text,gap:text,
   log:list(log),
-},{scenario_kind:oneOf(['record']),artifacts:list(artifact)});
+},{scenario_kind:oneOf(['record']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,label:text}))});
 const plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
 const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
 const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record']),read_only:bool});

@@ -19,7 +19,7 @@ export type Request =
   | { kind: "receipt"; run_id: string; operation_id: string }
   | { kind:'takeover';run_id:string;operation_id:string }
   | {kind:'restart';run_id:string;operation_id:string}
-  | {kind:'replay';run_id:string;to:number}
+  | {kind:'replay';run_id:string;to:number;node_revision?:number}
   | {kind:'current';run_id:string}
   | {kind:'previous';run_id:string}
   | {kind:'management_pause';reason:'focus_lost'|'application_hidden'};

@@ -1,4 +1,4 @@
-import type {LogEntry} from './contracts';
+import type {LogEntry,PlayerView} from './contracts';
 export function clock(ms:number):string {const seconds=Math.floor(ms/1000);return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}${ms%1000?'.'+String(ms%1000).padStart(3,'0'):''}`;}
 const errors:Record<string,string>={
   WRITER_BUSY:'另一个窗口正在指挥。请先关闭原窗口，再在这里接手。',
@@ -25,7 +25,15 @@ const errors:Record<string,string>={
 };
 export function error_copy(code:string):string {return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';}
 export function log_copy(entry:LogEntry):string {
-  if(entry.text.startsWith('记录'))return entry.text;
+  if(entry.text.startsWith('档案任务'))return '档案简报已送达，记录组 R 最后确认位于工位 H。';
+  if(entry.text.startsWith('记录')){
+    if(entry.kind==='issued')return '记录任务已签发登记，尚未发送；等待总部发送。';
+    if(entry.kind==='sent')return '总部已发送记录任务，等待记录组接令回报。';
+    if(entry.kind==='accepted_receipt')return `记录组接令回报已收到：接令 ${clock(entry.observed??entry.at)}，总部收到 ${clock(entry.at)}。`;
+    if(entry.kind==='fix_receipt')return `记录开始回报已收到：开始 ${clock(entry.observed??entry.at)}，总部收到 ${clock(entry.at)}。`;
+    if(entry.kind==='complete_receipt')return `记录成果回报已收到 · 未核验：完成 ${clock(entry.observed??entry.at)}，总部收到 ${clock(entry.at)}。`;
+    if(entry.kind==='deadline_receipt')return '记录组回报：未在时限内完成，宽限只等待已有回报。';
+  }
   if(entry.kind==='report')return '工位登记报告已送达。R最后确认位于总部起点H。';
   if(entry.kind==='issued')return '通行命令已登记并发出，等待编组接令回报。';
   if(entry.kind==='accepted_receipt')return 'R已确认接令并开始行动。';
@@ -34,4 +42,17 @@ export function log_copy(entry:LogEntry):string {
   if(entry.kind==='deadline_receipt')return '编组回报：未在时限内完成任务。确认宽限不能用来补做任务。';
   if(entry.kind==='deadline')return '行动时限已到，尚未下达任务。';
   return '行动记录已更新。';
+}
+export function status_copy(view:PlayerView):string {
+  if(view.scenario_kind==='record'){
+    if(view.status==='ready')return '尚未下达。当前只显示草案条件、假设耗时与假设消耗。';
+    if(view.status==='queued')return view.gap;
+    if(view.status==='finished')return '已收到记录成果回报 · 未核验';
+    if(view.status==='deadline')return '已收到截止情况，未完成记录';
+    return view.log.some(entry=>entry.kind==='fix_receipt')?'已收到开始记录回报，等待记录成果回报':'记录组已接令，等待开始记录回报';
+  }
+  return {ready:'待命',queued:'等待接令回报',executing:'行动中，等待抵达回报',finished:'已收到抵达回报',deadline:'已收到截止回报'}[view.status];
+}
+export function activity_copy(entry:LogEntry):string {
+  return entry.activity_id?`活动凭证 · 本次记录任务 · ${{accepted_receipt:'接令',fix_receipt:'开始记录',complete_receipt:'完成记录'}[entry.kind]??'记录回报'}`:'回报';
 }

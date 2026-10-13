@@ -26,6 +26,6 @@ test('FB02-S05/S06 real browser issues a fixed-station record task and receives 
   await expect(page.getByText('联络器电量 13 / 16',{exact:false})).toBeVisible();
   await expect(page.getByText('总部电量 15 / 16',{exact:false})).toBeVisible();
   const resources = page.locator('section').filter({hasText:'已收到的装备状态'});
-  await expect(resources).toContainText('成果 artifact-');
+  await expect(resources).toContainText('成果 · 未核验');
   await expect(resources).toContainText('未核验');
 });
