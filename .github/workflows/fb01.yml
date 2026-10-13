@@ -29,6 +29,8 @@ jobs:
   browser-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      FB01_BROWSER: /tmp/fb01-chrome/chrome-linux64/chrome
     defaults:
       run:
         working-directory: app
@@ -40,7 +42,12 @@ jobs:
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install-deps chromium
+      - name: Install the pinned Chrome for Testing build
+        run: |
+          curl --fail --location --retry 2 https://storage.googleapis.com/chrome-for-testing-public/155.0.8059.39/linux64/chrome-linux64.zip --output /tmp/fb01-chrome.zip
+          echo '55672d1f392fd3e7b7a08621b6e804e6bcb39d40cf155504abb74b3a021ea8ea  /tmp/fb01-chrome.zip' | sha256sum --check
+          unzip -q /tmp/fb01-chrome.zip -d /tmp/fb01-chrome
       - name: Install the window manager required for native focus transitions
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y openbox
       - name: Build the tested static image
