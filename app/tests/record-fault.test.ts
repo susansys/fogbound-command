@@ -154,3 +154,15 @@ test('Record restore rejects a rewritten restoration snapshot reference even wit
     expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });
+
+test('Record restore rejects time advancement without a committed input',async()=>{
+  const store=new Persistence('record-unrecorded-time'),game=new Game(store);
+  try{
+    const view=await game.create_run(recordEngineeringDefinition,'research','create');
+    const bad=structuredClone((await store.read_committed(view.run_id))!);
+    bad.sim_time=1;
+    await writeState(store,bad);
+    await expect(new Game(store).restore(view.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
+    expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
+  }finally{await store.delete();}
+});

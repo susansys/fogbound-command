@@ -4,7 +4,7 @@ import {hash,load_definition,definition_for_package,record_definition_for_packag
 import {record,valid_id,fields,valid_envelope} from '../protocol';
 import {player_view,position,resources} from '../dto';
 import {project_player_view} from './knowledge';
-import {replay_state} from './replay';
+import {replay_committed_state} from './replay';
 import {quantity,initial_record_accounts,record_work_at} from './record-accounting';
 export function canonical(value:unknown):unknown{
   if(Array.isArray(value))return value.map(canonical);
@@ -45,7 +45,7 @@ function record_history_matches(state:State):boolean {
   initial.known={position:structuredClone(definition.catalogs.position),report:structuredClone(definition.catalogs.report) as State['known']['report'],delivery:structuredClone(definition.catalogs.delivery),resources:{equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,movement_energy:p.movement_energy,record_energy:p.record_energy,record_wear:p.record_wear,record_packs:p.record_packs,record_energy_reserved:0,record_packs_reserved:0,hq_energy:p.hq_energy,hq_wear:p.hq_wear,confirmed_at:0},artifacts:[]};
   initial.log=[{id:'initial-report',at:0,kind:'report',text:'档案任务简报已递交；R最后确认在工位H。',evidence:definition.catalogs.delivery.id}];
   initial.schedule=[{id:'objective-deadline',at:p.deadline,phase:30,generation:initial.generation,kind:'deadline'}];
-  const expected=replay_state(initial,state.inputs,state.sim_time);
+  const expected=replay_committed_state(initial,state.inputs);
   return (['world','known','log','schedule','order','status','finished','ended','paused','rate','generation','revision','sim_time'] as const).every(key=>equal(state[key],expected[key]));
 }
 function pending_delivery(state:State,event:State['schedule'][number]):boolean{
