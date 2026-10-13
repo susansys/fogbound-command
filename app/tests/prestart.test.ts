@@ -81,7 +81,9 @@ test('CR08/CR10 replacing preparing N with T invalidates old work while preservi
     expect(view).not.toHaveProperty('replacement');expect(view.resources.equipment_energy).toBe(15);
     view=(await game.control_clock({run_id:view.run_id,operation_id:'replacement-ack',expected_revision:view.revision,intent:{kind:'advance',to:4000}})).view;
     expect(view).toMatchObject({replacement:{original_command_id:'original',replacement_command_id:'replacement',accepted_at:3000,received_at:4000},resources:{hq_energy:14,hq_wear:98,equipment_energy:14,movement_energy:20,movement_energy_reserved:2}});
+    expect(view.replay_nodes.find(node=>node.at===4000)?.label).toContain('替代确认回报已收到');
     view=(await game.control_clock({run_id:view.run_id,operation_id:'before-old-complete',expected_revision:view.revision,intent:{kind:'advance',to:20000}})).view;
+    expect(view.replay_nodes.find(node=>node.at===20000)?.label).toContain('开始移动回报已收到');
     const queued=await store.read_committed(view.run_id);
     expect(queued?.prestart?.activities[0]).toMatchObject({command_id:'original',generation:1,phase:'superseded'});
     expect(queued?.prestart?.queue.some(event=>event.kind==='complete'&&event.command_id==='original'&&event.at===21900)).toBe(true);

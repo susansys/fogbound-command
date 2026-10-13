@@ -19,7 +19,7 @@ export function public_replay_nodes(state:Pick<State,'inputs'|'log'|'sim_time'>)
       consumed.add(`${intent.command_id}:issued`);
     }
     const administrative={issue:'任务登记后',replace_task:'替代请求登记后',pause:'暂停确认后',continue:'继续确认后',rate:'速率确认后',save:'保存确认后',restore:'接手确认后',mode:'时间方式确认后'};
-    const eventLabels:Record<string,string>={sent:'任务发送记录',accepted_receipt:'接令回报已收到',fix_receipt:'进展回报已收到',complete_receipt:'完成回报已收到',deadline:'行动时限已到',deadline_receipt:'截止回报已收到'};
+    const eventLabels:Record<string,string>={sent:'任务发送记录',accepted_receipt:'接令回报已收到',replace_receipt:'替代确认回报已收到',start_receipt:'开始移动回报已收到',fix_receipt:'进展回报已收到',complete_receipt:'完成回报已收到',deadline:'行动时限已到',deadline_receipt:'截止回报已收到'};
     const title=intent.kind==='advance'||intent.kind==='tick'
       ?events.length?events.map(entry=>eventLabels[entry.kind]??'行动回报已收到').join('、'):'时间推进后'
       :administrative[intent.kind];
