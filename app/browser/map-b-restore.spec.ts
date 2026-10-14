@@ -1,6 +1,31 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
+async function holdOwnedDisplayDatabase(page:import('@playwright/test').Page){
+ await page.addInitScript(()=>{const active=new Set<ImageBitmap>(),native=createImageBitmap;(window as any).ownedMapImages=()=>active.size;window.createImageBitmap=(async(...args:any[])=>{const image=await Reflect.apply(native,window,args);active.add(image);const close=image.close.bind(image);image.close=()=>{active.delete(image);close();};return image;}) as typeof createImageBitmap;});
+ await page.goto('/');await page.evaluate(()=>new Promise<void>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1',9);open.onupgradeneeded=()=>{open.result.createObjectStore('records',{keyPath:'id'}).createIndex('run_id','run_id');open.result.createObjectStore('heads',{keyPath:'run_id'});};open.onerror=()=>reject(open.error);open.onsuccess=()=>{(window as any).ownedBlockedDB=open.result;open.result.onversionchange=()=>{};resolve();};}));
+ await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).ownedMapImages())).toBe(34);
+}
+test('MB24 actual blocked display DB cannot retain decoded images after map unmount',async({page})=>{
+ await holdOwnedDisplayDatabase(page);await page.getByRole('button',{name:'任务调度',exact:true}).click();await expect.poll(()=>page.evaluate(()=>(window as any).ownedMapImages())).toBe(0);
+ await page.evaluate(()=>(window as any).ownedBlockedDB.close());
+});
+
+test('MB19 a real held map readback does not hold the confirmed Game save or management pause controls',async({page})=>{
+ await page.addInitScript(()=>{
+  (window as any).ownedHoldMapReadback=false;const native=IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction=function(this:IDBDatabase,...args:any[]){const tx=Reflect.apply(native,this,args);if(this.name==='fogbound-map-b-display-1'&&args[1]!=='readwrite'&&(window as any).ownedHoldMapReadback){const store=tx.objectStore(tx.objectStoreNames[0]);const keep=()=>{if(!(window as any).ownedHoldMapReadback)return;const request=store.get('__owned_hold__');request.onsuccess=keep;};keep();}return tx;} as typeof IDBDatabase.prototype.transaction;
+ });
+ await start(page,'FB02-ENG-RECORD','command');await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
+ await page.evaluate(()=>(window as any).ownedHoldMapReadback=true);await page.getByRole('button',{name:'保存记录',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'暂停',exact:true})).toBeEnabled({timeout:2000});await page.getByRole('button',{name:'暂停',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
+ await expect(page.locator('.display-record-status')).toContainText('正在保存');await page.evaluate(()=>(window as any).ownedHoldMapReadback=false);await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
+});
+test('MB21 actual blocked display DB fails within its local bound and explicit rebind leaves Game paused',async({page})=>{
+ test.setTimeout(25000);await holdOwnedDisplayDatabase(page);await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable',{timeout:17000});await expect.poll(()=>page.evaluate(()=>(window as any).ownedMapImages())).toBe(0);
+ await page.evaluate(()=>(window as any).ownedBlockedDB.close());await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.clock')).toContainText('已暂停');
+});
+
 test('MB21 a stalled local tile has a bounded failure and explicit repair does not continue Game',async({page})=>{
  test.setTimeout(25000);let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let count=0;
  await page.route('**/assets/surface-0-0-*.png',async route=>{count++;await held;try{await route.continue();}catch{}});
@@ -70,6 +95,8 @@ for(const fault of ['denied','abort','readback'] as const)test(`MB19 ${fault} di
  await page.evaluate(fault=>(window as any).ownedDisplayFault=fault,fault);await page.getByRole('button',{name:'保存记录',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
  await expect(page.locator('.display-record-status')).toContainText(fault==='readback'?'待核查':'失败');const records=await readRecords();expect(records).toContainEqual(original[0]);expect(records).toHaveLength(fault==='readback'?2:1);
  if(fault==='readback'){
+  await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:'态势地图',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');
+  await expect(page.locator('.display-record-status')).toContainText('待核查');
   await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'核查地图保存结果',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('已核查保存');expect(await readRecords()).toHaveLength(2);
  }
 });

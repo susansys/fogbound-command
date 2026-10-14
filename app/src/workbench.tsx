@@ -225,11 +225,11 @@ export function Workbench() {
       const response = await transport.request({ kind: "operate", envelope });
       if (response.ok && response.view && response.receipt) {
         adoptView(response.view);
-        if(response.receipt.kind==='save')await displaySession.current?.save(response.view.revision);
         if(pendingControl.current?.operation_id===envelope.operation_id)pendingControl.current=null;
         setReceiptNote(
           is_task_intent(envelope.intent)?(response.view.scenario_kind==='prestart_move'?'通行指令已签发登记，实际发送和接受须看后续记录。':'命令已登记并发出，等待编组回报。'):response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
+        if(response.receipt.kind==='save')void displaySession.current?.save(response.view.revision);
         if (is_task_intent(envelope.intent)) {
           orderConfirmed.current=envelope.operation_id;
           setPlan(null);

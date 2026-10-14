@@ -139,9 +139,11 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       ready = false;
     const instance = new Application();
     let observer: ResizeObserver | undefined;
+    let pendingBundle:RegionalBundle|null=null;
     let destroyed=false;
     const textures=new Set<Texture>();ownedTextures.current=textures;
     const releaseRegion=()=>{
+      pendingBundle?.release();pendingBundle=null;
       background.current?.destroy({children:true});background.current=null;
       for(const texture of textures)texture.destroy(true);textures.clear();
       regional.current?.release();regional.current=null;
@@ -155,9 +157,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
     };
     const contextLost=(event:Event)=>{
       event.preventDefault();controller.abort();destroyRenderer();
-      if(!disposed){setRegionState('unavailable');setError(true);setMapFault('图形上下文已丢失；合法地点和文字选择仍保留，请显式修复本地地图显示。');}
+      if(!disposed){setRegionState('unavailable');setError(true);setMapFault(`${event.type==='map-init-timeout'?'图形初始化超时':'图形上下文已丢失'}；合法地点和文字选择仍保留，请显式修复本地地图显示。`);}
     };
-    const initTimeout=setTimeout(()=>contextLost(new Event('owned-init-timeout')),15000);
+    const initTimeout=setTimeout(()=>contextLost(new Event('map-init-timeout')),15000);
     void instance
       .init({
         resizeTo: el,
@@ -210,6 +212,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           setRegionState('loading');
           const bundle=await loadRegionalBundle(view.geometry,controller.signal);
           if(disposed){bundle.release();return;}
+          pendingBundle=bundle;
           if(displaySession){
             const saved=await displaySession.connect(bundle,view.revision,preferences(),controller.signal);
             if(disposed||controller.signal.aborted){bundle.release();return;}
@@ -218,7 +221,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
             terrainModeRef.current=saved.mode;regionalVisibleRef.current=saved.background;terrainRef.current=saved.terrain;labelsRef.current=saved.labels;
             setTerrainMode(saved.mode);setRegionalVisible(saved.background);setTerrain(saved.terrain);setLabels(saved.labels);apply();
           }
-          regional.current=bundle;const layer=new Container();layer.visible=regionalVisibleRef.current;background.current=layer;world.addChildAt(layer,0);
+          regional.current=bundle;pendingBundle=null;const layer=new Container();layer.visible=regionalVisibleRef.current;background.current=layer;world.addChildAt(layer,0);
           for(const asset of bundle.manifest.assets.filter(asset=>asset.kind===terrainModeRef.current)){
             const image=bundle.images.get(asset.file)!;const texture=Texture.from(image);ownedTextures.current.add(texture);const sprite=new Sprite(texture);
             sprite.position.set(bundle.origin[0]+asset.u!,bundle.origin[1]+asset.v!);sprite.width=asset.extent![0];sprite.height=asset.extent![1];layer.addChild(sprite);

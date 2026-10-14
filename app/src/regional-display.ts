@@ -4,6 +4,9 @@ export type RegionalIdentity={region_id:string;domain:number[];unit:string;axes:
 export type MapPreferences={camera:[number,number,number];mode:'surface'|'shade';background:boolean;terrain:boolean;labels:boolean};
 export type RegionalDisplayRecord={id:string;run_id:string;association_revision:number;identity:RegionalIdentity;preferences:MapPreferences};
 export class RegionalDisplayError extends Error{constructor(readonly code:'CONFLICT'|'WRITE_FAILED'|'READBACK_UNCONFIRMED'|'INVALID_RECORD'){super(code);}}
+function bounded<T>(work:Promise<T>,signal?:AbortSignal):Promise<T>{
+ return new Promise((resolve,reject)=>{const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(new RegionalDisplayError('READBACK_UNCONFIRMED'));},timer=setTimeout(abort,15000);if(signal?.aborted){abort();return;}signal?.addEventListener('abort',abort,{once:true});work.then(value=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);resolve(value);},error=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(error);});});
+}
 class DisplayDatabase extends Dexie{
  records!:Table<RegionalDisplayRecord,string>;heads!:Table<{run_id:string;id:string},string>;
  constructor(name:string){super(name);this.version(1).stores({records:'id,run_id',heads:'run_id'});}
@@ -16,8 +19,9 @@ export class RegionalDisplayStore{
  async read(run:string):Promise<RegionalDisplayRecord|null>{
   return this.db.transaction('r',this.db.heads,this.db.records,async()=>{const head=await this.db.heads.get(run);if(!head)return null;const record=await this.db.records.get(head.id);if(!record||record.id!==head.id)throw new RegionalDisplayError('INVALID_RECORD');return record;});
  }
- async write(record:RegionalDisplayRecord,expected:string|null):Promise<RegionalDisplayRecord>{
+ async write(record:RegionalDisplayRecord,expected:string|null,signal?:AbortSignal):Promise<RegionalDisplayRecord>{
   try{await this.db.transaction('rw',this.db.heads,this.db.records,async()=>{
+   if(signal?.aborted)throw new RegionalDisplayError('WRITE_FAILED');
    const head=await this.db.heads.get(record.run_id);if((head?.id??null)!==expected)throw new RegionalDisplayError('CONFLICT');
    if(await this.db.records.get(record.id))throw new RegionalDisplayError('CONFLICT');
    await this.db.records.add(record);await this.db.heads.put({run_id:record.run_id,id:record.id});
@@ -47,25 +51,26 @@ export class RegionalDisplaySession{
   this.identity=regionalIdentity(bundle);this.preferences??=defaults;
   if(signal.aborted)return null;
   try{
-   if(!this.record)this.record=await this.store.read(this.run);
+   if(!this.record&&!this.pending)this.record=await bounded(this.store.read(this.run),signal);
    if(signal.aborted)return null;
-   if(!this.record&&this.fresh&&!this.blocked){await this.save(revision);if(signal.aborted)return null;}
+   if(!this.record&&this.fresh&&!this.blocked){await this.save(revision,false,signal);if(signal.aborted)return null;}
    const record=this.record;
    if(!record||record.run_id!==this.run||!Number.isSafeInteger(record.association_revision)||record.association_revision<1||record.association_revision>(this.connected?revision:this.snapshotRevision??revision)||JSON.stringify(record.identity)!==JSON.stringify(this.identity)||!validMapPreferences(record.preferences)){
-    this.blocked=true;this.report('地图关联缺失或身份不匹配；合法覆盖及文字保留，请显式重新关联。');return null;
+    this.blocked=true;this.report(this.pending?'地图关联提交结果待核查，未确认保存；保留原件。':'地图关联缺失或身份不匹配；合法覆盖及文字保留，请显式重新关联。');return null;
    }
-   if(!this.connected)this.preferences=record.preferences;this.connected=true;this.report('地图关联已保存并读回核验');return this.preferences;
-  }catch(error){this.blocked=true;this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':'地图关联读取或写入失败；保留原件。');return null;}
+   if(!this.connected)this.preferences=record.preferences;this.connected=true;this.report(this.blocked?this.pending?'地图关联提交结果待核查；最后已核验关联仍可显示。':'最新地图关联保存失败；最后已核验关联仍可显示。':'地图关联已保存并读回核验');return this.preferences;
+  }catch(error){if(signal.aborted)return null;this.blocked=true;this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联等待超时或提交结果待核查，未确认保存；保留原件。':'地图关联读取或写入失败；保留原件。');return null;}
  }
- async save(revision:number,rebind=false):Promise<boolean>{
+ async save(revision:number,rebind=false,signal?:AbortSignal):Promise<boolean>{
   if(!this.identity||!this.preferences||this.pending||this.blocked&&!rebind){this.report('地图关联未保存；需要核查或显式重新关联。');return false;}
   const record:RegionalDisplayRecord={id:nonce(),run_id:this.run,association_revision:rebind||!this.record?revision:this.record.association_revision,identity:this.identity,preferences:structuredClone(this.preferences)};
   this.pending=record;
-  try{const expected=rebind?await this.store.currentId(this.run):this.record?.id??null;this.record=await this.store.write(record,expected);this.pending=null;this.blocked=false;if(rebind)this.connected=true;this.report('地图关联已保存并读回核验');return true;}
-  catch(error){if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED')this.pending=null;this.blocked=true;this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':error instanceof RegionalDisplayError&&error.code==='CONFLICT'?'地图关联写入冲突；保留最后良好原件。':'地图关联写入失败；保留最后良好原件。');return false;}
+  this.report('地图关联正在保存并等待独立读回确认。');
+  try{const expected=rebind?await bounded(this.store.currentId(this.run),signal):this.record?.id??null;this.record=await bounded(this.store.write(record,expected,signal),signal);this.pending=null;this.blocked=false;if(rebind)this.connected=true;if(!signal?.aborted)this.report('地图关联已保存并读回核验');return true;}
+  catch(error){if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED')this.pending=null;this.blocked=true;if(!signal?.aborted)this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':error instanceof RegionalDisplayError&&error.code==='CONFLICT'?'地图关联写入冲突；保留最后良好原件。':'地图关联写入失败；保留最后良好原件。');return false;}
  }
  async reconcile():Promise<boolean>{
   if(!this.pending){this.report('没有待核查的地图提交。');return false;}
-  try{if(await this.store.reconcile(this.pending)){this.record=this.pending;this.preferences=this.pending.preferences;this.pending=null;this.blocked=false;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{this.report('地图关联仍无法核查；不重复写入。');return false;}
+  try{if(await bounded(this.store.reconcile(this.pending))){this.record=this.pending;this.preferences=this.pending.preferences;this.pending=null;this.blocked=false;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{this.report('地图关联仍无法核查；不重复写入。');return false;}
  }
 }
