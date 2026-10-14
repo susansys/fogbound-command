@@ -78,7 +78,7 @@ export function Workbench() {
     finally{
       controlInFlight.current=false;
       setControlPending(!!pendingControl.current||!!deferredPause.current);
-      if(!pendingControl.current&&deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;void control(pause);}
+      if(!pendingControl.current&&deferredPause.current){const pause=deferredPause.current;deferredPause.current=null;await control(pause);}
     }
   }
   useEffect(()=>{

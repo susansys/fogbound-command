@@ -133,11 +133,41 @@ test('FB02-S01 the actual Worker confirms pause of an active run before another 
 });
 
 test('FB02-S01 switches only after confirmed pause and restores the saved Move rather than the current new-scene choice',async({page})=>{
+  await page.addInitScript(()=>{
+    const state=window as unknown as {scenePause:{stale:boolean;confirmed:boolean}};
+    state.scenePause={stale:false,confirmed:false};
+    let firstPause=true,agedRequest:string|null=null;
+    const Native=window.Worker;
+    window.Worker=new Proxy(Native,{construct(Target,args){
+      const worker=Reflect.construct(Target,args) as Worker;
+      worker.addEventListener('message',(event:MessageEvent)=>{
+        if(event.data.request_id===agedRequest)state.scenePause.stale=!event.data.ok&&event.data.code==='STALE_REVISION';
+        if(event.data.ok&&event.data.receipt?.kind==='pause')state.scenePause.confirmed=true;
+      });
+      return new Proxy(worker,{get(target,key){
+        const value=Reflect.get(target,key,target);
+        if(key==='postMessage')return(input:any)=>{
+          if(input.kind==='operate'&&input.envelope.intent.kind==='pause'&&firstPause){
+            firstPause=false;agedRequest=input.request_id;
+            const release=(event:MessageEvent)=>{
+              if(event.data.view?.revision>input.envelope.expected_revision){
+                target.removeEventListener('message',release);target.postMessage(input);
+              }
+            };
+            target.addEventListener('message',release);return;
+          }
+          target.postMessage(input);
+        };
+        return typeof value==='function'?value.bind(target):value;
+      },set(target,key,value){return Reflect.set(target,key,value,target);}});
+    }});
+  });
   await page.goto('/');
   await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');
   await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await expect.poll(()=>page.locator('.clock strong').innerText()).not.toBe('00:00');
   await page.getByRole('button',{name:'更换演练',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as {scenePause:{stale:boolean;confirmed:boolean}}).scenePause)).toEqual({stale:true,confirmed:true});
   await expect(page.getByText(/已保存的演练记录 · 走廊移动/)).toBeVisible();
   await page.getByLabel('演练任务').selectOption('FB02-ENG-RECORD');
   await page.getByLabel('时间方式').selectOption('research');
