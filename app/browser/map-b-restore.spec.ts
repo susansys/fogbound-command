@@ -1,6 +1,13 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
+test('MB19 a real queued display write that is definitively cancelled allows explicit rebind without reload',async({page})=>{
+ await page.goto('/');await page.evaluate(()=>new Promise<void>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1',10);open.onupgradeneeded=()=>{open.result.createObjectStore('records',{keyPath:'id'}).createIndex('run_id','run_id');open.result.createObjectStore('heads',{keyPath:'run_id'});};open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['records','heads'],'readonly'),store=tx.objectStore('heads');(window as any).ownedQueueHold=true;const keep=()=>{if(!(window as any).ownedQueueHold)return;const request=store.get('__hold__');request.onsuccess=keep;};keep();tx.oncomplete=()=>db.close();resolve();};}));
+ await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('正在保存');
+ await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.evaluate(()=>(window as any).ownedQueueHold=false);await page.waitForTimeout(150);await page.getByRole('button',{name:'态势地图',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable');
+ await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.clock')).toContainText('已暂停');
+});
+
 async function holdOwnedDisplayDatabase(page:import('@playwright/test').Page){
  await page.addInitScript(()=>{const active=new Set<ImageBitmap>(),native=createImageBitmap;(window as any).ownedMapImages=()=>active.size;window.createImageBitmap=(async(...args:any[])=>{const image=await Reflect.apply(native,window,args);active.add(image);const close=image.close.bind(image);image.close=()=>{active.delete(image);close();};return image;}) as typeof createImageBitmap;});
  await page.goto('/');await page.evaluate(()=>new Promise<void>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1',9);open.onupgradeneeded=()=>{open.result.createObjectStore('records',{keyPath:'id'}).createIndex('run_id','run_id');open.result.createObjectStore('heads',{keyPath:'run_id'});};open.onerror=()=>reject(open.error);open.onsuccess=()=>{(window as any).ownedBlockedDB=open.result;open.result.onversionchange=()=>{};resolve();};}));

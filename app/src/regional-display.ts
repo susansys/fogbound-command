@@ -5,7 +5,7 @@ export type MapPreferences={camera:[number,number,number];mode:'surface'|'shade'
 export type RegionalDisplayRecord={id:string;run_id:string;association_revision:number;identity:RegionalIdentity;preferences:MapPreferences};
 export class RegionalDisplayError extends Error{constructor(readonly code:'CONFLICT'|'WRITE_FAILED'|'READBACK_UNCONFIRMED'|'INVALID_RECORD'){super(code);}}
 function bounded<T>(work:Promise<T>,signal?:AbortSignal):Promise<T>{
- return new Promise((resolve,reject)=>{const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(new RegionalDisplayError('READBACK_UNCONFIRMED'));},timer=setTimeout(abort,15000);if(signal?.aborted){abort();return;}signal?.addEventListener('abort',abort,{once:true});work.then(value=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);resolve(value);},error=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(error);});});
+ return new Promise((resolve,reject)=>{const abort=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(new RegionalDisplayError('READBACK_UNCONFIRMED'));},timer=setTimeout(abort,15000);work.then(value=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);resolve(value);},error=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(error);});if(signal?.aborted){abort();return;}signal?.addEventListener('abort',abort,{once:true});});
 }
 class DisplayDatabase extends Dexie{
  records!:Table<RegionalDisplayRecord,string>;heads!:Table<{run_id:string;id:string},string>;
@@ -20,12 +20,15 @@ export class RegionalDisplayStore{
   return this.db.transaction('r',this.db.heads,this.db.records,async()=>{const head=await this.db.heads.get(run);if(!head)return null;const record=await this.db.records.get(head.id);if(!record||record.id!==head.id)throw new RegionalDisplayError('INVALID_RECORD');return record;});
  }
  async write(record:RegionalDisplayRecord,expected:string|null,signal?:AbortSignal):Promise<RegionalDisplayRecord>{
+  let abort:(()=>void)|undefined;
   try{await this.db.transaction('rw',this.db.heads,this.db.records,async()=>{
+   const transaction=Dexie.currentTransaction;abort=()=>{try{transaction?.abort();}catch{}};signal?.addEventListener('abort',abort,{once:true});
    if(signal?.aborted)throw new RegionalDisplayError('WRITE_FAILED');
    const head=await this.db.heads.get(record.run_id);if((head?.id??null)!==expected)throw new RegionalDisplayError('CONFLICT');
    if(await this.db.records.get(record.id))throw new RegionalDisplayError('CONFLICT');
+   if(signal?.aborted)throw new RegionalDisplayError('WRITE_FAILED');
    await this.db.records.add(record);await this.db.heads.put({run_id:record.run_id,id:record.id});
-  });}catch(error){throw error instanceof RegionalDisplayError?error:new RegionalDisplayError('WRITE_FAILED');}
+  });}catch(error){throw error instanceof RegionalDisplayError?error:new RegionalDisplayError('WRITE_FAILED');}finally{if(abort)signal?.removeEventListener('abort',abort);}
   try{const readback=await this.read(record.run_id);if(JSON.stringify(readback)!==JSON.stringify(record))throw Error();return readback!;}catch{throw new RegionalDisplayError('READBACK_UNCONFIRMED');}
  }
  async reconcile(record:RegionalDisplayRecord):Promise<boolean>{return JSON.stringify(await this.read(record.run_id))===JSON.stringify(record);}
@@ -66,7 +69,12 @@ export class RegionalDisplaySession{
   const record:RegionalDisplayRecord={id:nonce(),run_id:this.run,association_revision:rebind||!this.record?revision:this.record.association_revision,identity:this.identity,preferences:structuredClone(this.preferences)};
   this.pending=record;
   this.report('地图关联正在保存并等待独立读回确认。');
-  try{const expected=rebind?await bounded(this.store.currentId(this.run),signal):this.record?.id??null;this.record=await bounded(this.store.write(record,expected,signal),signal);this.pending=null;this.blocked=false;if(rebind)this.connected=true;if(!signal?.aborted)this.report('地图关联已保存并读回核验');return true;}
+  try{const expected=rebind?await bounded(this.store.currentId(this.run),signal):this.record?.id??null;
+   const write=this.store.write(record,expected,signal);
+   // A cancelled wait is uncertain until the actual atomic storage operation
+   // settles. A later definitive non-commit releases only this pending nonce.
+   void write.catch(error=>{if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED'&&this.pending?.id===record.id){this.pending=null;this.blocked=true;}});
+   this.record=await bounded(write,signal);this.pending=null;this.blocked=false;if(rebind)this.connected=true;if(!signal?.aborted)this.report('地图关联已保存并读回核验');return true;}
   catch(error){if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED')this.pending=null;this.blocked=true;if(!signal?.aborted)this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':error instanceof RegionalDisplayError&&error.code==='CONFLICT'?'地图关联写入冲突；保留最后良好原件。':'地图关联写入失败；保留最后良好原件。');return false;}
  }
  async reconcile():Promise<boolean>{
