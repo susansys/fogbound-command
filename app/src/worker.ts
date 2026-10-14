@@ -7,7 +7,7 @@ import type { Request, Response } from "./transport";
 import { valid_request, correlation } from "./protocol";
 import {valid_response} from './dto';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
-const store = new Persistence("fogbound-fb01-schema4");
+const store = new Persistence("fogbound-map-b-game-1");
 const game = new Game(store);
 let locked = false;
 let blocked=false;
@@ -16,7 +16,7 @@ async function acquire_writer(): Promise<boolean> {
   if (!navigator.locks) throw new GameError("LOCK_UNSUPPORTED");
   return new Promise<boolean>((resolve, reject) => {
     void navigator.locks
-      .request("fogbound-fb01-writer", { ifAvailable: true }, async (lock) => {
+      .request("fogbound-map-b-writer-1", { ifAvailable: true }, async (lock) => {
         if (!lock) {
           resolve(false);
           return;

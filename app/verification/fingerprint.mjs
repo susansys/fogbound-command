@@ -16,22 +16,18 @@ async function asset(path){const response=await fetch(new URL(path,origin));if(!
 const main=await asset(entry),workerPath=main.bytes.toString().match(/\/assets\/worker-[A-Za-z0-9_-]+\.js/)?.[0];
 if(!workerPath)throw Error('missing worker entry');
 const worker=await asset(workerPath),styles=[];
-const manifest=JSON.parse(await fs.readFile('src/map-assets/manifest.json','utf8'));
-const mapPaths=[...new Set([
-  ...[...main.bytes.toString().matchAll(/\/?assets\/(?:maplibre-gl[^"'`\s]*?\.(?:js|css)|(?:grid|colour|manifest)-[A-Za-z0-9_-]+\.(?:png|json))/g)].map(match=>`/${match[0].replace(/^\//,'')}`),
-  ...[...main.bytes.toString().matchAll(/\.\/(maplibre-gl-[A-Za-z0-9_-]+\.(?:js|css))/g)].map(match=>`/assets/${match[1]}`),
-])];
+const manifestBytes=await fs.readFile('src/regional-assets/manifest.json'),manifest=JSON.parse(manifestBytes),release=JSON.parse(await fs.readFile('src/regional-assets/trusted-release.json'));
+if(sha(manifestBytes)!==release.manifest_sha256||sha(await fs.readFile('verification/generate-regional.mjs'))!==manifest.generator_source_sha256)throw Error('regional source identity differs from release');
+const paths=[...new Set([...main.bytes.toString().matchAll(/\/assets\/[A-Za-z0-9_.-]+\.(?:png|bin|json|txt)/g)].map(match=>match[0]))];
 const mapAssets=[];
-for(const path of mapPaths){const item=await asset(path);mapAssets.push({path,sha256:item.sha256,bytes:item.bytes.length});
-  if(/\/(?:grid|colour)-/.test(path)){const original=manifest.assets.find(image=>path.includes(`/${image.file.split('.')[0]}-`));if(!original||item.sha256!==original.sha256||item.bytes.length!==original.bytes)throw Error('served synthetic image differs from original');}
-  if(/\/manifest-/.test(path)&&!item.bytes.equals(await fs.readFile('src/map-assets/manifest.json')))throw Error('served synthetic manifest differs from source');
+for(const expected of [{file:'manifest.json',sha256:release.manifest_sha256,bytes:release.manifest_bytes},...release.assets]){
+ const dot=expected.file.lastIndexOf('.'),stem=expected.file.slice(0,dot),extension=expected.file.slice(dot);let found=false;
+ for(const path of paths.filter(path=>path.startsWith(`/assets/${stem}-`)&&path.endsWith(extension))){const item=await asset(path);if(item.sha256!==expected.sha256)continue;if(item.bytes.length!==expected.bytes||!item.bytes.equals(await fs.readFile(`src/regional-assets/${expected.file}`)))throw Error('regional served bytes differ');mapAssets.push({file:expected.file,path,sha256:item.sha256,bytes:item.bytes.length});found=true;break;}
+ if(!found)throw Error(`missing exact public regional asset: ${expected.file}`);
 }
-for(const prefix of ['maplibre-gl-worker-','maplibre-gl-','grid-','colour-','manifest-'])if(!mapAssets.some(item=>item.path.includes(`/${prefix}`)))throw Error('missing public map build asset');
-if(!mapAssets.some(item=>item.path.endsWith('.css')))throw Error('missing geographic SDK CSS');
-if(!mapAssets.some(item=>item.path.endsWith('.js')&&/\/maplibre-gl-(?!worker-)/.test(item.path)))throw Error('missing geographic SDK bundle');
-const lock=JSON.parse(await fs.readFile('package-lock.json','utf8')),mapDependency=lock.packages['node_modules/maplibre-gl'];
-if(mapDependency.version!=='6.14.0')throw Error('map version differs from frozen binding');
-const mapping={version:mapDependency.version,integrity:mapDependency.integrity,manifest_sha256:sha(await fs.readFile('src/map-assets/manifest.json')),mapping_sha256:sha(JSON.stringify(manifest.mapping)),assets:mapAssets};
+const lock=JSON.parse(await fs.readFile('package-lock.json','utf8')),renderer=lock.packages['node_modules/pixi.js'];
+if(renderer.version!=='8.22.0')throw Error('regional renderer version differs');
+const mapping={renderer:'Pixi',version:renderer.version,integrity:renderer.integrity,region_id:manifest.region_id,bundle_version:manifest.version,generator:manifest.generator,generator_source_sha256:manifest.generator_source_sha256,config_hash:manifest.config_hash,manifest_sha256:release.manifest_sha256,mapping_sha256:sha(JSON.stringify(manifest.mapping)),mapping:manifest.mapping,assets:mapAssets};
 const definitions=[];
 for(const path of ['src/core/engineering.json','src/core/record-engineering.json','src/core/prestart-engineering.json']){
   const bytes=await fs.readFile(path),definition=JSON.parse(bytes),{definition_hash,...body}=definition;
