@@ -103,10 +103,20 @@ test('MB20 a newer committed Game snapshot restores with the original constant m
  await observeGame(page);await start(page,'FB02-ENG-RECORD');
  await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
  const first=(await trace(page)).views.at(-1)!;
+ const readMaps=()=>page.evaluate(()=>new Promise<Array<{id:string;preferences:{mode:string;camera:number[]}}>>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction('records','readonly'),read=tx.objectStore('records').getAll();tx.oncomplete=()=>{db.close();resolve(read.result);};tx.onabort=()=>{db.close();reject(tx.error);};};}));
+ const originalMap=(await readMaps())[0];
  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByLabel('地形表现',{exact:true}).selectOption('shade');await page.getByRole('button',{name:'区域全景（仅背景阅读）',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
+ await expect(page.locator('.map')).toHaveAttribute('data-terrain-mode','shade');
  const camera=await page.locator('.map').getAttribute('data-camera');
  await page.getByLabel('推进至秒').fill('2');await page.getByRole('button',{name:'推进时间',exact:true}).click();await expect(page.locator('.clock strong')).toHaveText('00:02');
- await page.getByRole('button',{name:'保存记录',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
+ await page.getByRole('button',{name:'保存记录',exact:true}).click();
+ const saveRequest=(await trace(page)).requests.slice().reverse().find(request=>request.kind==='operate'&&request.envelope.intent.kind==='save');
+ expect(saveRequest?.kind).toBe('operate');if(saveRequest?.kind!=='operate')throw Error('Missing actual save request');
+ await expect.poll(()=>page.evaluate(operation=>(window as any).ownedRestoreReceipts.findLast((receipt:any)=>receipt.kind==='save'&&receipt.operation_id===operation)?.result,saveRequest.envelope.operation_id)).toBe('committed');
+ // An earlier association confirmation is not confirmation of this save.
+ // Observe the real new immutable display record before closing the context.
+ await expect.poll(async()=> (await readMaps()).some(record=>record.id!==originalMap.id&&record.preferences.mode==='shade'&&record.preferences.camera.join(',')===camera)).toBe(true);
+ await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
  const saved=(await trace(page)).views.at(-1)!;expect(saved.revision).toBeGreaterThan(first.revision);
  await page.reload();await page.getByRole('button',{name:'接手这场演练',exact:true}).click();
  await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.map')).toHaveAttribute('data-terrain-mode','shade');

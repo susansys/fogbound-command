@@ -8,6 +8,12 @@ async function coordinates(page:Page,points:readonly(readonly[number,number])[])
   const rows=[];
   for(const [x,y] of points){
     await page.mouse.move(box.x+ox+x*s,box.y+oy+y*s);
+    // The mouse event and React's visible coordinate commit are asynchronous.
+    // Wait for that actual public readout; retain the independent numeric oracle.
+    await expect.poll(async()=>{
+      const match=(await page.locator('.map-coordinate').innerText()).match(/图上(-?[\d.]+), (-?[\d.]+)/);
+      return match?Math.hypot(Number(match[1])-x,Number(match[2])-y):Infinity;
+    }).toBeLessThanOrEqual(.1);
     const text=await page.locator('.map-coordinate').innerText(),match=text.match(/图上(-?[\d.]+), (-?[\d.]+)/)!;
     const actual=[Number(match[1]),Number(match[2])],error=Math.hypot(actual[0]-x,actual[1]-y);expect(error).toBeLessThanOrEqual(.1);rows.push({expected:[x,y],actual,error});
   }
@@ -40,6 +46,9 @@ async function backgroundControls(page:Page){
 }
 
 for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR${dpr} three public scenes/complete-region P stay aligned under real camera actions`,async({browser},info)=>{
+ // Three independent fresh scenes share this wrapper; each assertion keeps its
+ // original bound. Software screenshot encoding is included, not a startup gate.
+ test.setTimeout(90000);
  const audit=[];
  const sourceSha256=createHash('sha256').update(await fs.readFile(new URL(import.meta.url))).digest('hex');
  info.annotations.push({type:'test-source-sha256',description:sourceSha256});
@@ -69,6 +78,11 @@ for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR
   expect(Math.max(...errors)).toBeLessThanOrEqual(1);
   const gamePoints=await coordinates(page,[[0,0],[400,0],[0,300],[400,300],[200,150]]);
   await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'区域全景（仅背景阅读）',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
+  // Linux fallback fonts make the fixed caption cover the north-west control.
+  // Use the player's real camera pan to expose it; no overlay or point is hidden.
+  const panoramaY=Number((await map.getAttribute('data-camera'))!.split(',')[1]);
+  await map.focus();await page.keyboard.press('ArrowUp');
+  await expect.poll(async()=>Number((await map.getAttribute('data-camera'))!.split(',')[1])).toBeCloseTo(panoramaY+30,4);
   // Frozen mapping: domain0..10000 centred on Game200/150. Raster seams are2560m.
   const regionPoints=await coordinates(page,[[-4800,-4850],[5200,-4850],[-4800,5150],[5200,5150],[200,150],[-2240,-2290],[320,270],[2880,2830]]);
   const pixelPoints=await backgroundControls(page);expect(Math.max(...[...pixelPoints.water,...pixelPoints.edges].map(point=>point.cssError))).toBeLessThanOrEqual(1);

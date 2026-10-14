@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import fs from 'node:fs/promises';
 import {legalKnowledge} from '../tests/fixtures/legal-knowledge';
 import {valid_response} from '../src/dto';
 async function showRegion(page:Page,visible:boolean){
@@ -45,7 +46,11 @@ for(const regionalVisible of [false,true])test(`CR03/MB12 paired private Knowled
       await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const visible=await page.locator('.unit-marker').evaluate(element=>({left:(element as HTMLElement).style.left,top:(element as HTMLElement).style.top,selected:element.classList.contains('selected')}));
       const requests=await page.evaluate(()=>(window as unknown as {pairRequests:Array<{kind:string;envelope?:{intent:unknown}}>}).pairRequests.map(request=>({kind:request.kind,intent:request.envelope?.intent})));
-      const pixels=await page.locator('.map').screenshot();await page.screenshot({path:testInfo.outputPath(`private-pair-${index}.png`),fullPage:true});evidence.push({before,candidates,error,visible,requests,pixels,after:await page.locator('body').innerText()});
+      // Fractional locator clipping adds one-channel raster noise on software
+      // compositors. Compare the complete integer viewport, including the map,
+      // with the original exact PNG-byte assertion and no masked UI or tolerance.
+      await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.querySelectorAll('img')].map(image=>image.decode()));});
+      const pixels=await page.screenshot({path:testInfo.outputPath(`private-pair-${index}.png`),fullPage:true});await fs.writeFile(testInfo.outputPath(`public-workbench-pair-${index}.png`),pixels);evidence.push({before,candidates,error,visible,requests,pixels,after:await page.locator('body').innerText()});
     }finally{await context.close();}
   }
   expect(evidence[1]).toEqual(evidence[0]);
