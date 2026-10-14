@@ -1,6 +1,17 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
+test('MB20 a restored explicit rebind confirmed after readback uncertainty uses current association audit without rejecting the older restore source',async({page})=>{
+ await page.addInitScript(()=>{(window as any).ownedRebindReadFailure=false;let nextRead=false;const native=IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction=function(this:IDBDatabase,...args:any[]){if(this.name==='fogbound-map-b-display-1'&&args[1]!=='readwrite'&&nextRead){nextRead=false;throw new DOMException('owned rebind readback failure','UnknownError');}const tx=Reflect.apply(native,this,args);if(this.name==='fogbound-map-b-display-1'&&args[1]==='readwrite'&&(window as any).ownedRebindReadFailure){(window as any).ownedRebindReadFailure=false;tx.addEventListener('complete',()=>nextRead=true,{once:true});}return tx;} as typeof IDBDatabase.prototype.transaction;
+ });
+ await observeGame(page);await start(page,'FB02-ENG-RECORD');await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
+ await page.evaluate(()=>new Promise<void>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction('records','readwrite'),store=tx.objectStore('records'),read=store.getAll();read.onsuccess=()=>{const record=read.result[0];record.identity.version=2;store.put(record);};tx.oncomplete=()=>{db.close();resolve();};};}));
+ await page.reload();await page.getByRole('button',{name:'接手这场演练',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable');const restored=(await trace(page)).views.at(-1)!;
+ await page.evaluate(()=>(window as any).ownedRebindReadFailure=true);await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('待核查');await page.getByRole('button',{name:'核查地图保存结果',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');expect((await trace(page)).views.at(-1)).toEqual(restored);
+ await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:'态势地图',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');expect((await trace(page)).views.at(-1)).toEqual(restored);
+});
+
 test('MB19 a real queued display write that is definitively cancelled allows explicit rebind without reload',async({page})=>{
  await page.goto('/');await page.evaluate(()=>new Promise<void>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1',10);open.onupgradeneeded=()=>{open.result.createObjectStore('records',{keyPath:'id'}).createIndex('run_id','run_id');open.result.createObjectStore('heads',{keyPath:'run_id'});};open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['records','heads'],'readonly'),store=tx.objectStore('heads');(window as any).ownedQueueHold=true;const keep=()=>{if(!(window as any).ownedQueueHold)return;const request=store.get('__hold__');request.onsuccess=keep;};keep();tx.oncomplete=()=>db.close();resolve();};}));
  await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('正在保存');

@@ -84,6 +84,6 @@ export class RegionalDisplaySession{
   if(!this.pending){this.report('没有待核查的地图提交。');return false;}
   const candidate=this.pending;
   try{const matches=await bounded(this.store.reconcile(candidate));if(this.pending?.id!==candidate.id)return this.record?.id===candidate.id;
-   if(matches){this.record=candidate;this.preferences=candidate.preferences;this.pending=null;this.blocked=false;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{if(this.pending?.id===candidate.id)this.report('地图关联仍无法核查；不重复写入。');return false;}
+   if(matches){this.record=candidate;this.preferences=candidate.preferences;this.pending=null;this.blocked=false;this.connected=true;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{if(this.pending?.id===candidate.id)this.report('地图关联仍无法核查；不重复写入。');return false;}
  }
 }
