@@ -275,3 +275,5 @@ Real Workbench RED/GREEN covers the missing synthetic-layer entry, actual clippe
 
 These are local T01 candidate results only. Fixed-SHA independent Standards/Spec review, T02/T03, affected final regressions, final image/SHA CI/PR/main acceptance, exact temporary cleanup and the adoption receipt remain pending. Original244AT remains not_run; no real-region accuracy, large-package performance, full player experience or real military claim follows.
 
+The synthetic asset directory explicitly marks PNGs binary. Actual Git-blob bytes must match the authored manifest; the real-file asset contract checks signature, dimensions, SHA and the complete2MiB budget. Four targeted asset/geometry contracts pass after normalization correction. This preserves original bytes without changing global Git settings; local image evidence alone does not prove a reconstructed Git artifact.
+
