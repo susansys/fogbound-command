@@ -1,5 +1,37 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start,enableSynthetic} from './map-a-helpers';
+import type {Page} from '@playwright/test';
+
+async function checkVisibleAlignment(page:Page,recording:boolean){
+  await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  const measured=await page.locator('.map').evaluate((map,recording)=>{
+    const box=map.getBoundingClientRect(),[ox,oy,scale]=(map.getAttribute('data-camera')??'').split(',').map(Number);
+    // Independent frozen scene coordinates; the north-up camera is read from the real SDK.
+    const points=[{id:'H',x:50,y:150},...(!recording?[{id:'N',x:110,y:150},{id:'T',x:170,y:150}]:[])];
+    const errors=points.map(({id,x,y})=>{const anchor=map.querySelector(`[data-anchor="${id}"]`)!.getBoundingClientRect();return Math.hypot(anchor.left+anchor.width/2-box.left-(ox+x*scale),anchor.top+anchor.height/2-box.top-(oy+y*scale));});
+    const unit=map.querySelector<HTMLElement>('[data-marker="R"]')!,symbol=unit.querySelector('img')!.getBoundingClientRect();
+    errors.push(Math.hypot(symbol.left+symbol.width/2-box.left-(ox+50*scale),symbol.top+symbol.height/2-box.top-(oy+150*scale)));
+    const inverseErrors=[Math.hypot((parseFloat(unit.style.left)-ox)/scale-50,(parseFloat(unit.style.top)-oy)/scale-150)];
+    if(!recording){
+      const path=map.querySelector<SVGPathElement>('.plan-route path[stroke-dasharray]')!;
+      for(const [index,point] of [[50,150],[110,150]].entries()){
+        const screen=path.getPointAtLength(index===0?0:path.getTotalLength());
+        errors.push(Math.hypot(screen.x-(ox+point[0]*scale),screen.y-(oy+point[1]*scale)));
+        inverseErrors.push(Math.hypot((screen.x-ox)/scale-point[0],(screen.y-oy)/scale-point[1]));
+      }
+    }
+    const hit={x:symbol.left+symbol.width/2,y:symbol.top+symbol.height/2};
+    return {errors,inverseErrors,hit,hitId:document.elementFromPoint(hit.x,hit.y)?.closest<HTMLElement>('[data-marker]')?.dataset.marker};
+  },recording);
+  expect(Math.max(...measured.errors)).toBeLessThanOrEqual(1);
+  expect(Math.max(...measured.inverseErrors)).toBeLessThanOrEqual(0.1);
+  expect(measured.hitId).toBe('R');await page.mouse.click(measured.hit.x,measured.hit.y);
+  await expect(page.locator('[data-marker="R"]')).toHaveClass(/selected/);
+  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'合成资料与范围',exact:true}).click();await page.getByRole('button',{name:'检验显示配准',exact:true}).click();
+  const returned=await page.locator('.map-coordinate-check tbody tr').evaluateAll(rows=>rows.map(row=>[Number(row.getAttribute('data-return-x')),Number(row.getAttribute('data-return-y'))]));
+  const controls=[[0,0],[400,0],[0,300],[400,300],[200,150]];expect(returned).toHaveLength(5);returned.forEach((point,index)=>expect(Math.hypot(point[0]-controls[index][0],point[1]-controls[index][1])).toBeLessThanOrEqual(0.1));
+  await page.getByRole('button',{name:'合成资料与范围',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
+}
 
 test('MA05 physical map gestures and source reading preserve every paused public field and create no operation or arbitrary plan',async({page})=>{
   await observeGame(page);await start(page);const before=await trace(page);
@@ -75,7 +107,9 @@ test('MA07 command map reading advances normally and real lost focus pauses only
 for(const width of [1366,1920])for(const dpr of [1,2])for(const definition of ['ENG-PRESTART-REPLACE','FB02-ENG-RECORD'])for(const doubled of [false,true])test(`MA08 ${definition} CSS hit/overlay at ${width}, DPR${dpr}, doubled=${doubled}`,async({browser},info)=>{
   const context=await browser.newContext({viewport:{width,height:width===1366?768:1080},deviceScaleFactor:dpr}),page=await context.newPage();
   try{
-    await start(page,definition);await enableSynthetic(page);
+    await start(page,definition);
+    await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:definition==='FB02-ENG-RECORD'?'查看记录预案':'查看通行预案',exact:true}).click();await page.getByRole('button',{name:'态势地图',exact:true}).click();
+    await enableSynthetic(page);
     if(doubled)await page.evaluate(()=>{const elements=[...document.querySelectorAll<HTMLElement>('*')],sizes=elements.map(element=>parseFloat(getComputedStyle(element).fontSize));elements.forEach((element,index)=>{if(Number.isFinite(sizes[index]))element.style.fontSize=`${sizes[index]*2}px`;});});
     const actualDpr=await page.evaluate(()=>devicePixelRatio);expect(Math.abs(actualDpr-dpr)).toBeLessThanOrEqual(0.000001);
     info.annotations.push({type:'display-density',description:JSON.stringify({requested:dpr,actual:actualDpr})});
@@ -87,22 +121,14 @@ for(const width of [1366,1920])for(const dpr of [1,2])for(const definition of ['
         await page.locator('.map-objects').getByRole('button',{name:definition==='FB02-ENG-RECORD'?'H · 工位':'N · 联络点',exact:true}).click();
         await page.getByRole('button',{name:'定位选中',exact:true}).click();for(let count=0;count<3;count++)await page.getByRole('button',{name:'放大地图',exact:true}).click();
       }
-      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
-      const errors=await page.locator('.map').evaluate(map=>{
-        const box=map.getBoundingClientRect(),[ox,oy,scale]=(map.getAttribute('data-camera')??'').split(',').map(Number);
-        const literal:{id:string;x:number;y:number}[]=[{id:'H',x:50,y:150},...(map.querySelector('[data-anchor="N"]')?[{id:'N',x:110,y:150},{id:'T',x:170,y:150}]:[])];
-        return literal.map(({id,x,y})=>{const anchor=map.querySelector(`[data-anchor="${id}"]`)!.getBoundingClientRect();return Math.hypot(anchor.left+anchor.width/2-box.left-(ox+x*scale),anchor.top+anchor.height/2-box.top-(oy+y*scale));});
-      });expect(Math.max(...errors)).toBeLessThanOrEqual(1);
+      await checkVisibleAlignment(page,definition==='FB02-ENG-RECORD');
       await page.getByRole('button',{name:target,exact:true}).click({position:{x:14,y:18}});
       await expect(page.locator('.inspector .facts')).toContainText(definition==='FB02-ENG-RECORD'?'50.00, 150.00':'110.00, 150.00');
       await page.getByRole('button',{name:target,exact:true}).focus();await page.keyboard.press('Enter');
       await expect(page.locator('.map canvas')).toHaveCount(1);
-      await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'合成资料与范围',exact:true}).click();await page.getByRole('button',{name:'检验显示配准',exact:true}).click();
-      const returns=await page.locator('.map-coordinate-check tbody tr').evaluateAll(rows=>rows.map(row=>[Number(row.getAttribute('data-return-x')),Number(row.getAttribute('data-return-y'))]));
-      const controls=[[0,0],[400,0],[0,300],[400,300],[200,150]];expect(returns).toHaveLength(5);returns.forEach((point,index)=>expect(Math.hypot(point[0]-controls[index][0],point[1]-controls[index][1])).toBeLessThanOrEqual(0.1));
-      await page.getByRole('button',{name:'合成资料与范围',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
     }
     await page.setViewportSize({width:width-120,height:width===1366?700:960});await page.getByRole('button',{name:'全图',exact:true}).click();
+    await checkVisibleAlignment(page,definition==='FB02-ENG-RECORD');
     await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
     const boxes=await page.locator('.site-marker').evaluateAll(elements=>elements.map(element=>element.getBoundingClientRect().toJSON()));
     for(const [index,a] of boxes.entries())for(const b of boxes.slice(index+1))expect(a.right<=b.left||b.right<=a.left||a.bottom<=b.top||b.bottom<=a.top).toBe(true);
