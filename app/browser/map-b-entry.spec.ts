@@ -25,6 +25,9 @@ test('MB01/MB05 the current offline entry shows a complete original 10km region 
   expect(external).toEqual([]);
   await page.getByRole('button',{name:'地图图层',exact:true}).click();
   await page.getByRole('button',{name:'区域资料与来源',exact:true}).click();
+  await expect(page.locator('.map-source')).toContainText('资源版本1');
+  await expect(page.locator('.map-source')).toContainText('local-region-1');
+  await expect(page.locator('.map-source')).toContainText('u向东、v向南；图上北在上');
   const notices=page.getByRole('link',{name:'运行库许可与版权原文',exact:true});
   await expect(notices).toBeVisible();
   const response=await page.request.get((await notices.getAttribute('href'))!);
