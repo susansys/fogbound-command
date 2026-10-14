@@ -21,17 +21,63 @@ test('lost focus during a pending rate receipt queues a real pause after confirm
   const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setFocusEmulationEnabled',{enabled:false});
   await page.addInitScript(()=>{
     let held:(()=>void)|null=null;
+    let ageFirstRate=true;
+    const rateRequests=new Set<string>();
+    (window as unknown as {rateOutcome:string}).rateOutcome='not_requested';
     (window as unknown as {releaseRate:()=>void}).releaseRate=()=>{if(!held)throw Error('no held rate receipt');held();held=null;};
     (window as unknown as {hasHeldRate:()=>boolean}).hasHeldRate=()=>held!==null;
     const Native=window.Worker;window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args) as Worker;
-      return new Proxy(worker,{get(target,key){const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;},set(target,key,value){
-        if(key==='onmessage'){target.onmessage=(event:MessageEvent)=>{const deliver=()=>value(event);if(event.data.receipt?.kind==='rate'&&!held)held=deliver;else deliver();};return true;}
+      return new Proxy(worker,{get(target,key){
+        const value=Reflect.get(target,key,target);
+        if(key==='postMessage')return(input:any)=>{
+          if(input.kind==='operate'&&input.envelope.intent.kind==='rate'){
+            rateRequests.add(input.request_id);
+            (window as unknown as {rateOutcome:string}).rateOutcome='pending';
+            if(ageFirstRate){
+              ageFirstRate=false;
+              const release=(event:MessageEvent)=>{
+                if(event.data.view?.revision>input.envelope.expected_revision){
+                  target.removeEventListener('message',release);
+                  target.postMessage(input);
+                }
+              };
+              target.addEventListener('message',release);
+              return;
+            }
+          }
+          target.postMessage(input);
+        };
+        return typeof value==='function'?value.bind(target):value;
+      },set(target,key,value){
+        if(key==='onmessage'){
+          target.onmessage=(event:MessageEvent)=>{
+            const deliver=()=>value(event);
+            if(rateRequests.delete(event.data.request_id)){
+              (window as unknown as {rateOutcome:string}).rateOutcome=event.data.ok&&event.data.receipt?.kind==='rate'?'accepted':event.data.code??'unexpected_response';
+            }
+            if(event.data.receipt?.kind==='rate'&&!held)held=deliver;
+            else deliver();
+          };
+          return true;
+        }
         return Reflect.set(target,key,value,target);
       }});
     }});
   });
   await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();
-  await page.getByLabel('时间速率').selectOption('2');
+  // A real tick may reject a rate request before this test's accepted-receipt
+  // precondition exists. Retry only an observed definitive STALE_REVISION,
+  // through the UI, with a new request; never retry a held or uncertain control.
+  for(let attempt=0;attempt<5;attempt++){
+    await expect(page.getByLabel('时间速率')).toBeEnabled();
+    await page.getByLabel('时间速率').selectOption('2');
+    await expect.poll(()=>page.evaluate(()=>(window as unknown as {rateOutcome:string}).rateOutcome)).not.toBe('pending');
+    const outcome=await page.evaluate(()=>(window as unknown as {rateOutcome:string}).rateOutcome);
+    if(attempt===0)expect(outcome).toBe('STALE_REVISION');
+    if(outcome==='accepted')break;
+    expect(outcome).toBe('STALE_REVISION');
+  }
+  expect(await page.evaluate(()=>(window as unknown as {rateOutcome:string}).rateOutcome)).toBe('accepted');
   await expect(page.getByRole('button',{name:'控制待确认',exact:true})).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {hasHeldRate:()=>boolean}).hasHeldRate())).toBe(true);
   const other=await context.newPage();await other.goto('/');
