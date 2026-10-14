@@ -1,0 +1,72 @@
+{
+  "sample_id": "MAPA-SYNTH",
+  "version": 1,
+  "synthetic": true,
+  "creator": "玄枢行动 sole developer / 01a13080-ddaf-7041-840b-1a19cf2a6f53",
+  "provenance": {
+    "generated": "2026-10-14",
+    "tool": "Python/Pillow 9.5.0",
+    "rules": "Original colour grid, distinct corners, axes and five control crosses; no external images or fonts"
+  },
+  "attribution_text": "合成验证资料 · 非遥感影像",
+  "mapping": {
+    "id": "MAPA-SYNTH-MERCATOR",
+    "version": 1,
+    "units": "fictional-map-metre",
+    "axis": "E=x,N=-y",
+    "game_extent": [
+      0,
+      0,
+      400,
+      300
+    ],
+    "background_extent": [
+      -200,
+      -150,
+      600,
+      450
+    ],
+    "image_corners": [
+      [
+        -0.001796630568,
+        0.001347472926
+      ],
+      [
+        0.005389891705,
+        0.001347472926
+      ],
+      [
+        0.005389891705,
+        -0.004042418775
+      ],
+      [
+        -0.001796630568,
+        -0.004042418775
+      ]
+    ]
+  },
+  "assets": [
+    {
+      "id": "grid",
+      "file": "grid.png",
+      "mime": "image/png",
+      "dimensions": [
+        512,
+        384
+      ],
+      "bytes": 1897,
+      "sha256": "33b3d42043c8947165d765bc097c7b51f572c1f40a2c852ba943681d2c2bc706"
+    },
+    {
+      "id": "colour",
+      "file": "colour.png",
+      "mime": "image/png",
+      "dimensions": [
+        512,
+        384
+      ],
+      "bytes": 1883,
+      "sha256": "257b8159bdc17158fd8fe56d3f6ec4679646217ba8cc86ed7d88e357d98fd346"
+    }
+  ]
+}

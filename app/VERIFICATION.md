@@ -265,3 +265,13 @@ CR01–26 are traceable to the six independently reviewed ticket checkpoints and
 
 This final evidence append and README entry update do not change product source, lock or Dockerfile. Final documentation-head CI, PR merge, actual main CI/source-tree/image acceptance and exact owned temporary cleanup are integration gates that must still be completed before announcing whole-batch delivery. Private profiles, scratch artifacts and private design/research documents are excluded from publication.
 
+## MAP-A T01 local candidate (#30)
+
+Frozen MAP-A-DESIGN-1.0.0 is a three-ticket/twelve-case synthetic-display batch, baseline d181dfb1b9c6cb17b20be80fd098f5313c6323d1, SPEC#29 and children#30—32. Independent readback verifies four exact bodies, three native parent links and two blocking edges. B/C and original244AT are not accepted by it.
+
+Official MapLibre6.14.0 registry metadata and actual tarball integrity match. Exact Node22.23.3/npm10.9.9/TS5.9.3/Vite8.3.4 compatibility build passes; existing dependency versions remain unchanged and full license is retained. The two original512×384 PNGs plus manifest total5277 bytes. No real imagery, external tiles/styles/glyphs, data services or Game/DTO/registry/save changes are involved.
+
+Real Workbench RED/GREEN covers the missing synthetic-layer entry, actual clipped raster pixels and missing readonly camera inverse verification. Independent control values and public geometry fault tests cover registration/digest and bounds. Fresh T01 local results pass147 core contracts, types/import boundaries, six actual headed Chrome155.0.8059.39 software WebGL2 contracts and six actual headed Windows Edge155.0.4283.45 contracts. Native Edge separately identifies AMD/ANGLE Direct3D11 hardware WebGL2; software and hardware evidence are not conflated. Default Pixi, one active canvas, three legal views/last-confirmed positions, genuine grid pixels, five floating camera round trips and panorama/colour/selection behavior are checked.
+
+These are local T01 candidate results only. Fixed-SHA independent Standards/Spec review, T02/T03, affected final regressions, final image/SHA CI/PR/main acceptance, exact temporary cleanup and the adoption receipt remain pending. Original244AT remains not_run; no real-region accuracy, large-package performance, full player experience or real military claim follows.
+
