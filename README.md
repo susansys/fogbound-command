@@ -35,6 +35,8 @@ docker run --rm --name fogbound-command-demo -p 127.0.0.1:4175:80 fogbound-comma
 
 存档保存在本浏览器的 IndexedDB 中，当前没有服务器账号或云存档。清理网站数据会删除本地记录。演练页面通过浏览器的单写者锁管理接手，不适合同时打开多个指挥窗口。
 
+地图默认使用原示意图。“图层 → 合成验证底图”可打开 MapLibre6.14.0 的原创小型网格，检验公开坐标、选取及已有预案的显示配准。“合成资料与范围”提供来源、单独的背景全景、颜色变体和只读配准检查。需要 WebGL2；资产或图形故障会返回原图及文字选择。网格不是遥感影像，背景范围不扩大可操作区域，图上米也不是现实地理测量。切换图面不改变命令、资源、时钟或存档规则。
+
 ## 开发与验证
 
 前端采用 React、TypeScript 和 Vite；态势地图使用 PixiJS、milsymbol；Game 在 Web Worker 中执行，Dexie/IndexedDB 保存本地事务记录。自动验证使用 Vitest 与 Playwright。[工作流](.github/workflows/fb01.yml)保留最初批次的名称，包含核心质量检查和真实浏览器合同检查；[工程验证记录](app/VERIFICATION.md)区分各次检查点和最终验收。

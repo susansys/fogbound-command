@@ -16,6 +16,22 @@ async function asset(path){const response=await fetch(new URL(path,origin));if(!
 const main=await asset(entry),workerPath=main.bytes.toString().match(/\/assets\/worker-[A-Za-z0-9_-]+\.js/)?.[0];
 if(!workerPath)throw Error('missing worker entry');
 const worker=await asset(workerPath),styles=[];
+const manifest=JSON.parse(await fs.readFile('src/map-assets/manifest.json','utf8'));
+const mapPaths=[...new Set([
+  ...[...main.bytes.toString().matchAll(/\/?assets\/(?:maplibre-gl[^"'`\s]*?\.(?:js|css)|(?:grid|colour|manifest)-[A-Za-z0-9_-]+\.(?:png|json))/g)].map(match=>`/${match[0].replace(/^\//,'')}`),
+  ...[...main.bytes.toString().matchAll(/\.\/(maplibre-gl-[A-Za-z0-9_-]+\.(?:js|css))/g)].map(match=>`/assets/${match[1]}`),
+])];
+const mapAssets=[];
+for(const path of mapPaths){const item=await asset(path);mapAssets.push({path,sha256:item.sha256,bytes:item.bytes.length});
+  if(/\/(?:grid|colour)-/.test(path)){const original=manifest.assets.find(image=>path.includes(`/${image.file.split('.')[0]}-`));if(!original||item.sha256!==original.sha256||item.bytes.length!==original.bytes)throw Error('served synthetic image differs from original');}
+  if(/\/manifest-/.test(path)&&!item.bytes.equals(await fs.readFile('src/map-assets/manifest.json')))throw Error('served synthetic manifest differs from source');
+}
+for(const prefix of ['maplibre-gl-worker-','maplibre-gl-','grid-','colour-','manifest-'])if(!mapAssets.some(item=>item.path.includes(`/${prefix}`)))throw Error('missing public map build asset');
+if(!mapAssets.some(item=>item.path.endsWith('.css')))throw Error('missing geographic SDK CSS');
+if(!mapAssets.some(item=>item.path.endsWith('.js')&&/\/maplibre-gl-(?!worker-)/.test(item.path)))throw Error('missing geographic SDK bundle');
+const lock=JSON.parse(await fs.readFile('package-lock.json','utf8')),mapDependency=lock.packages['node_modules/maplibre-gl'];
+if(mapDependency.version!=='6.14.0')throw Error('map version differs from frozen binding');
+const mapping={version:mapDependency.version,integrity:mapDependency.integrity,manifest_sha256:sha(await fs.readFile('src/map-assets/manifest.json')),mapping_sha256:sha(JSON.stringify(manifest.mapping)),assets:mapAssets};
 const definitions=[];
 for(const path of ['src/core/engineering.json','src/core/record-engineering.json','src/core/prestart-engineering.json']){
   const bytes=await fs.readFile(path),definition=JSON.parse(bytes),{definition_hash,...body}=definition;
@@ -30,5 +46,6 @@ let browserVersion;try{browserVersion=browser.version();}finally{await browser.c
 const event=process.env.GITHUB_EVENT_PATH?JSON.parse(await fs.readFile(process.env.GITHUB_EVENT_PATH,'utf8')):null;
 const optional=async path=>{try{return (await fs.readFile(path,'utf8')).trim();}catch{return null;}};
 const fingerprint={tested_sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),worktree_dirty:execFileSync('git',['-C','..','status','--porcelain','--','app','.github'],{encoding:'utf8'}).trim().length>0,pr_head_sha:event?.pull_request?.head?.sha??null,node:process.version,browser:browserVersion,platform:process.platform,architecture:process.arch,workflow_sha256:sha(await fs.readFile('../.github/workflows/fb01.yml')),lock_sha256:sha(await fs.readFile('package-lock.json')),definition_sha256:sha(await fs.readFile('src/core/engineering.json')),definitions,image_id:await optional('image-id.txt'),html_sha256:sha(html),main:{path:main.path,sha256:main.sha256},worker:{path:worker.path,sha256:worker.sha256},styles};
+fingerprint.mapping=mapping;
 await fs.mkdir('verification-output',{recursive:true});await fs.writeFile('verification-output/fingerprint.json',JSON.stringify(fingerprint,null,2));
 console.log(JSON.stringify(fingerprint,null,2));
