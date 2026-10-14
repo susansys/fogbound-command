@@ -867,6 +867,12 @@ dialog > header > button {
 .map[data-renderer^="synthetic"] .unit-marker{align-items:flex-start}
 .map[data-region-state] .unit-marker{align-items:flex-start}
 .map-coordinate{position:absolute;left:20px;bottom:60px;z-index:3;padding:5px 8px;pointer-events:none;background:#172329ed;color:#dce7dc;font:11px Consolas,"Microsoft YaHei UI",sans-serif}
+.map-coordinate{max-width:calc(100% - 180px);overflow-wrap:anywhere}
+.map-legend{max-width:min(330px,calc(100% - 120px));max-height:calc(100% - 130px);overflow:auto;z-index:4}
+.map-legend>button{position:sticky;top:0;background:#172329;z-index:1}
+.height-bands{padding:0;list-style:none;font-size:11px}
+.height-bands li{display:flex;gap:6px;margin:5px 0}
+.height-bands i{flex:none;width:24px;height:12px;border:1px solid #71817b}
 .map[data-renderer="synthetic-loading"] .world-overlay,.map[data-renderer="synthetic-loading"] .plan-route{visibility:hidden}
 .map-source{position:absolute;left:20px;top:57px;max-width:340px;max-height:calc(100% - 77px);overflow:auto;padding:12px;background:#172329f5;border:1px solid var(--line);z-index:5;font-size:12px}
 .map-source p{margin:8px 0}.map-source button{font-size:12px;margin:3px}.map-source small{display:block;margin-top:8px;color:#afc2bf}

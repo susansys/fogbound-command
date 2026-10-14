@@ -7,6 +7,16 @@ export type RegionalBundle={manifest:RegionManifest;manifestHash:string;geometry
 const urls=Object.fromEntries(Object.entries(import.meta.glob('./regional-assets/*',{query:'?url&no-inline',import:'default',eager:true})).map(([name,url])=>[name.split('/').at(-1)!,url as string]));
 export async function digest(bytes:BufferSource){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),n=>n.toString(16).padStart(2,'0')).join('');}
 export class RegionalResourceError extends Error{}
+export type SimulationField={width:number;height:number;step:number;values:Float32Array;mask:Uint8Array};
+export function sampleSimulationHeight(field:SimulationField,u:number,v:number):number|null{
+  const {width,height,step,values,mask}=field;
+  if(!Number.isInteger(width)||!Number.isInteger(height)||width<2||height<2||width>401||height>401||!Number.isFinite(step)||step<=0||values.length!==width*height||mask.length!==values.length||!Number.isFinite(u)||!Number.isFinite(v)||u<0||v<0||u>(width-1)*step||v>(height-1)*step)return null;
+  const x=Math.min(width-2,Math.floor(u/step)),y=Math.min(height-2,Math.floor(v/step)),a=u/step-x,b=v/step-y;
+  const indices=[y*width+x,y*width+x+1,(y+1)*width+x,(y+1)*width+x+1];
+  if(indices.some(i=>mask[i]!==1||!Number.isFinite(values[i])))return null;
+  const [h00,h10,h01,h11]=indices.map(i=>values[i]);
+  return (h00*(1-a)+h10*a)*(1-b)+(h01*(1-a)+h11*a)*b;
+}
 function assert(condition:unknown,message:string):asserts condition{if(!condition)throw new RegionalResourceError(message);}
 export function regionOrigin(geometry:PlayerView['geometry']):readonly[number,number]{
   const [w,h]=geometry.extent;assert(Number.isFinite(w)&&Number.isFinite(h)&&w>0&&h>0&&w<=10000&&h<=10000,'合法活动范围不能关联此区域');

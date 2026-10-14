@@ -6,7 +6,7 @@ import type { PlayerView } from "./contracts";
 import { clock } from "./player-copy";
 import {createMapSurface,type MapSurface} from './map-surface';
 import mapManifest from './map-assets/manifest.json';
-import {loadRegionalBundle,RegionalResourceError,type RegionalBundle} from './regional-terrain';
+import {loadRegionalBundle,sampleSimulationHeight,RegionalResourceError,type RegionalBundle} from './regional-terrain';
 import runtimeNotices from '../THIRD_PARTY_LICENSES/current-runtime-notices.txt?url&no-inline';
 type Props = {
   view: PlayerView;
@@ -33,7 +33,11 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     scene = useRef<Container | null>(null);
   const geographicHost=useRef<HTMLDivElement>(null),surface=useRef<MapSurface|null>(null);
   const regional=useRef<RegionalBundle|null>(null),background=useRef<Container|null>(null);
+  const ownedTextures=useRef(new Set<Texture>());
+  const [terrainMode,setTerrainMode]=useState<'surface'|'shade'>('surface');
+  const terrainModeRef=useRef(terrainMode);terrainModeRef.current=terrainMode;
   const [regionState,setRegionState]=useState('loading');
+  const [displayGeneration,setDisplayGeneration]=useState(0);
   const [pointerPixel,setPointerPixel]=useState<readonly[number,number]|null>(null);
   const [regionalVisible,setRegionalVisible]=useState(true);
   const regionalVisibleRef=useRef(regionalVisible);regionalVisibleRef.current=regionalVisible;
@@ -129,6 +133,23 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       ready = false;
     const instance = new Application();
     let observer: ResizeObserver | undefined;
+    let destroyed=false;
+    const textures=new Set<Texture>();ownedTextures.current=textures;
+    const releaseRegion=()=>{
+      background.current?.destroy({children:true});background.current=null;
+      for(const texture of textures)texture.destroy(true);textures.clear();
+      regional.current?.release();regional.current=null;
+    };
+    const destroyRenderer=()=>{
+      if(destroyed)return;destroyed=true;
+      observer?.disconnect();releaseRegion();
+      if(ready){instance.canvas.removeEventListener('webglcontextlost',contextLost);instance.destroy(true,{children:true});}
+      app.current=null;scene.current=null;
+    };
+    const contextLost=(event:Event)=>{
+      event.preventDefault();controller.abort();destroyRenderer();
+      if(!disposed){setRegionState('unavailable');setError(true);setMapFault('图形上下文已丢失；合法地点和文字选择仍保留，请显式修复本地地图显示。');}
+    };
     void instance
       .init({
         resizeTo: el,
@@ -145,6 +166,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         }
         el.prepend(instance.canvas);
         app.current = instance;
+        instance.canvas.addEventListener('webglcontextlost',contextLost);
         const world = new Container(),
           graphics = new Graphics();
         scene.current = world;
@@ -180,34 +202,35 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           const bundle=await loadRegionalBundle(view.geometry,controller.signal);
           if(disposed){bundle.release();return;}
           regional.current=bundle;const layer=new Container();layer.visible=regionalVisibleRef.current;background.current=layer;world.addChildAt(layer,0);
-          for(const asset of bundle.manifest.assets.filter(asset=>asset.kind==='surface')){
-            const image=bundle.images.get(asset.file)!;const sprite=new Sprite(Texture.from(image));
+          for(const asset of bundle.manifest.assets.filter(asset=>asset.kind===terrainModeRef.current)){
+            const image=bundle.images.get(asset.file)!;const texture=Texture.from(image);ownedTextures.current.add(texture);const sprite=new Sprite(texture);
             sprite.position.set(bundle.origin[0]+asset.u!,bundle.origin[1]+asset.v!);sprite.width=asset.extent![0];sprite.height=asset.extent![1];layer.addChild(sprite);
           }
           instance.renderer.render(instance.stage);
           await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
           if(!disposed){setRegionState('ready');setMapFault('');apply();}
         }catch(error){
-          controller.abort();if(!disposed){setRegionState('unavailable');setMapFault(`虚构区域资源不可用：${error instanceof RegionalResourceError?error.message:'解码或图形初始化失败'}；合法地点、通道及文字选择仍保留。`);}
+          controller.abort();if(!disposed){releaseRegion();setRegionState('unavailable');setMapFault(`虚构区域资源不可用：${error instanceof RegionalResourceError?error.message:'解码或图形初始化失败'}；合法地点、通道及文字选择仍保留。`);}
         }
       })
       .catch(() => {
-        if (!disposed) setError(true);
+        if (!disposed){controller.abort();destroyRenderer();setError(true);setRegionState('unavailable');setMapFault('图形初始化失败；请用文字选择对象或显式修复本地地图显示。');}
       });
     return () => {
       disposed = true;
-      controller.abort();regional.current?.release();regional.current=null;background.current=null;
-      observer?.disconnect();
-      app.current = null;
-      scene.current = null;
-      if (ready) instance.destroy(true, { children: true,texture:true,textureSource:true });
+      controller.abort();destroyRenderer();
     };
-  }, [synthetic,view.run_id,geometryKey]);
+  }, [synthetic,view.run_id,geometryKey,displayGeneration]);
   useEffect(() => {
     if (scene.current) scene.current.visible = terrain;
     surface.current?.terrain(terrain);
   }, [terrain]);
   useEffect(()=>{if(background.current)background.current.visible=regionalVisible;},[regionalVisible]);
+  useEffect(()=>{
+    const bundle=regional.current,layer=background.current;if(!bundle||!layer)return;
+    const assets=bundle.manifest.assets.filter(asset=>asset.kind===terrainMode);
+    layer.children.forEach((child,index)=>{const texture=Texture.from(bundle.images.get(assets[index].file)!);ownedTextures.current.add(texture);(child as Sprite).texture=texture;});
+  },[terrainMode]);
   useEffect(() => {
     const el = host.current!;
     const wheel = (e: WheelEvent) => {
@@ -234,6 +257,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   const pointerPoint=pointerPixel?[(pointerPixel[0]-c.x)/c.s,(pointerPixel[1]-c.y)/c.s]:null;
   const regionPoint=pointerPoint&&regional.current?pointerPoint.map((value,index)=>value-regional.current!.origin[index]):null;
   const insideRegion=regionPoint?.every(value=>value>=0&&value<=10000);
+  const height=regionPoint&&regional.current?sampleSimulationHeight({...regional.current.manifest.field,values:regional.current.values,mask:regional.current.mask},regionPoint[0],regionPoint[1]):null;
   return (
     <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
     <section
@@ -246,6 +270,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       data-renderer={renderer}
       data-region-state={regionState}
       data-background-visible={regionalVisible}
+      data-terrain-mode={terrainMode}
       data-public-geometry-digest={surface.current?.public_geometry_digest}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -307,7 +332,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       }}
     >
       {synthetic&&<div className="geographic-surface" ref={geographicHost} aria-hidden="true"/>}
-      {mapFault&&<div className="map-fallback" role="alert" data-ui>{mapFault}</div>}
+      {mapFault&&<div className="map-fallback" role="alert" data-ui>{mapFault}<button onClick={()=>{setPointerPixel(null);setDisplayGeneration(value=>value+1);}}>修复本地地图显示</button></div>}
       {error && (
         <div className="fault" role="alert">
           地图渲染不可用；请用右侧文本选择固定目标。
@@ -317,7 +342,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         <span className="outline-tag">程序生成的虚构区域；不代表任何现实地点</span>
         <span>最后确认 · 不是现场实时位置</span>
       </div>
-      {pointerPoint&&<div className="map-coordinate" data-ui>图上{pointerPoint.map(value=>value.toFixed(2)).join(', ')} · {regionPoint?insideRegion?`区域${regionPoint.map(value=>value.toFixed(2)).join(', ')} 图上米（仅背景阅读）`:'区域界外：无地形资料':'区域资料未就绪'}</div>}
+      {pointerPoint&&<div className="map-coordinate" data-ui>图上{pointerPoint.map(value=>value.toFixed(2)).join(', ')} · {regionPoint?insideRegion?`区域${regionPoint.map(value=>value.toFixed(2)).join(', ')} 图上米（仅背景阅读）`:'区域界外：无地形资料':'区域资料未就绪'} · 模拟高程（相对虚构基准，图上米）：{height===null?'未知':height.toFixed(2)}</div>}
       {planned && !recording && (
         <svg className="plan-route" aria-hidden="true">
           <path
@@ -402,6 +427,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       {layers && (
         <div className="map-layers" data-ui>
           <label><input type="checkbox" checked={regionalVisible} onChange={e=>setRegionalVisible(e.target.checked)}/>虚构区域背景</label>
+          <label>地形表现<select aria-label="地形表现" value={terrainMode} onChange={e=>setTerrainMode(e.target.value as 'surface'|'shade')}><option value="surface">模拟高程色带与地表</option><option value="shade">模拟阴影（灰度）</option></select></label>
           <button onClick={()=>setSourceInfo(value=>!value)} aria-expanded={sourceInfo}>区域资料与来源</button>
           <button disabled={regionState!=='ready'} onClick={panorama}>区域全景（仅背景阅读）</button>
           <button onClick={fit}>回到行动范围</button>
@@ -431,6 +457,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           图例 {legend ? "收起" : "展开"}
         </button>
         {legend && (
+          <div>
+          {regional.current&&<div><strong>模拟高程（相对虚构基准，图上米）</strong><p>范围{regional.current.manifest.field.minimum.toFixed(2)}至{regional.current.manifest.field.maximum.toFixed(2)}；人为基准0。阴影明暗仅为表现，查询值来自同一格网。</p><ul className="height-bands">{regional.current.manifest.bands.map(band=><li key={band.from}><i style={{background:`rgb(${band.rgb.join(',')})`}}/>{band.from}至{band.to} 图上米（未受阴影与装饰影响的基色）</li>)}</ul></div>}
           <p>
             蓝色框：最后确认编组
             <br />
@@ -440,6 +468,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
             <br />
             {synthetic?'网格与四角：原创合成显示资料':'右侧条纹：崎岖地带'}
           </p>
+          </div>
         )}
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>

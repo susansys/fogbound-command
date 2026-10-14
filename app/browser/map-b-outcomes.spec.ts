@@ -21,13 +21,14 @@ const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(val
 
 for(const kind of ['near','replace','record','move'])test(`MB13 real ${kind} committed events/phases/RNG/hash/resources remain identical with full background on, off or refused`,async({browser})=>{
   const results=[];
-  for(const display of ['on','off','refused']){
+  for(const display of ['on','off','refused','shade-query']){
     const context=await browser.newContext(),page=await context.newPage();
     try{
       await observeCommittedGame(page);
       if(display==='refused')await page.route('**/assets/surface-0-0-*.png',route=>route.fulfill({status:404,body:''}));
       await start(page,kind==='record'?'FB02-ENG-RECORD':kind==='move'?'FB01-ENG-MOVE':'ENG-PRESTART-REPLACE');await expect(page.locator('.map')).toHaveAttribute('data-region-state',display==='refused'?'unavailable':'ready');
       if(display==='off'){await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('checkbox',{name:'虚构区域背景',exact:true}).uncheck();await page.getByRole('button',{name:'地图图层',exact:true}).click();}
+      if(display==='shade-query'){await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByLabel('地形表现',{exact:true}).selectOption('shade');await page.getByRole('button',{name:'地图图层',exact:true}).click();const box=(await page.locator('.map').boundingBox())!;await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await expect(page.locator('.map-coordinate')).toContainText('模拟高程');}
       await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:kind==='record'?'查看记录预案':'查看通行预案',exact:true}).click();
       await page.getByRole('button',{name:kind==='record'?'下达记录任务':'下达通行命令',exact:true}).click();await page.getByRole('button',{name:'确认下达',exact:true}).click();
       await expect(page.getByTestId('frozen-command').locator('article')).toHaveCount(1);
@@ -48,5 +49,5 @@ for(const kind of ['near','replace','record','move'])test(`MB13 real ${kind} com
       expect(states.at(-1)?.sim_time).toBe(expected);results.push(states);
     }finally{await context.close();}
   }
-  expect(results[1]).toEqual(results[0]);expect(results[2]).toEqual(results[0]);
+  for(const result of results.slice(1))expect(result).toEqual(results[0]);
 });
