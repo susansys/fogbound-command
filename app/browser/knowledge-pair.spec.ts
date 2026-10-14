@@ -36,6 +36,10 @@ for(const synthetic of [false,true])test(`CR03/MA09 paired private Knowledge inp
       const received={...view,revision:5,sim_time:7000,position:{x:68.87,y:150,observed:6000,received:7000,evidence:'legal-fix'},log:[...view.log,{id:'legal-fix',at:7000,kind:'fix_receipt' as const,text:'位置回报已收到',observed:6000,evidence:'legal-fix'}]};
       expect(valid_response({request_id:'clock-pair-received',ok:true,view:received})).toBe(true);
       await page.evaluate((known)=>{(window as unknown as {deliver:(data:unknown)=>void}).deliver({request_id:'clock-pair-received',ok:true,view:known});},received);await expect(page.getByTestId('position')).toContainText('68.87');
+      await expect(page.locator('.map canvas')).toHaveCount(1);
+      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+      await page.getByRole('button',{name:'全图',exact:true}).click();
+      await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const visible=await page.locator('.unit-marker').evaluate(element=>({left:(element as HTMLElement).style.left,top:(element as HTMLElement).style.top,selected:element.classList.contains('selected')}));
       const requests=await page.evaluate(()=>(window as unknown as {pairRequests:Array<{kind:string;envelope?:{intent:unknown}}>}).pairRequests.map(request=>({kind:request.kind,intent:request.envelope?.intent})));
       await page.screenshot({path:testInfo.outputPath(`private-pair-${index}.png`),fullPage:true});evidence.push({before,candidates,error,visible,requests,after:await page.locator('body').innerText()});
