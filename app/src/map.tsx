@@ -208,7 +208,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           }
           instance.renderer.render(instance.stage);
           await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-          if(!disposed){setRegionState('ready');setMapFault('');apply();}
+          if(!disposed&&!destroyed&&!controller.signal.aborted){setRegionState('ready');setMapFault('');apply();}
         }catch(error){
           controller.abort();if(!disposed){releaseRegion();setRegionState('unavailable');setMapFault(`虚构区域资源不可用：${error instanceof RegionalResourceError?error.message:'解码或图形初始化失败'}；合法地点、通道及文字选择仍保留。`);}
         }

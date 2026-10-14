@@ -49,7 +49,7 @@ export async function loadRegionalBundle(geometry:PlayerView['geometry'],signal:
         }else if(asset.file.endsWith('.png')){
           const header=new DataView(data.buffer);assert(data.length>=33&&[137,80,78,71,13,10,26,10].every((value,index)=>data[index]===value)&&header.getUint32(16)===asset.width&&header.getUint32(20)===asset.height&&data[24]===8&&data[25]===6,'PNG尺寸或格式不一致');
           const image=await createImageBitmap(new Blob([data.buffer],{type:'image/png'}));if(signal.aborted||closed){image.close();throw Error('区域加载已取消');}
-          assert(image.width===asset.width&&image.height===asset.height,'解码尺寸不一致');images.set(asset.file,image);decodedBytes+=image.width*image.height*4;
+          images.set(asset.file,image);assert(image.width===asset.width&&image.height===asset.height,'解码尺寸不一致');decodedBytes+=image.width*image.height*4;
         }
       }
     }

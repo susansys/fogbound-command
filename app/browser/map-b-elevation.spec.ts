@@ -1,6 +1,25 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
+test('MB18 an actual resized native bitmap rejected by the size check is released',async({page})=>{
+ await page.addInitScript(()=>{
+  const active=new Set<ImageBitmap>(),native=window.createImageBitmap;let first=true;(window as any).ownedRegionImages=()=>active.size;
+  window.createImageBitmap=(async(...args:any[])=>{if(first&&args[0] instanceof Blob&&args[0].type==='image/png'){first=false;args=[args[0],{resizeWidth:1,resizeHeight:1}];}const image=await Reflect.apply(native,window,args);active.add(image);const close=image.close.bind(image);image.close=()=>{active.delete(image);close();};return image;}) as typeof createImageBitmap;
+ });
+ await page.goto('/');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+ await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable');await expect.poll(()=>page.evaluate(()=>(window as any).ownedRegionImages())).toBe(0);
+});
+
+test('MB18 loss during the actual final upload frames cannot commit a destroyed renderer as ready',async({page})=>{
+ await page.addInitScript(()=>{
+  let decoded=0,lost=false;const bitmap=window.createImageBitmap,frame=window.requestAnimationFrame.bind(window);
+  window.createImageBitmap=(async(...args:any[])=>{const result=await Reflect.apply(bitmap,window,args);if(args[0] instanceof Blob&&args[0].type==='image/png')decoded++;return result;}) as typeof createImageBitmap;
+  window.requestAnimationFrame=callback=>frame(time=>{const canvas=document.querySelector<HTMLCanvasElement>('.map[data-region-state="loading"] canvas');if(!lost&&decoded===34&&canvas){const extension=canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context');if(extension){lost=true;extension.loseContext();frame(()=>callback(time));return;}}callback(time);});
+ });
+ await observeGame(page);await start(page,'FB02-ENG-RECORD');await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable');
+ await expect(page.locator('.map canvas')).toHaveCount(0);await page.waitForTimeout(150);await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable');
+});
+
 test('MB18 failed third native bitmap decode releases earlier and late images before explicit repair',async({page})=>{
  await page.addInitScript(()=>{
   const active=new Set<ImageBitmap>(),native=window.createImageBitmap;let count=0;
@@ -54,8 +73,10 @@ test('MB14 same-camera shade and surface show honest simulation bands and author
   await page.getByRole('button',{name:'图例 展开',exact:true}).click();
   await expect(page.locator('.map-legend')).toContainText('模拟高程（相对虚构基准，图上米）');
   await expect(page.locator('.height-bands li')).toHaveCount(7);
+  await expect(page.locator('.height-bands li').last().locator('i')).toHaveCSS('background-color','rgb(190, 176, 152)');
+  await expect(page.locator('.map-legend')).toContainText('范围-60.00至407.74');
   await page.getByRole('button',{name:'图例 收起',exact:true}).click();
-  for(const [u,v,value] of [[7000,5000,0],[6625,7500,-30],[7375,2500,30]]){
+  for(const [u,v,value] of [[7000,5000,0],[6625,7500,-30],[7375,2500,30],[1550,1250,407.7431945800781],[7000,0,60],[7000,10000,-60]]){
     const box=(await map.boundingBox())!,[x,y,s]=(await map.getAttribute('data-camera'))!.split(',').map(Number);
     await page.mouse.move(box.x+x+(u-4800)*s,box.y+y+(v-4850)*s);
     await expect(page.locator('.map-coordinate')).toContainText(`模拟高程（相对虚构基准，图上米）：${value.toFixed(2)}`);

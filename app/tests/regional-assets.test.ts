@@ -42,4 +42,9 @@ test('MB03 the shipped surface has opaque full coverage, downhill rivers, common
   };
   for(const [u,v] of [[7000,0],[7375,2500],[7000,5000],[6625,7500],[7000,10000]])expect(colour(u,v)).toEqual([39,78,90]);
   for(const [u,v] of manifest.decoration.bridges){expect([2400,7400]).toContain(v);expect(colour(u,v)).toEqual([172,160,119]);}
+  // Independent fixed R high point; illumination/land texture may scale this
+  // unadorned pixel but cannot select a different elevation base palette.
+  expect(field.readFloatLE((50*401+62)*4)).toBe(407.7431945800781);
+  const topBand=manifest.bands.at(-1);expect(topBand.rgb).toEqual([190,176,152]);expect(topBand.from).toBeLessThan(407.7431945800781);expect(topBand.to).toBeGreaterThan(407.7431945800781);
+  const ratios=colour(1552.5,1252.5).map((value,index)=>value/[190,176,152][index]);expect(Math.max(...ratios)-Math.min(...ratios)).toBeLessThan(.01);
 });
