@@ -55,7 +55,7 @@ test('FB02-S02 loads the actual FB01 saved package as Move and preserves its ori
   await page.goto('/');await expect(page.getByLabel('演练任务')).toBeVisible();
   await expect.poll(()=>page.evaluate(()=>(window as unknown as {fixtureStoreReady?:boolean}).fixtureStoreReady===true)).toBe(true);
   await page.evaluate(data=>new Promise<void>((resolve,reject)=>{
-    const open=indexedDB.open('fogbound-fb01-schema4');open.onerror=()=>reject(open.error);
+    const open=indexedDB.open('fogbound-map-b-game-1');open.onerror=()=>reject(open.error);
     open.onsuccess=()=>{
       const db=open.result,transaction=db.transaction(['runs','snapshots','operations','metadata'],'readwrite');
       for(const table of ['runs','snapshots','operations','metadata'] as const)for(const item of data[table])transaction.objectStore(table).put(item);
@@ -68,7 +68,7 @@ test('FB02-S02 loads the actual FB01 saved package as Move and preserves its ori
   await expect(page.locator('.contextbar')).toContainText('目标联络点 T');
   await expect(page.locator('.clock')).toContainText('已暂停');
   const retained=await page.evaluate(()=>new Promise<{snapshots:typeof legacy.snapshots;operations:typeof legacy.operations}>((resolve,reject)=>{
-    const open=indexedDB.open('fogbound-fb01-schema4');open.onerror=()=>reject(open.error);
+    const open=indexedDB.open('fogbound-map-b-game-1');open.onerror=()=>reject(open.error);
     open.onsuccess=()=>{
       const db=open.result,transaction=db.transaction(['snapshots','operations']),snapshots=transaction.objectStore('snapshots').getAll(),operations=transaction.objectStore('operations').getAll();
       transaction.oncomplete=()=>{db.close();resolve({snapshots:snapshots.result,operations:operations.result});};transaction.onabort=()=>reject(transaction.error);

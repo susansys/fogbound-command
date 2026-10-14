@@ -8,6 +8,7 @@ import { Dialog } from "./dialog";
 import {FrozenOrders} from './frozen-orders';
 import {RecordSummary,RecordDetail} from './readable-log';
 import {PlanDraft} from './plan-draft';
+import {RegionalDisplayStore,RegionalDisplaySession} from './regional-display';
 import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
 import ms from 'milsymbol';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
@@ -18,15 +19,20 @@ function isMovePlan(plan: Plan | null | undefined): plan is Exclude<Plan,Extract
   return !!plan && !isRecordPlan(plan);
 }
 const transport = new Transport();
+const displayStore=new RegionalDisplayStore();
 export function Workbench() {
-  const createOperation = useRef(crypto.randomUUID());
+  const displaySession=useRef<RegionalDisplaySession|null>(null);
+  const [displayStatus,setDisplayStatus]=useState('');
+  const createOperation = useRef('');
+  if(!createOperation.current)createOperation.current=crypto.randomUUID();
   const [definitionRef,setDefinitionRef]=useState<DefinitionRef>('FB02-ENG-RECORD');
   const [caseRef,setCaseRef]=useState<PrestartCaseRef>('normal');
   const [sceneChanging,setSceneChanging]=useState(false);
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
   const orderConfirmed=useRef<string|null>(null);
-  const historyActive=useRef(false),restartOperation=useRef(crypto.randomUUID()),liveView=useRef<PlayerView|null>(null);
+  const historyActive=useRef(false),restartOperation=useRef(''),liveView=useRef<PlayerView|null>(null);
+  if(!restartOperation.current)restartOperation.current=crypto.randomUUID();
   const [reviewNode,setReviewNode]=useState('');
   const [fullReplay,setFullReplay]=useState(false);
   const [logDetail,setLogDetail]=useState<LogEntry|null>(null);
@@ -104,7 +110,7 @@ export function Workbench() {
         ...(definitionRef==='ENG-PRESTART-REPLACE'?{case_ref:caseRef}:{}),
         operation_id: createOperation.current,
       });
-      if (result.ok && result.view) adoptView(result.view);
+      if (result.ok && result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(currentView.current?.run_id===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');adoptView(result.view);}
       else if (!result.ok) setError(result.code);
     } catch {
       setError("CHANNEL_UNCERTAIN");
@@ -115,7 +121,7 @@ export function Workbench() {
   async function takeover(run_id:string){
     const operation_id=takeoverOperations.current.get(run_id)??crypto.randomUUID();takeoverOperations.current.set(run_id,operation_id);
     setBusy(true);setError('');
-    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){displaySession.current=new RegionalDisplaySession(run_id,displayStore,false,result.receipt?.snapshot_revision??null,text=>{if(currentView.current?.run_id===run_id&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus(`地图关联正在核验 · 真实恢复快照 ${result.receipt?.snapshot_revision??'未经确认'} · 恢复提交 ${result.receipt?.revision??'未经确认'}`);adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function changeScene(){
@@ -161,7 +167,7 @@ export function Workbench() {
   }
   async function restart(){
     if(!view||history)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'restart',run_id:view.run_id,operation_id:restartOperation.current});if(result.ok&&result.view){setView(result.view);liveView.current=result.view;restartOperation.current=crypto.randomUUID();setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;pendingControl.current=null;editing.current++;setWorkspace('map');setSelected('R');setAdvanceTo('7');setReceiptNote('已开启同场景的新演练，原行动保留为只读记录。这不是独立的首次体验。');setRestartConfirm(false);}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'restart',run_id:view.run_id,operation_id:restartOperation.current});if(result.ok&&result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(currentView.current?.run_id===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');setView(result.view);liveView.current=result.view;restartOperation.current=crypto.randomUUID();setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;pendingControl.current=null;editing.current++;setWorkspace('map');setSelected('R');setAdvanceTo('7');setReceiptNote('已开启同场景的新演练，原行动保留为只读记录。这不是独立的首次体验。');setRestartConfirm(false);}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function preview() {
@@ -223,6 +229,7 @@ export function Workbench() {
         setReceiptNote(
           is_task_intent(envelope.intent)?(response.view.scenario_kind==='prestart_move'?'通行指令已签发登记，实际发送和接受须看后续记录。':'命令已登记并发出，等待编组回报。'):response.receipt.kind==='save'?`已保存至 ${clock(response.receipt.sim_time)} · 记录序号 ${response.receipt.revision}。此后进度以最新已提交记录为准。`:response.receipt.kind==='pause'?'暂停已确认，等待明确继续。':`情况已推进至 ${clock(response.receipt.sim_time)}。`,
         );
+        if(response.receipt.kind==='save')void displaySession.current?.save(response.view.revision);
         if (is_task_intent(envelope.intent)) {
           orderConfirmed.current=envelope.operation_id;
           setPlan(null);
@@ -461,6 +468,7 @@ export function Workbench() {
                 {workspace === "map" ? (
                   <MapView
                     view={view}
+                    displaySession={history?undefined:displaySession.current??undefined}
                     selected={selected}
                     onSelect={select}
                     planned={
@@ -588,6 +596,7 @@ export function Workbench() {
                     {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 · 未核验</p>}
                   </section>
                   {receiptNote && !history && <p role="status">{receiptNote}</p>}
+                  {!history&&displayStatus&&<p className="display-record-status" aria-live="polite">{displayStatus}</p>}
                   {!history&&pendingOrder.current && error && (
                     <section>
                       <button onClick={() => void queryReceipt()}>
