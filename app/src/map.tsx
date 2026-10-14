@@ -34,6 +34,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   const geographicHost=useRef<HTMLDivElement>(null),surface=useRef<MapSurface|null>(null);
   const regional=useRef<RegionalBundle|null>(null),background=useRef<Container|null>(null);
   const [regionState,setRegionState]=useState('loading');
+  const [pointerPoint,setPointerPoint]=useState<readonly[number,number]|null>(null);
+  const [regionalVisible,setRegionalVisible]=useState(true);
+  const regionalVisibleRef=useRef(regionalVisible);regionalVisibleRef.current=regionalVisible;
   const [synthetic,setSynthetic]=useState(false),[sourceInfo,setSourceInfo]=useState(false),[variant,setVariant]=useState<'grid'|'colour'>('grid');
   const [renderer,setRenderer]=useState('pixi'),[mapFault,setMapFault]=useState('');
   const [displayChecks,setDisplayChecks]=useState<Array<{point:readonly [number,number];returned:readonly [number,number];error:number}>>([]);
@@ -86,7 +89,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       y = py ?? el.clientHeight / 2,
       wx = (x - c.x) / c.s,
       wy = (y - c.y) / c.s;
-    c.s = Math.max(c.fit * 0.6, Math.min(c.fit * 6, c.s * factor));
+    const regionFit=Math.max(.0001,Math.min((el.clientWidth-100)/10000,(el.clientHeight-100)/10000));
+    const minimum=regional.current?Math.min(c.fit*.6,regionFit*.5):c.fit*.6;
+    c.s = Math.max(minimum, Math.min(c.fit * 6, c.s * factor));
     c.x = x - wx * c.s;
     c.y = y - wy * c.s;
     apply();
@@ -174,7 +179,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           setRegionState('loading');
           const bundle=await loadRegionalBundle(view.geometry,controller.signal);
           if(disposed){bundle.release();return;}
-          regional.current=bundle;const layer=new Container();background.current=layer;world.addChildAt(layer,0);
+          regional.current=bundle;const layer=new Container();layer.visible=regionalVisibleRef.current;background.current=layer;world.addChildAt(layer,0);
           for(const asset of bundle.manifest.assets.filter(asset=>asset.kind==='surface')){
             const image=bundle.images.get(asset.file)!;const sprite=new Sprite(Texture.from(image));
             sprite.position.set(bundle.origin[0]+asset.u!,bundle.origin[1]+asset.v!);sprite.width=asset.extent![0];sprite.height=asset.extent![1];layer.addChild(sprite);
@@ -202,6 +207,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     if (scene.current) scene.current.visible = terrain;
     surface.current?.terrain(terrain);
   }, [terrain]);
+  useEffect(()=>{if(background.current)background.current.visible=regionalVisible;},[regionalVisible]);
   useEffect(() => {
     const el = host.current!;
     const wheel = (e: WheelEvent) => {
@@ -223,9 +229,12 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       top: surface.current?.project([x,y]).y??c.y + y * c.s,
     });
   const start=point(...view.geometry.H),end=point(...routeTarget);
-  const scaleMetres=synthetic?Math.max(1,Math.floor(100/c.s/10)*10):100;
+  const scaleTarget=100/c.s,scalePower=10**Math.floor(Math.log10(scaleTarget));
+  const scaleMetres=([1,2,5,10].filter(value=>value<=scaleTarget/scalePower).at(-1)??1)*scalePower;
+  const regionPoint=pointerPoint&&regional.current?pointerPoint.map((value,index)=>value-regional.current!.origin[index]):null;
+  const insideRegion=regionPoint?.every(value=>value>=0&&value<=10000);
   return (
-    <div className="map-wrapper">
+    <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
     <section
       className="map map-canvas"
       ref={host}
@@ -235,6 +244,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       data-camera-version={cameraVersion}
       data-renderer={renderer}
       data-region-state={regionState}
+      data-background-visible={regionalVisible}
       data-public-geometry-digest={surface.current?.public_geometry_digest}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -271,13 +281,16 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       }}
       onPointerMove={(e) => {
         const d = drag.current;
-        if (!d || d.id !== e.pointerId) return;
-        if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) d.moved = true;
-        if (d.moved) {
+        if (d && d.id === e.pointerId) {
+          if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) d.moved = true;
+          if (d.moved) {
           if(surface.current){surface.current.pan(e.clientX-d.x,e.clientY-d.y);d.x=e.clientX;d.y=e.clientY;}else{c.x = d.cx + e.clientX - d.x;c.y = d.cy + e.clientY - d.y;}
           apply();
+          }
         }
+        if(!(e.target as HTMLElement).closest('[data-ui]')){const box=e.currentTarget.getBoundingClientRect(),active=camera.current;setPointerPoint([(e.clientX-box.left-active.x)/active.s,(e.clientY-box.top-active.y)/active.s]);}
       }}
+      onPointerLeave={()=>{if(!drag.current)setPointerPoint(null);}}
       onPointerUp={(e) => {
         const d = drag.current;
         if (d && d.id === e.pointerId && !d.moved) {
@@ -303,6 +316,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         <span className="outline-tag">程序生成的虚构区域；不代表任何现实地点</span>
         <span>最后确认 · 不是现场实时位置</span>
       </div>
+      {pointerPoint&&<div className="map-coordinate" data-ui>图上{pointerPoint.map(value=>value.toFixed(2)).join(', ')} · {regionPoint?insideRegion?`区域${regionPoint.map(value=>value.toFixed(2)).join(', ')} 图上米（仅背景阅读）`:'区域界外：无地形资料':'区域资料未就绪'}</div>}
       {planned && !recording && (
         <svg className="plan-route" aria-hidden="true">
           <path
@@ -329,7 +343,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         })}
       </svg>}
       <div className="world-overlay">
-        {synthetic&&sites.map(id=><i key={id} className="map-anchor" data-anchor={id} style={point(...site(id))}/>)}
+        {sites.map(id=><i key={id} className="map-anchor" data-anchor={id} aria-hidden="true" style={point(...site(id))}/>)}
         {recording&&<span className="record-leader" style={point(...view.geometry.H)} aria-hidden="true"/>}
         {sites.map((id) => {
           const [x, y] = site(id);
@@ -386,6 +400,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       <button className="map-layer-toggle" data-ui aria-label="地图图层" onClick={()=>setLayers(x=>!x)}><Stack/> 图层</button>
       {layers && (
         <div className="map-layers" data-ui>
+          <label><input type="checkbox" checked={regionalVisible} onChange={e=>setRegionalVisible(e.target.checked)}/>虚构区域背景</label>
           <button onClick={()=>setSourceInfo(value=>!value)} aria-expanded={sourceInfo}>区域资料与来源</button>
           <button disabled={regionState!=='ready'} onClick={panorama}>区域全景（仅背景阅读）</button>
           <button onClick={fit}>回到行动范围</button>
@@ -428,7 +443,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,...(synthetic?{maxWidth:'none'}:{})}}/>{scaleMetres} 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
     </div>
   );
 }

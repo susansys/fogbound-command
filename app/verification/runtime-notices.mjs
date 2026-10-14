@@ -15,5 +15,5 @@ for(const [directory,item] of Object.entries(lock.packages)){
  for(const {file,text} of extra){output+=`\n--- ${file} ---\n${text}`;sources.push({file,sha256:crypto.createHash('sha256').update(text).digest('hex')});}
  rows.push({name:pkg.name,version:pkg.version,declaredLicence:pkg.license,sources});
 }
-await fs.mkdir('THIRD_PARTY_LICENSES',{recursive:true});await fs.writeFile('THIRD_PARTY_LICENSES/current-runtime-notices.txt',output);
+await fs.mkdir('THIRD_PARTY_LICENSES',{recursive:true});await fs.writeFile('THIRD_PARTY_LICENSES/current-runtime-notices.txt',output.replace(/\r\n/g,'\n'));
 console.log(JSON.stringify({included:rows.length,missing,rows}));if(missing.length)process.exitCode=1;

@@ -1,9 +1,12 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
 import {legalKnowledge} from '../tests/fixtures/legal-knowledge';
 import {valid_response} from '../src/dto';
-import {enableSynthetic} from './map-a-helpers';
+async function showRegion(page:Page,visible:boolean){
+  await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');
+  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('checkbox',{name:'虚构区域背景',exact:true}).setChecked(visible);await page.getByRole('button',{name:'地图图层',exact:true}).click();
+}
 
-for(const synthetic of [false,true])test(`CR03/MA09 paired private Knowledge inputs render identically through strict Transport and Workbench, synthetic=${synthetic}`,async({browser},testInfo)=>{
+for(const regionalVisible of [false,true])test(`CR03/MB12 paired private Knowledge inputs render identically through strict Transport and current Workbench, regionalVisible=${regionalVisible}`,async({browser},testInfo)=>{
   // The core Knowledge contract independently proves both authored private alternatives
   // project to this same public fixture. This browser slice proves strict Transport/UI handling.
   const projected=[structuredClone(legalKnowledge),structuredClone(legalKnowledge)];
@@ -25,12 +28,12 @@ for(const synthetic of [false,true])test(`CR03/MA09 paired private Knowledge inp
         }});
       },view);
       await page.goto('/');await page.getByLabel('时间方式').selectOption('research');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect(page.locator('.clock strong')).toHaveText('00:06');
-      if(synthetic)await enableSynthetic(page);
+      await showRegion(page,regionalVisible);
       await page.getByRole('button',{name:'定位联络点T',exact:true}).click();await expect(page.locator('.inspector .facts')).toContainText('170.00, 150.00');await expect(page.getByTestId('position')).toContainText('50.00');
       const before=await page.locator('body').innerText();expect(before).not.toContain('ENGINE_ONLY');
       await page.getByRole('button',{name:'任务调度',exact:true}).click();const candidates=await page.locator('.task-main').innerText();expect(await page.getByRole('button',{name:'查看通行预案',exact:true}).isDisabled()).toBe(true);
       await page.getByRole('button',{name:'态势地图',exact:true}).click();
-      if(synthetic)await enableSynthetic(page);
+      await showRegion(page,regionalVisible);
       await page.evaluate((legal)=>{(window as unknown as {deliver:(data:unknown)=>void}).deliver({request_id:'clock-fault',ok:true,view:{...legal,position:{...legal.position,private_canary:'ENGINE_ONLY'}}});},view);
       await expect(page.getByRole('alert')).toContainText('暂未收到确认');await expect(page.getByTestId('position')).toContainText('50.00');const error=await page.getByRole('alert').innerText();
       const received={...view,revision:5,sim_time:7000,position:{x:68.87,y:150,observed:6000,received:7000,evidence:'legal-fix'},log:[...view.log,{id:'legal-fix',at:7000,kind:'fix_receipt' as const,text:'位置回报已收到',observed:6000,evidence:'legal-fix'}]};
@@ -42,7 +45,7 @@ for(const synthetic of [false,true])test(`CR03/MA09 paired private Knowledge inp
       await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const visible=await page.locator('.unit-marker').evaluate(element=>({left:(element as HTMLElement).style.left,top:(element as HTMLElement).style.top,selected:element.classList.contains('selected')}));
       const requests=await page.evaluate(()=>(window as unknown as {pairRequests:Array<{kind:string;envelope?:{intent:unknown}}>}).pairRequests.map(request=>({kind:request.kind,intent:request.envelope?.intent})));
-      await page.screenshot({path:testInfo.outputPath(`private-pair-${index}.png`),fullPage:true});evidence.push({before,candidates,error,visible,requests,after:await page.locator('body').innerText()});
+      const pixels=await page.locator('.map').screenshot();await page.screenshot({path:testInfo.outputPath(`private-pair-${index}.png`),fullPage:true});evidence.push({before,candidates,error,visible,requests,pixels,after:await page.locator('body').innerText()});
     }finally{await context.close();}
   }
   expect(evidence[1]).toEqual(evidence[0]);
