@@ -1,4 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
+import fs from 'node:fs/promises';
 import {observeGame,trace,start} from './map-a-helpers';
 
 async function coordinates(page:Page,points:readonly(readonly[number,number])[]){
@@ -20,12 +21,20 @@ async function backgroundControls(page:Page){
     const bitmap=await createImageBitmap(new Blob([Uint8Array.from(atob(base64),c=>c.charCodeAt(0))],{type:'image/png'})),canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;
     const ctx=canvas.getContext('2d')!;ctx.drawImage(bitmap,0,0);bitmap.close();const rgba=ctx.getImageData(0,0,canvas.width,canvas.height).data,ratioX=canvas.width/width,ratioY=canvas.height/height;
     // Independent river P controls and literal colour from the frozen original R.
-    return [[7375,2500],[7000,5000],[6625,7500]].map(([u,v])=>{
+    const water=[[7375,2500],[7000,5000],[6625,7500]].map(([u,v])=>{
       const px=(camera[0]+(u-4800)*camera[2])*ratioX,py=(camera[1]+(v-4850)*camera[2])*ratioY;let error=Infinity;
       for(let y=Math.floor(py-ratioY);y<=Math.ceil(py+ratioY);y++)for(let x=Math.floor(px-ratioX);x<=Math.ceil(px+ratioX);x++){
         const i=(y*canvas.width+x)*4;if(x>=0&&x<canvas.width&&y>=0&&y<canvas.height&&Math.abs(rgba[i]-39)<=3&&Math.abs(rgba[i+1]-78)<=3&&Math.abs(rgba[i+2]-90)<=3)error=Math.min(error,Math.hypot((x+.5-px)/ratioX,(y+.5-py)/ratioY));
       }return{regional:[u,v],cssError:error};
     });
+    const edge=(axis:'x'|'y',low:boolean,u:number,v:number)=>{
+      const px=(camera[0]+(u-4800)*camera[2])*ratioX,py=(camera[1]+(v-4850)*camera[2])*ratioY,target=axis==='x'?px:py,ratio=axis==='x'?ratioX:ratioY;const hits=[];
+      for(let p=Math.floor(target-3*ratio);p<=Math.ceil(target+3*ratio);p++){
+        const x=axis==='x'?p:Math.floor(px),y=axis==='y'?p:Math.floor(py),i=(y*canvas.width+x)*4;
+        if(x>=0&&x<canvas.width&&y>=0&&y<canvas.height&&Math.abs(rgba[i]-28)+Math.abs(rgba[i+1]-41)+Math.abs(rgba[i+2]-41)>12)hits.push(p+.5);
+      }return{axis,low,regional:[u,v],cssError:hits.length?Math.abs((low?Math.min(...hits):Math.max(...hits))-target)/ratio:Infinity};
+    };
+    return{water,edges:[edge('x',true,0,5000),edge('x',false,10000,7500),edge('y',true,2000,0),edge('y',false,2000,10000)]};
   },{base64:png.toString('base64'),camera,width:box.width,height:box.height});
 }
 
@@ -59,7 +68,7 @@ for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR
   await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'区域全景（仅背景阅读）',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
   // Frozen mapping: domain0..10000 centred on Game200/150. Raster seams are2560m.
   const regionPoints=await coordinates(page,[[-4800,-4850],[5200,-4850],[-4800,5150],[5200,5150],[200,150],[-2240,-2290],[320,270],[2880,2830]]);
-  const pixelPoints=await backgroundControls(page);expect(Math.max(...pixelPoints.map(point=>point.cssError))).toBeLessThanOrEqual(1);
+  const pixelPoints=await backgroundControls(page);expect(Math.max(...[...pixelPoints.water,...pixelPoints.edges].map(point=>point.cssError))).toBeLessThanOrEqual(1);
   audit.push({definition,width,dpr,actualDpr,browser:browser.version(),overlayErrors:errors,gamePoints,regionPoints,pixelPoints});
   await page.screenshot({path:info.outputPath(`${definition}-whole-region-full-workbench.png`),fullPage:true});
   await page.getByRole('button',{name:'全图',exact:true}).click();
@@ -75,5 +84,6 @@ for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR
   await page.screenshot({path:info.outputPath(`${definition}-action-area-full-workbench.png`),fullPage:true});
   }finally{await context.close();}
  }
- await info.attach('independent-projection-audit',{body:Buffer.from(JSON.stringify(audit,null,2)),contentType:'application/json'});
+ const file=info.outputPath('independent-projection-audit.json');await fs.writeFile(file,JSON.stringify(audit,null,2));
+ await info.attach('independent-projection-audit',{path:file,contentType:'application/json'});
 });
