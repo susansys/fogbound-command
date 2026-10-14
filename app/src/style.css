@@ -861,7 +861,14 @@ dialog > header > button {
   font-size: 12px;
   margin: 8px 0 14px;
 }
-.map-wrapper{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}.map-wrapper>.map{min-height:0}.map-objects{position:static;height:43px;flex-shrink:0}.map-tools.map-controls{top:auto;bottom:16px;right:16px;display:flex;flex-direction:row;gap:0}.map-layer-toggle{position:absolute;top:16px;right:18px;z-index:4;background:#142629ed;border-color:#3e5454;font-size:12px}.map-north{position:absolute;top:85px;right:22px;display:flex;flex-direction:column;align-items:center;font-size:10px;color:#abbcb6}.map-caption{top:16px;left:20px}.inspector-bottom{position:sticky;bottom:-20px;background:#19262e;flex-shrink:0;padding-bottom:20px}.map-layers{top:56px}.scale i{display:inline-block;border-top:1px solid #acbdb8;max-width:100px}
+.map-wrapper{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}.map-wrapper>.map{min-height:0}.map-objects{position:static;height:43px;flex-shrink:0}.map-tools.map-controls{top:auto;bottom:16px;right:16px;display:flex;flex-direction:row;gap:0}.map-layer-toggle{position:absolute;top:16px;right:18px;z-index:4;background:#142629ed;border-color:#3e5454;font-size:12px}.map-north{position:absolute;top:85px;right:22px;display:flex;flex-direction:column;align-items:center;font-size:10px;color:#abbcb6}.map-caption{top:16px;left:20px}.inspector-bottom{position:sticky;bottom:-20px;background:#19262e;flex-shrink:0;padding-bottom:20px}.map-layers{top:56px;z-index:5}.scale i{display:inline-block;border-top:1px solid #acbdb8;max-width:100px}
+.map .geographic-surface{position:absolute;inset:0;pointer-events:none}
+.map-anchor{position:absolute;width:5px;height:5px;border-radius:50%;background:#ecce94;transform:translate(-50%,-50%)}
+.map[data-renderer^="synthetic"] .unit-marker{align-items:flex-start}
+.map[data-renderer="synthetic-loading"] .world-overlay,.map[data-renderer="synthetic-loading"] .plan-route{visibility:hidden}
+.map-source{position:absolute;left:20px;top:57px;max-width:340px;max-height:calc(100% - 77px);overflow:auto;padding:12px;background:#172329f5;border:1px solid var(--line);z-index:5;font-size:12px}
+.map-source p{margin:8px 0}.map-source button{font-size:12px;margin:3px}.map-source small{display:block;margin-top:8px;color:#afc2bf}
+.map-fallback{position:absolute;left:20px;right:160px;top:60px;z-index:5;padding:9px;background:#403126;color:#eed0a3;font-size:12px}
 
 .map-controls>button{white-space:nowrap}.map-tools.map-controls{min-width:176px}
 

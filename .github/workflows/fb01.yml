@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 20
     env:
       FB01_BROWSER: /tmp/fb01-chrome/chrome-linux64/chrome
+      MAP_A_SOFTWARE_GL: '1'
     defaults:
       run:
         working-directory: app

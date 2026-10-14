@@ -4,6 +4,8 @@ import ms from "milsymbol";
 import { Plus, Minus, Crosshair, Stack, Compass } from "@phosphor-icons/react";
 import type { PlayerView } from "./contracts";
 import { clock } from "./player-copy";
+import {createMapSurface,type MapSurface} from './map-surface';
+import mapManifest from './map-assets/manifest.json';
 type Props = {
   view: PlayerView;
   selected: string;
@@ -27,6 +29,10 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   const host = useRef<HTMLDivElement>(null),
     app = useRef<Application | null>(null),
     scene = useRef<Container | null>(null);
+  const geographicHost=useRef<HTMLDivElement>(null),surface=useRef<MapSurface|null>(null);
+  const [synthetic,setSynthetic]=useState(false),[sourceInfo,setSourceInfo]=useState(false),[variant,setVariant]=useState<'grid'|'colour'>('grid');
+  const [renderer,setRenderer]=useState('pixi'),[mapFault,setMapFault]=useState('');
+  const [displayChecks,setDisplayChecks]=useState<Array<{point:readonly [number,number];returned:readonly [number,number];error:number}>>([]);
   const camera = useRef({ x: 0, y: 0, s: 1, fit: 1 });
   const [cameraVersion, setCameraVersion] = useState(0),
     [legend, setLegend] = useState(false),
@@ -34,6 +40,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     [terrain, setTerrain] = useState(true),
     [labels, setLabels] = useState(true),
     [error, setError] = useState(false);
+  const terrainRef=useRef(terrain);terrainRef.current=terrain;
+  const geometryKey=JSON.stringify(view.geometry);
   const drag = useRef<{
     id: number;
     x: number;
@@ -44,6 +52,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   } | null>(null);
   function apply() {
     const c = camera.current;
+    if(surface.current){const origin=surface.current.project([0,0]);c.x=origin.x;c.y=origin.y;c.s=surface.current.scale();c.fit=surface.current.fitScale();}
     if (scene.current) {
       scene.current.position.set(c.x, c.y);
       scene.current.scale.set(c.s);
@@ -51,6 +60,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     setCameraVersion((x) => x + 1);
   }
   function fit() {
+    if(surface.current){surface.current.fit();apply();return;}
     const el = host.current;
     if (!el) return;
     const c = camera.current;
@@ -64,6 +74,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     apply();
   }
   function magnify(factor: number, px?: number, py?: number) {
+    if(surface.current){surface.current.zoom(factor,px===undefined||py===undefined?undefined:[px,py]);apply();return;}
     const el = host.current;
     if (!el) return;
     const c = camera.current,
@@ -79,10 +90,30 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   function focusSelection(){
     const el=host.current;if(!el)return;
     const position=selected==='R'?[view.position.x,view.position.y]:site(selected==='N'?'N':selected==='T'?'T':'H');
+    if(surface.current){surface.current.focus([position[0],position[1]]);apply();return;}
     camera.current.x=el.clientWidth/2-position[0]*camera.current.s;camera.current.y=el.clientHeight/2-position[1]*camera.current.s;apply();
+  }
+  function checkDisplay(){
+    const active=surface.current;if(!active)return;
+    const controls=[[0,0],[400,0],[0,300],[400,300],[200,150]] as const;
+    setDisplayChecks(controls.map(point=>{const screen=active.project(point),returned=active.unproject([screen.x,screen.y]);return {point,returned,error:Math.hypot(returned[0]-point[0],returned[1]-point[1])};}));
   }
   useEffect(() => {
     const el = host.current!;
+    setError(false);
+    setDisplayChecks([]);
+    if(synthetic){
+      const controller=new AbortController();
+      let disposed=false;
+      setRenderer('synthetic-loading');
+      const failure=()=>{if(!disposed){setMapFault('合成底图不可用，已返回原示意图；仍可从文字列表选择对象。');setSynthetic(false);}};
+      void createMapSurface(geographicHost.current!,view.geometry,controller.signal,apply,failure).then(instance=>{
+        if(disposed){instance.remove();return;}
+        surface.current=instance;instance.terrain(terrainRef.current);setRenderer('synthetic-ready');apply();
+      }).catch(()=>{if(!disposed)failure();});
+      return()=>{disposed=true;controller.abort();surface.current?.remove();surface.current=null;};
+    }
+    setRenderer('pixi');
     let disposed = false,
       ready = false;
     const instance = new Application();
@@ -144,9 +175,10 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       scene.current = null;
       if (ready) instance.destroy(true, { children: true });
     };
-  }, []);
+  }, [synthetic,view.run_id,geometryKey]);
   useEffect(() => {
     if (scene.current) scene.current.visible = terrain;
+    surface.current?.terrain(terrain);
   }, [terrain]);
   useEffect(() => {
     const el = host.current!;
@@ -165,9 +197,11 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   }, []);
   const c = camera.current,
     point = (x: number, y: number) => ({
-      left: c.x + x * c.s,
-      top: c.y + y * c.s,
+      left: surface.current?.project([x,y]).x??c.x + x * c.s,
+      top: surface.current?.project([x,y]).y??c.y + y * c.s,
     });
+  const start=point(...view.geometry.H),end=point(...routeTarget);
+  const scaleMetres=synthetic?Math.max(1,Math.floor(100/c.s/10)*10):100;
   return (
     <div className="map-wrapper">
     <section
@@ -177,6 +211,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       aria-label="公开态势地图"
       data-camera={`${c.x},${c.y},${c.s}`}
       data-camera-version={cameraVersion}
+      data-renderer={renderer}
+      data-public-geometry-digest={surface.current?.public_geometry_digest}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (e.key === "+" || e.key === "=") {
@@ -191,8 +227,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         } else if (
           ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
         ) {
-          c.x += e.key === "ArrowLeft" ? 30 : e.key === "ArrowRight" ? -30 : 0;
-          c.y += e.key === "ArrowUp" ? 30 : e.key === "ArrowDown" ? -30 : 0;
+          const dx=e.key === "ArrowLeft" ? 30 : e.key === "ArrowRight" ? -30 : 0,dy=e.key === "ArrowUp" ? 30 : e.key === "ArrowDown" ? -30 : 0;
+          if(surface.current)surface.current.pan(dx,dy);else{c.x+=dx;c.y+=dy;}
           apply();
           e.preventDefault();
         }
@@ -215,8 +251,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         if (!d || d.id !== e.pointerId) return;
         if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) d.moved = true;
         if (d.moved) {
-          c.x = d.cx + e.clientX - d.x;
-          c.y = d.cy + e.clientY - d.y;
+          if(surface.current){surface.current.pan(e.clientX-d.x,e.clientY-d.y);d.x=e.clientX;d.y=e.clientY;}else{c.x = d.cx + e.clientX - d.x;c.y = d.cy + e.clientY - d.y;}
           apply();
         }
       }}
@@ -234,19 +269,21 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         drag.current = null;
       }}
     >
+      {synthetic&&<div className="geographic-surface" ref={geographicHost} aria-hidden="true"/>}
+      {mapFault&&<div className="map-fallback" role="alert" data-ui>{mapFault}</div>}
       {error && (
         <div className="fault" role="alert">
           地图渲染不可用；请用右侧文本选择固定目标。
         </div>
       )}
       <div className="map-caption" data-ui>
-        <span className="outline-tag">演练地图 / 虚构区域</span>
+        <span className="outline-tag">{synthetic?'合成验证资料 · 非遥感影像':'演练地图 / 虚构区域'}</span>
         <span>最后确认 · 不是现场实时位置</span>
       </div>
       {planned && !recording && (
         <svg className="plan-route" aria-hidden="true">
           <path
-            d={`M${c.x + view.geometry.H[0] * c.s} ${c.y + view.geometry.H[1] * c.s} L${c.x + routeTarget[0] * c.s} ${c.y + routeTarget[1] * c.s}`}
+            d={`M${start.left} ${start.top} L${end.left} ${end.top}`}
             stroke="#d2b87e"
             strokeWidth="3"
             strokeDasharray="8 6"
@@ -260,7 +297,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           return (
             <path
               key={id}
-              d={`M${c.x + x * c.s} ${c.y + y * c.s} v${id==='N'?-90:-44}`}
+              d={`M${point(x,y).left} ${point(x,y).top} v${id==='N'?-90:-44}`}
               stroke="#aabbb6"
               strokeWidth="1"
               fill="none"
@@ -269,6 +306,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         })}
       </svg>}
       <div className="world-overlay">
+        {synthetic&&sites.map(id=><i key={id} className="map-anchor" data-anchor={id} style={point(...site(id))}/>)}
         {recording&&<span className="record-leader" style={point(...view.geometry.H)} aria-hidden="true"/>}
         {sites.map((id) => {
           const [x, y] = site(id);
@@ -326,6 +364,11 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       {layers && (
         <div className="map-layers" data-ui>
           <label>
+            <input type="checkbox" checked={synthetic} onChange={event=>{setMapFault('');setVariant('grid');setSynthetic(event.target.checked);}}/>
+            合成验证底图
+          </label>
+          {synthetic&&<button onClick={()=>setSourceInfo(value=>!value)} aria-expanded={sourceInfo}>合成资料与范围</button>}
+          <label>
             <input
               type="checkbox"
               checked={terrain}
@@ -343,6 +386,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           </label>
         </div>
       )}
+      {synthetic&&sourceInfo&&<div className="map-source" data-ui><strong>原创合成网格 · 版本1</strong><p>仅验证显示配准，不是遥感影像。背景范围不是可执行区域。</p><p>当前操作范围：400 × 300 图上米；合成背景：800 × 600。</p><button disabled={renderer!=='synthetic-ready'} onClick={()=>{surface.current?.fit(true);apply();}}>区域全景</button><button disabled={renderer!=='synthetic-ready'} onClick={fit}>返回操作范围</button><button disabled={renderer!=='synthetic-ready'} onClick={()=>{const next=variant==='grid'?'colour':'grid';surface.current?.variant(next);setVariant(next);}}>切换颜色变体</button><button disabled={renderer!=='synthetic-ready'} onClick={checkDisplay}>检验显示配准</button>{displayChecks.length>0&&<table className="map-coordinate-check"><caption>本次浮点显示往返 · 仅阅读</caption><thead><tr><th>图上坐标</th><th>回算坐标</th></tr></thead><tbody>{displayChecks.map(check=><tr key={check.point.join(',')} data-return-x={check.returned[0]} data-return-y={check.returned[1]} data-error={check.error}><td>{check.point.join(', ')}</td><td>{check.returned.map(value=>value.toFixed(2)).join(', ')}</td></tr>)}</tbody></table>}<small>来源：项目原创；{mapManifest.assets.reduce((sum,asset)=>sum+asset.bytes,0)} 字节PNG，另有小型清单。</small></div>}
       <div className="map-legend" data-ui>
         <button aria-expanded={legend} onClick={() => setLegend((x) => !x)}>
           图例 {legend ? "收起" : "展开"}
@@ -355,13 +399,13 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
             <br />
             虚线：预案或已下达的计划
             <br />
-            右侧条纹：崎岖地带
+            {synthetic?'网格与四角：原创合成显示资料':'右侧条纹：崎岖地带'}
           </p>
         )}
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:100*c.s}}/>100 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,...(synthetic?{maxWidth:'none'}:{})}}/>{scaleMetres} 图上米</span></div>
     </div>
   );
 }
