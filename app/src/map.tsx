@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Container, Graphics,Sprite,Texture } from "pixi.js";
 import ms from "milsymbol";
 import { Plus, Minus, Crosshair, Stack, Compass } from "@phosphor-icons/react";
 import type { PlayerView } from "./contracts";
 import { clock } from "./player-copy";
 import {createMapSurface,type MapSurface} from './map-surface';
 import mapManifest from './map-assets/manifest.json';
+import {loadRegionalBundle,RegionalResourceError,type RegionalBundle} from './regional-terrain';
+import runtimeNotices from '../THIRD_PARTY_LICENSES/current-runtime-notices.txt?url&no-inline';
 type Props = {
   view: PlayerView;
   selected: string;
@@ -30,6 +32,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     app = useRef<Application | null>(null),
     scene = useRef<Container | null>(null);
   const geographicHost=useRef<HTMLDivElement>(null),surface=useRef<MapSurface|null>(null);
+  const regional=useRef<RegionalBundle|null>(null),background=useRef<Container|null>(null);
+  const [regionState,setRegionState]=useState('loading');
   const [synthetic,setSynthetic]=useState(false),[sourceInfo,setSourceInfo]=useState(false),[variant,setVariant]=useState<'grid'|'colour'>('grid');
   const [renderer,setRenderer]=useState('pixi'),[mapFault,setMapFault]=useState('');
   const [displayChecks,setDisplayChecks]=useState<Array<{point:readonly [number,number];returned:readonly [number,number];error:number}>>([]);
@@ -93,6 +97,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
     if(surface.current){surface.current.focus([position[0],position[1]]);apply();return;}
     camera.current.x=el.clientWidth/2-position[0]*camera.current.s;camera.current.y=el.clientHeight/2-position[1]*camera.current.s;apply();
   }
+  function panorama(){const el=host.current;if(!el||!regional.current)return;const c=camera.current,origin=regional.current.origin;c.s=Math.min((el.clientWidth-100)/10000,(el.clientHeight-100)/10000);c.x=(el.clientWidth-10000*c.s)/2-origin[0]*c.s;c.y=(el.clientHeight-10000*c.s)/2-origin[1]*c.s;apply();}
   function checkDisplay(){
     const active=surface.current;if(!active)return;
     const controls=[[0,0],[400,0],[0,300],[400,300],[200,150]] as const;
@@ -114,6 +119,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       return()=>{disposed=true;controller.abort();surface.current?.remove();surface.current=null;};
     }
     setRenderer('pixi');
+    const controller=new AbortController();
     let disposed = false,
       ready = false;
     const instance = new Application();
@@ -126,7 +132,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         resolution: devicePixelRatio,
         autoDensity: true,
       })
-      .then(() => {
+      .then(async() => {
         ready = true;
         if (disposed) {
           instance.destroy(true, { children: true });
@@ -142,9 +148,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         const { plain, rough, H, T, corridor_width } = view.geometry;
         graphics
           .rect(plain[0], plain[1], plain[2] - plain[0], plain[3] - plain[1])
-          .fill("#283a33")
+          .fill({color:0x283a33,alpha:.12})
           .rect(rough[0], rough[1], rough[2] - rough[0], rough[3] - rough[1])
-          .fill("#384139");
+          .fill({color:0x384139,alpha:.12});
         for (let x = rough[0] + 20; x < rough[2]; x += 20)
           graphics
             .moveTo(x, rough[1])
@@ -164,16 +170,32 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           if (!drag.current) apply();
         });
         observer.observe(el);
+        try{
+          setRegionState('loading');
+          const bundle=await loadRegionalBundle(view.geometry,controller.signal);
+          if(disposed){bundle.release();return;}
+          regional.current=bundle;const layer=new Container();background.current=layer;world.addChildAt(layer,0);
+          for(const asset of bundle.manifest.assets.filter(asset=>asset.kind==='surface')){
+            const image=bundle.images.get(asset.file)!;const sprite=new Sprite(Texture.from(image));
+            sprite.position.set(bundle.origin[0]+asset.u!,bundle.origin[1]+asset.v!);sprite.width=asset.extent![0];sprite.height=asset.extent![1];layer.addChild(sprite);
+          }
+          instance.renderer.render(instance.stage);
+          await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+          if(!disposed){setRegionState('ready');setMapFault('');apply();}
+        }catch(error){
+          controller.abort();if(!disposed){setRegionState('unavailable');setMapFault(`虚构区域资源不可用：${error instanceof RegionalResourceError?error.message:'解码或图形初始化失败'}；合法地点、通道及文字选择仍保留。`);}
+        }
       })
       .catch(() => {
         if (!disposed) setError(true);
       });
     return () => {
       disposed = true;
+      controller.abort();regional.current?.release();regional.current=null;background.current=null;
       observer?.disconnect();
       app.current = null;
       scene.current = null;
-      if (ready) instance.destroy(true, { children: true });
+      if (ready) instance.destroy(true, { children: true,texture:true,textureSource:true });
     };
   }, [synthetic,view.run_id,geometryKey]);
   useEffect(() => {
@@ -212,6 +234,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       data-camera={`${c.x},${c.y},${c.s}`}
       data-camera-version={cameraVersion}
       data-renderer={renderer}
+      data-region-state={regionState}
       data-public-geometry-digest={surface.current?.public_geometry_digest}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -277,7 +300,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
         </div>
       )}
       <div className="map-caption" data-ui>
-        <span className="outline-tag">{synthetic?'合成验证资料 · 非遥感影像':'演练地图 / 虚构区域'}</span>
+        <span className="outline-tag">程序生成的虚构区域；不代表任何现实地点</span>
         <span>最后确认 · 不是现场实时位置</span>
       </div>
       {planned && !recording && (
@@ -363,10 +386,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
       <button className="map-layer-toggle" data-ui aria-label="地图图层" onClick={()=>setLayers(x=>!x)}><Stack/> 图层</button>
       {layers && (
         <div className="map-layers" data-ui>
-          <label>
-            <input type="checkbox" checked={synthetic} onChange={event=>{setMapFault('');setVariant('grid');setSynthetic(event.target.checked);}}/>
-            合成验证底图
-          </label>
+          <button onClick={()=>setSourceInfo(value=>!value)} aria-expanded={sourceInfo}>区域资料与来源</button>
+          <button disabled={regionState!=='ready'} onClick={panorama}>区域全景（仅背景阅读）</button>
+          <button onClick={fit}>回到行动范围</button>
           {synthetic&&<button onClick={()=>setSourceInfo(value=>!value)} aria-expanded={sourceInfo}>合成资料与范围</button>}
           <label>
             <input
@@ -386,6 +408,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           </label>
         </div>
       )}
+      {!synthetic&&sourceInfo&&<div className="map-source" data-ui><strong>原创虚构乡村丘陵 · synthetic-rural-1</strong><p>固定区域：10 × 10 图上公里；地表采样5图上米，非遥感精度。</p><p>背景范围仅供阅读；合法活动范围仍为{view.geometry.extent.join(' × ')}图上米。</p><p>资料状态：{regionState==='ready'?'完整固定资源已核验':regionState==='loading'?'正在核验资源':'资源不可用'}；{regional.current?.bytes??0} 字节。</p><p>模拟数值相对虚构基准，不是现实海拔；素材由程序原创生成。系统字体未复制。</p><a href={runtimeNotices} target="_blank" rel="noopener">运行库许可与版权原文</a></div>}
       {synthetic&&sourceInfo&&<div className="map-source" data-ui><strong>原创合成网格 · 版本1</strong><p>仅验证显示配准，不是遥感影像。背景范围不是可执行区域。</p><p>当前操作范围：400 × 300 图上米；合成背景：800 × 600。</p><button disabled={renderer!=='synthetic-ready'} onClick={()=>{surface.current?.fit(true);apply();}}>区域全景</button><button disabled={renderer!=='synthetic-ready'} onClick={fit}>返回操作范围</button><button disabled={renderer!=='synthetic-ready'} onClick={()=>{const next=variant==='grid'?'colour':'grid';surface.current?.variant(next);setVariant(next);}}>切换颜色变体</button><button disabled={renderer!=='synthetic-ready'} onClick={checkDisplay}>检验显示配准</button>{displayChecks.length>0&&<table className="map-coordinate-check"><caption>本次浮点显示往返 · 仅阅读</caption><thead><tr><th>图上坐标</th><th>回算坐标</th></tr></thead><tbody>{displayChecks.map(check=><tr key={check.point.join(',')} data-return-x={check.returned[0]} data-return-y={check.returned[1]} data-error={check.error}><td>{check.point.join(', ')}</td><td>{check.returned.map(value=>value.toFixed(2)).join(', ')}</td></tr>)}</tbody></table>}<small>来源：项目原创；{mapManifest.assets.reduce((sum,asset)=>sum+asset.bytes,0)} 字节PNG，另有小型清单。</small></div>}
       <div className="map-legend" data-ui>
         <button aria-expanded={legend} onClick={() => setLegend((x) => !x)}>

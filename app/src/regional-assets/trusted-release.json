@@ -1,0 +1,267 @@
+{
+  "manifest_sha256": "3991b8d10ba6bf8873e3d3d085ff0c8c78865dde24ec0fe52951787ab3c8e43b",
+  "manifest_bytes": 15436,
+  "config_hash": "c16fe5c7f88194689efae7e434b55823ece301a2a0b8a9239de9dd415d2f76da",
+  "assets": [
+    {
+      "file": "height.bin",
+      "bytes": 643204,
+      "sha256": "d272df0134660c09516f7a4cf507b0a500f93ae0d243df90735832ee8ac072a6",
+      "width": 401,
+      "height": 401
+    },
+    {
+      "file": "valid.bin",
+      "bytes": 160801,
+      "sha256": "a1a8ad3622622956d1261af9d3c171b64df899e0152aaa1e7aa3d9ddc6897e80",
+      "width": 401,
+      "height": 401
+    },
+    {
+      "file": "surface-0-0.png",
+      "bytes": 50117,
+      "sha256": "e0cfc1d0798a2e40c49ed2832acf2c0c3f2b66f2f97fccbd7ca87df443b9d134",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-0-1.png",
+      "bytes": 54243,
+      "sha256": "7d5a40fb9e9f6724445213bde77c6de46ea37901acf39bf3eae32c8e256138f2",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-0-2.png",
+      "bytes": 41662,
+      "sha256": "13150cdd8e092b1333b1f0321f1bfd88c5ce7b78fff02c28cb76742b7fd379ad",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-0-3.png",
+      "bytes": 36382,
+      "sha256": "d7c3f96d95992066dfbb7f76811b9f185c0172356389c48a5763f7a2729e5905",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "surface-1-0.png",
+      "bytes": 19998,
+      "sha256": "afc1364e7be7d7aadd013f5fc53aef023e967a27ddab0396b5e416d1948661f9",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-1-1.png",
+      "bytes": 63979,
+      "sha256": "7c51a79e2e41afe96b6150d4b42f84066ebd16b91de0eb87a12437d743d6fb20",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-1-2.png",
+      "bytes": 39302,
+      "sha256": "85431f00bf5128c586429bde7feaf238b76a07a6f92e220bc6b168b3078bc62d",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-1-3.png",
+      "bytes": 23532,
+      "sha256": "1a2276d23a6115537a5e4f6f7acd531fc65f9a49c119eea506b703fa934e6250",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "surface-2-0.png",
+      "bytes": 19987,
+      "sha256": "670689a9923124fa639a70455da521482b95516ca257e66130abde6786b07188",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-2-1.png",
+      "bytes": 57403,
+      "sha256": "86e02a7fa82e8fe65def0a18f4ab8aebabbf7cf152570891c6c970255d31939c",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-2-2.png",
+      "bytes": 39824,
+      "sha256": "204987d8113f01d9b1c8f36dcd559867bd2b075d9c8cd94882320ec24cab0ed9",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "surface-2-3.png",
+      "bytes": 14582,
+      "sha256": "00c6a44d473b904e49f84709a6559fe5f8b71b7654ee91a173fc99e261bfa2e8",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "surface-3-0.png",
+      "bytes": 21264,
+      "sha256": "43ff714be80e0b0b92234b0783246143346440d77e692572f08437cf6ab58e6f",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "surface-3-1.png",
+      "bytes": 28543,
+      "sha256": "c8bc93ea8f7eb84ac54e5310f24791f6838c6f263d910525b33045ab1c2d5d90",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "surface-3-2.png",
+      "bytes": 27223,
+      "sha256": "5d361302bf416c35fe9846dedd10cf6582b75fa7fb43e50cbf4b4dddc8021d97",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "surface-3-3.png",
+      "bytes": 21649,
+      "sha256": "f01172ad98a94efc3a56faae303db259126561889870064bc696f292d8f9d28c",
+      "width": 464,
+      "height": 464
+    },
+    {
+      "file": "shade-0-0.png",
+      "bytes": 23419,
+      "sha256": "95a74cc81b3344945381e718222a3155f1f53bc64b5cf5769ce5b701e72b4bfe",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-0-1.png",
+      "bytes": 38723,
+      "sha256": "991b4a87c961096f31513aa46460e9c9983079bcb0b9d7ee7d857e9f8928c9ea",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-0-2.png",
+      "bytes": 37119,
+      "sha256": "3f21bb66513af2aa7bd6da1c95f26f12703d0beaa8eb3a025bcb49f506c09685",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-0-3.png",
+      "bytes": 26381,
+      "sha256": "b06147d4f9cec975f9f3d7ad23b25169eaa8f0e22f1b7a91dc55c55acc27d22e",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "shade-1-0.png",
+      "bytes": 16186,
+      "sha256": "38b1ef7c1d8f55fa22485a46e9d8ff5b6720edc487ee0c1f63046d06416e0fc9",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-1-1.png",
+      "bytes": 40357,
+      "sha256": "8fef904c80b6adb2f86b4afe5e2ff6cbd1fc8fbcb9907de3bc71aa30f3df4e26",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-1-2.png",
+      "bytes": 44940,
+      "sha256": "8fca78c8348b40f920ed7423d792b543aa9a0287ad292bed16bc2cf620403793",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-1-3.png",
+      "bytes": 19374,
+      "sha256": "baf7002f4948439cc52215d1d77e1cd58e024e46d9ae6e526c537eac3e2e606b",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "shade-2-0.png",
+      "bytes": 14175,
+      "sha256": "921e1658c2e30eee54a4c1885b2c402a61d0c01da5fae88112638f3c0f950b2c",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-2-1.png",
+      "bytes": 38365,
+      "sha256": "4fdfbf785c560ee7a32fc3648b074df2246abc8615071f2c49089f1ed72d59bc",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-2-2.png",
+      "bytes": 46965,
+      "sha256": "9b57f2c2224f144f7267d84a5cccd42e127d47efab88ddb4db39348722fa5406",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "file": "shade-2-3.png",
+      "bytes": 12204,
+      "sha256": "d0d79d8c768c6bc9c0c47fe314ad4860026b4bc6bcbdb63025d91beb3ef3a254",
+      "width": 464,
+      "height": 512
+    },
+    {
+      "file": "shade-3-0.png",
+      "bytes": 14458,
+      "sha256": "24b160eafacd7ed3599bdb190d48f634ede039d2c690899a4459683ef5a92aae",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "shade-3-1.png",
+      "bytes": 23471,
+      "sha256": "61bc3e9ab780ff8cef2bb3cdc1b41f1a8bd11c89f26f4ed8b08945c89f545a1a",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "shade-3-2.png",
+      "bytes": 27400,
+      "sha256": "82043bcfb97e82577a73144c6fd10800978abbc65e5bd29f379f9b6eb5bec0cd",
+      "width": 512,
+      "height": 464
+    },
+    {
+      "file": "shade-3-3.png",
+      "bytes": 14494,
+      "sha256": "f9e93be47891601b48bc40ff7d5a6369606a4cb0ed7f3e82ca400b83e6cbbe11",
+      "width": 464,
+      "height": 464
+    },
+    {
+      "file": "surface-overview.png",
+      "bytes": 52192,
+      "sha256": "13079598209fe60f2effc6325bec4f27a478dca7ee4558c68a6efdf5d0d41b44",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "file": "shade-overview.png",
+      "bytes": 40927,
+      "sha256": "228e6e67b7a2afd6c6781c1aec78329a6c969e74c5dc960d344cca89e9a2d3b5",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "file": "NOTICE.txt",
+      "bytes": 321,
+      "sha256": "12c4a65a7e7667fb2bfa50a74aa8ff48efd265fcafbdeea65249e41fe0b98c7d"
+    }
+  ],
+  "region_id": "fictional-rural-region-1",
+  "version": 1,
+  "generator": "synthetic-rural-1"
+}

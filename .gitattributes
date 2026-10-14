@@ -1,2 +1,4 @@
 app/** text eol=lf
 .github/** text eol=lf
+app/**/*.png -text
+app/**/*.bin -text
