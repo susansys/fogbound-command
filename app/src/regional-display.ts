@@ -69,16 +69,21 @@ export class RegionalDisplaySession{
   const record:RegionalDisplayRecord={id:nonce(),run_id:this.run,association_revision:rebind||!this.record?revision:this.record.association_revision,identity:this.identity,preferences:structuredClone(this.preferences)};
   this.pending=record;
   this.report('地图关联正在保存并等待独立读回确认。');
+  let mutationStarted=false,waiting=true;
   try{const expected=rebind?await bounded(this.store.currentId(this.run),signal):this.record?.id??null;
+   mutationStarted=true;
    const write=this.store.write(record,expected,signal);
    // A cancelled wait is uncertain until the actual atomic storage operation
    // settles. A later definitive non-commit releases only this pending nonce.
-   void write.catch(error=>{if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED'&&this.pending?.id===record.id){this.pending=null;this.blocked=true;}});
-   this.record=await bounded(write,signal);this.pending=null;this.blocked=false;if(rebind)this.connected=true;if(!signal?.aborted)this.report('地图关联已保存并读回核验');return true;}
-  catch(error){if(error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED')this.pending=null;this.blocked=true;if(!signal?.aborted)this.report(error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':error instanceof RegionalDisplayError&&error.code==='CONFLICT'?'地图关联写入冲突；保留最后良好原件。':'地图关联写入失败；保留最后良好原件。');return false;}
+   void write.catch(error=>{if(!waiting&&error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED'&&this.pending?.id===record.id){this.pending=null;this.blocked=true;}});
+   const confirmed=await bounded(write,signal);waiting=false;if(this.pending?.id!==record.id)return this.record?.id===record.id;
+   this.record=confirmed;this.pending=null;this.blocked=false;if(rebind)this.connected=true;if(!signal?.aborted)this.report('地图关联已保存并读回核验');return true;}
+  catch(error){waiting=false;if(this.pending?.id!==record.id)return false;if(!mutationStarted||error instanceof RegionalDisplayError&&error.code!=='READBACK_UNCONFIRMED')this.pending=null;this.blocked=true;if(!signal?.aborted)this.report(!mutationStarted?'地图关联读库失败或超时，尚未写入；保留原件。':error instanceof RegionalDisplayError&&error.code==='READBACK_UNCONFIRMED'?'地图关联提交结果待核查，未确认保存；保留原件。':error instanceof RegionalDisplayError&&error.code==='CONFLICT'?'地图关联写入冲突；保留最后良好原件。':'地图关联写入失败；保留最后良好原件。');return false;}
  }
  async reconcile():Promise<boolean>{
   if(!this.pending){this.report('没有待核查的地图提交。');return false;}
-  try{if(await bounded(this.store.reconcile(this.pending))){this.record=this.pending;this.preferences=this.pending.preferences;this.pending=null;this.blocked=false;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{this.report('地图关联仍无法核查；不重复写入。');return false;}
+  const candidate=this.pending;
+  try{const matches=await bounded(this.store.reconcile(candidate));if(this.pending?.id!==candidate.id)return this.record?.id===candidate.id;
+   if(matches){this.record=candidate;this.preferences=candidate.preferences;this.pending=null;this.blocked=false;this.report('地图关联已核查保存');return true;}this.report('地图关联核查不匹配；不重复写入或删除原件。');return false;}catch{if(this.pending?.id===candidate.id)this.report('地图关联仍无法核查；不重复写入。');return false;}
  }
 }

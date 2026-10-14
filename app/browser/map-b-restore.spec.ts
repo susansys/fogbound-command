@@ -33,6 +33,23 @@ test('MB21 actual blocked display DB fails within its local bound and explicit r
  await page.evaluate(()=>(window as any).ownedBlockedDB.close());await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.clock')).toContainText('已暂停');
 });
 
+test('MB19 a timed-out head read before rebind never becomes a permanently unknown write',async({page})=>{
+ test.setTimeout(45000);await holdOwnedDisplayDatabase(page);await expect(page.locator('.map')).toHaveAttribute('data-region-state','unavailable',{timeout:17000});
+ await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText(/待核查|尚未写入/,{timeout:17000});
+ await page.evaluate(()=>(window as any).ownedBlockedDB.close());await page.getByRole('button',{name:'重新关联当前区域',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');
+});
+
+test('MB19 two concurrent real readbacks confirm the same pending map record without erasing it',async({page})=>{
+ await page.addInitScript(()=>{
+  (window as any).ownedFailRead=false;(window as any).ownedHoldReads=false;(window as any).ownedHeldReads=0;const native=IDBDatabase.prototype.transaction;
+  IDBDatabase.prototype.transaction=function(this:IDBDatabase,...args:any[]){if(this.name==='fogbound-map-b-display-1'&&args[1]!=='readwrite'&&(window as any).ownedFailRead){(window as any).ownedFailRead=false;throw new DOMException('owned readback failure','UnknownError');}const tx=Reflect.apply(native,this,args);if(this.name==='fogbound-map-b-display-1'&&args[1]!=='readwrite'&&(window as any).ownedHoldReads){(window as any).ownedHeldReads++;const store=tx.objectStore(tx.objectStoreNames[0]),keep=()=>{if(!(window as any).ownedHoldReads)return;store.get('__held__').onsuccess=keep;};keep();}return tx;} as typeof IDBDatabase.prototype.transaction;
+ });
+ await start(page,'FB02-ENG-RECORD');await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');await page.evaluate(()=>(window as any).ownedFailRead=true);await page.getByRole('button',{name:'保存记录',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('待核查');
+ await page.evaluate(()=>{(window as any).ownedHoldReads=true;(window as any).ownedStatusMessages=[];new MutationObserver(()=>{(window as any).ownedStatusMessages.push(document.querySelector('.display-record-status')?.textContent);}).observe(document.querySelector('.display-record-status')!,{childList:true,subtree:true,characterData:true});});await page.getByRole('button',{name:'地图图层',exact:true}).click();const button=page.getByRole('button',{name:'核查地图保存结果',exact:true});await button.click();await button.click();await expect.poll(()=>page.evaluate(()=>(window as any).ownedHeldReads)).toBe(2);await page.evaluate(()=>(window as any).ownedHoldReads=false);
+ await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');await expect(page.locator('.display-record-status')).toContainText(/已核查保存|已保存并读回核验/);
+ expect(await page.evaluate(()=>(window as any).ownedStatusMessages)).not.toContain('地图关联仍无法核查；不重复写入。');
+});
+
 test('MB21 a stalled local tile has a bounded failure and explicit repair does not continue Game',async({page})=>{
  test.setTimeout(25000);let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);let count=0;
  await page.route('**/assets/surface-0-0-*.png',async route=>{count++;await held;try{await route.continue();}catch{}});
