@@ -1,5 +1,17 @@
 import {test,expect} from '@playwright/test';
 
+test('MB07 stationary pointer is projected again after keyboard camera movement',async({page})=>{
+  await page.goto('/');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  const map=page.locator('.map');await expect(map).toHaveAttribute('data-region-state','ready');
+  const box=(await map.boundingBox())!,[x,y,s]=(await map.getAttribute('data-camera'))!.split(',').map(Number),px=x+100*s,py=y+100*s;
+  await map.focus();await page.mouse.move(box.x+px,box.y+py);
+  for(const key of ['+','ArrowUp']){
+    await page.keyboard.press(key);
+    const [cx,cy,scale]=(await map.getAttribute('data-camera'))!.split(',').map(Number);
+    await expect(page.locator('.map-coordinate')).toContainText(`图上${((px-cx)/scale).toFixed(2)}, ${((py-cy)/scale).toFixed(2)}`);
+  }
+});
+
 test('MB08 regional panorama zoom stays on the same camera without snapping to the small Game fit',async({page})=>{
   await page.goto('/');await page.getByLabel('时间方式').selectOption('research');
   await page.getByRole('button',{name:'开始演练',exact:true}).click();

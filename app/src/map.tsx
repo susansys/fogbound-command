@@ -34,7 +34,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   const geographicHost=useRef<HTMLDivElement>(null),surface=useRef<MapSurface|null>(null);
   const regional=useRef<RegionalBundle|null>(null),background=useRef<Container|null>(null);
   const [regionState,setRegionState]=useState('loading');
-  const [pointerPoint,setPointerPoint]=useState<readonly[number,number]|null>(null);
+  const [pointerPixel,setPointerPixel]=useState<readonly[number,number]|null>(null);
   const [regionalVisible,setRegionalVisible]=useState(true);
   const regionalVisibleRef=useRef(regionalVisible);regionalVisibleRef.current=regionalVisible;
   const [synthetic,setSynthetic]=useState(false),[sourceInfo,setSourceInfo]=useState(false),[variant,setVariant]=useState<'grid'|'colour'>('grid');
@@ -231,6 +231,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
   const start=point(...view.geometry.H),end=point(...routeTarget);
   const scaleTarget=100/c.s,scalePower=10**Math.floor(Math.log10(scaleTarget));
   const scaleMetres=([1,2,5,10].filter(value=>value<=scaleTarget/scalePower).at(-1)??1)*scalePower;
+  const pointerPoint=pointerPixel?[(pointerPixel[0]-c.x)/c.s,(pointerPixel[1]-c.y)/c.s]:null;
   const regionPoint=pointerPoint&&regional.current?pointerPoint.map((value,index)=>value-regional.current!.origin[index]):null;
   const insideRegion=regionPoint?.every(value=>value>=0&&value<=10000);
   return (
@@ -288,9 +289,9 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T' }:
           apply();
           }
         }
-        if(!(e.target as HTMLElement).closest('[data-ui]')){const box=e.currentTarget.getBoundingClientRect(),active=camera.current;setPointerPoint([(e.clientX-box.left-active.x)/active.s,(e.clientY-box.top-active.y)/active.s]);}
+        if(!(e.target as HTMLElement).closest('[data-ui]')){const box=e.currentTarget.getBoundingClientRect();setPointerPixel([e.clientX-box.left,e.clientY-box.top]);}
       }}
-      onPointerLeave={()=>{if(!drag.current)setPointerPoint(null);}}
+      onPointerLeave={()=>{if(!drag.current)setPointerPixel(null);}}
       onPointerUp={(e) => {
         const d = drag.current;
         if (d && d.id === e.pointerId && !d.moved) {

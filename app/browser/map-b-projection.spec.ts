@@ -1,5 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
 import fs from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import {observeGame,trace,start} from './map-a-helpers';
 
 async function coordinates(page:Page,points:readonly(readonly[number,number])[]){
@@ -40,6 +41,8 @@ async function backgroundControls(page:Page){
 
 for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR${dpr} three public scenes/complete-region P stay aligned under real camera actions`,async({browser},info)=>{
  const audit=[];
+ const sourceSha256=createHash('sha256').update(await fs.readFile(new URL(import.meta.url))).digest('hex');
+ info.annotations.push({type:'test-source-sha256',description:sourceSha256});
  for(const definition of ['FB01-ENG-MOVE','FB02-ENG-RECORD','ENG-PRESTART-REPLACE']){
   const context=await browser.newContext({viewport:{width,height:width===1366?768:1080},deviceScaleFactor:dpr}),page=await context.newPage();
   try{
