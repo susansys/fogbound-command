@@ -95,10 +95,20 @@ export function Workbench() {
     if(!pendingControl.current)pendingControl.current={run_id:current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.revision,intent};
     setControlPending(true);
     try{
-      const original=pendingControl.current;
-      const result=await operate(original);
-      if(original.intent.kind==='pause'&&result&&!result.ok&&result.code==='STALE_REVISION')deferredPause.current=original.intent;
-    }
+      for(let attempt=0;attempt<3;attempt++){
+        const original:Envelope=pendingControl.current!;
+        const result=await operate(original);
+        if(original.intent.kind==='pause'&&result&&!result.ok&&result.code==='STALE_REVISION')deferredPause.current=original.intent;
+        // A definitive rejection made no save. Refresh only that rejected
+        // operation; an uncertain reply retains its original id for recovery.
+        if(original.intent.kind!=='save'||!result||result.ok||result.code!=='STALE_REVISION'||attempt===2)break;
+        const fresh=await transport.request({kind:'view',run_id:original.run_id});
+        if(!fresh.ok){setError(fresh.code);break;}
+        if(!fresh.view||fresh.view.run_id!==original.run_id||currentView.current?.run_id!==original.run_id||historyActive.current)break;
+        adoptView(fresh.view);
+        pendingControl.current={...original,operation_id:crypto.randomUUID(),expected_revision:fresh.view.revision};
+      }
+    }catch{setError('CHANNEL_UNCERTAIN');}
     finally{
       controlInFlight.current=false;
       setControlPending(!!pendingControl.current||!!deferredPause.current);

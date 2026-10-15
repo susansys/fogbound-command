@@ -1,6 +1,46 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
+test('MB19 a command save rejected by a genuine intervening clock commit refreshes once and confirms the save independently of map readback',async({page})=>{
+ await page.addInitScript(()=>{
+  const Native=window.Worker,observed={requests:[] as any[],responses:[] as any[],held:false};
+  Object.assign(window,{ownedSaveConflict:observed});
+  class Observer extends Native{constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(String(url).includes('/assets/worker-')){
+   const post=this.postMessage.bind(this);let delayed:any=null,heldOnce=false;
+   this.postMessage=(value:any)=>{observed.requests.push(structuredClone(value));if(value.kind==='operate'&&value.envelope?.intent.kind==='save'&&!heldOnce){heldOnce=true;delayed=structuredClone(value);observed.held=true;return;}post(value);};
+   this.addEventListener('message',event=>{observed.responses.push(structuredClone(event.data));if(delayed&&event.data.ok&&event.data.request_id?.startsWith('clock-')&&event.data.view?.revision>delayed.envelope.expected_revision){const original=delayed;delayed=null;observed.held=false;post(original);}});
+  }}}
+  window.Worker=Observer;
+ });
+ await start(page,'FB02-ENG-RECORD','command');await expect(page.locator('.display-record-status')).toContainText('地图关联已保存');
+ await page.getByRole('button',{name:'保存记录',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>Reflect.get(window,'ownedSaveConflict').responses.some((response:any)=>response.code==='STALE_REVISION'))).toBe(true);
+ await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
+ const observed=await page.evaluate(()=>Reflect.get(window,'ownedSaveConflict'));
+ const saves=observed.requests.filter((request:any)=>request.kind==='operate'&&request.envelope?.intent.kind==='save');expect(saves).toHaveLength(2);
+ expect(saves[0].envelope.operation_id).not.toBe(saves[1].envelope.operation_id);
+ expect(observed.responses.find((response:any)=>response.request_id===saves[0].request_id)?.code).toBe('STALE_REVISION');
+ expect(observed.responses.find((response:any)=>response.request_id===saves[1].request_id)?.receipt?.result).toBe('committed');
+ await expect(page.getByRole('button',{name:'暂停',exact:true})).toBeEnabled();await page.getByRole('button',{name:'暂停',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
+});
+
+test('MB19 an uncertain command save retains the original operation until an explicit retry confirms its existing receipt',async({page})=>{
+ await page.addInitScript(()=>{
+  const Native=window.Worker,observed={saves:[] as any[],dropped:false,savesAtUncertainty:0};Object.assign(window,{ownedUncertainSave:observed});
+  class Observer extends Native{constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(String(url).includes('/assets/worker-')){
+   const post=this.postMessage.bind(this);this.postMessage=(value:any)=>{if(value.kind==='operate'&&value.envelope?.intent.kind==='save')observed.saves.push(structuredClone(value.envelope));post(value);};
+   this.addEventListener('message',event=>{if(event.data?.receipt?.kind==='save'&&!observed.dropped){observed.dropped=true;observed.savesAtUncertainty=observed.saves.length;event.stopImmediatePropagation();this.dispatchEvent(new MessageEvent('message',{data:{request_id:event.data.request_id,ok:false,code:'CHANNEL_UNCERTAIN'}}));}});
+  }}}
+  window.Worker=Observer;
+ });
+ await start(page,'FB02-ENG-RECORD','command');await page.getByRole('button',{name:'保存记录',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('暂未收到确认');await expect(page.getByRole('button',{name:'重试原控制',exact:true})).toBeVisible();
+ const uncertain=await page.evaluate(()=>Reflect.get(window,'ownedUncertainSave'));expect(uncertain.savesAtUncertainty).toBeGreaterThanOrEqual(1);expect(uncertain.savesAtUncertainty).toBeLessThanOrEqual(3);expect(uncertain.saves).toHaveLength(uncertain.savesAtUncertainty);
+ await page.getByRole('button',{name:'重试原控制',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
+ const saves=await page.evaluate(()=>Reflect.get(window,'ownedUncertainSave').saves);expect(saves).toHaveLength(uncertain.saves.length+1);expect(saves.at(-1)).toEqual(uncertain.saves.at(-1));
+ await page.getByRole('button',{name:'暂停',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
+});
+
 test('MB20 a restored explicit rebind confirmed after readback uncertainty uses current association audit without rejecting the older restore source',async({page})=>{
  await page.addInitScript(()=>{(window as any).ownedRebindReadFailure=false;let nextRead=false;const native=IDBDatabase.prototype.transaction;
   IDBDatabase.prototype.transaction=function(this:IDBDatabase,...args:any[]){if(this.name==='fogbound-map-b-display-1'&&args[1]!=='readwrite'&&nextRead){nextRead=false;throw new DOMException('owned rebind readback failure','UnknownError');}const tx=Reflect.apply(native,this,args);if(this.name==='fogbound-map-b-display-1'&&args[1]==='readwrite'&&(window as any).ownedRebindReadFailure){(window as any).ownedRebindReadFailure=false;tx.addEventListener('complete',()=>nextRead=true,{once:true});}return tx;} as typeof IDBDatabase.prototype.transaction;
