@@ -150,7 +150,7 @@ export function Workbench() {
   }
   async function returnCurrent(){
     if(!view)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setReviewNode("");setPreviousLimit(null);editing.current++;setPlan(null);if(!liveView.current){setView(null);const listed=await transport.request({kind:'list'});if(listed.ok)setRuns(listed.runs??[]);else setError(listed.code);}else{setView(result.view);liveView.current=result.view;}}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'current',run_id:liveView.current?.run_id??view.run_id});if(result.ok&&result.view){historyActive.current=false;setHistory(false);setReviewNode("");setPreviousLimit(null);editing.current++;setPlan(null);if(!liveView.current){setListReady(false);setView(null);const listed=await transport.request({kind:'list'});if(listed.ok){setRuns(listed.runs??[]);setListReady(true);}else setError(listed.code);}else{setView(result.view);liveView.current=result.view;}}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function readRetained(run:RunSummary){
