@@ -390,6 +390,7 @@ export function Workbench() {
           >
             开始演练
           </button>
+          {runs.length>0&&<p>下面列出每项演练最近一局的最新进度，可能晚于手动保存的时刻。接手后保持暂停。</p>}
           {runs.map((run) => (
             <p key={run.run_id}>
               已保存的演练记录 · {run.scenario_kind==='record'?'工位记录':run.scenario_kind==='prestart_move'?'准备期替代':'走廊移动'} · {clock(run.sim_time)}
