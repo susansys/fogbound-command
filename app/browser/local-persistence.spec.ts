@@ -19,3 +19,14 @@ test('PC02/PC11 the recent-run entry explains latest progress rather than a fixe
   await expect(page.locator('.clock strong')).toHaveText('00:09');
   await expect(page.locator('.clock')).toContainText('已暂停');
 });
+
+test('PC11 saving from task scheduling announces the committed result without switching to the map',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('时间方式').selectOption('research');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByRole('button',{name:'任务调度',exact:true}).click();
+  await page.getByRole('button',{name:'保存记录',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading',{name:'任务调度',exact:true})).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('已保存至 00:00');
+});

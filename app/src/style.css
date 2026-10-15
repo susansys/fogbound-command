@@ -232,6 +232,14 @@ small {
   background: #17232b;
   border-bottom: 1px solid var(--line);
 }
+.operation-status {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 12px;
+  background: #17232b;
+  border-bottom: 1px solid var(--line);
+}
 .workbody {
   display: flex;
   flex: 1;

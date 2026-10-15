@@ -465,6 +465,7 @@ export function Workbench() {
                     </div>
                   )}
               </div>
+              {receiptNote && !history && <p className="operation-status" role="status">{receiptNote}</p>}
               <div className={`workbody workspace-${workspace}`}>
                 {workspace === "map" ? (
                   <MapView
@@ -596,7 +597,6 @@ export function Workbench() {
                     <small>依据 {clock(view.resources.confirmed_at)} 收到的回报更新</small>
                     {view.scenario_kind==='record'&&!!view.artifacts?.length&&<p>成果 · 未核验</p>}
                   </section>
-                  {receiptNote && !history && <p role="status">{receiptNote}</p>}
                   {!history&&displayStatus&&<p className="display-record-status" aria-live="polite">{displayStatus}</p>}
                   {!history&&pendingOrder.current && error && (
                     <section>
