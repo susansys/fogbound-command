@@ -774,14 +774,15 @@
         "factor": 1,
         "evidence_ref": "B21-INITIAL-ENVIRONMENT"
       }
-    ]
+    ],
+    "position_reports": []
   },
   "hashes": {
     "profile": "3f28ac965b9a041afee2da7bc52c1bd9031f0466bedcf651f9b1993d90a80820",
     "capabilities": "6896de3a9499f5d9cb68d9b789755ad6d8615b17c7904e29a5d62c1fd78763e3",
     "rules": "cbe2e1c7d850f4549a443520d3281fcc6f91600af5bdaf74dd586883a671554e",
-    "catalogs": "efa15e724899521ad47d18cb4ce0a2c2ff49fc980e4914123efa17a1b3cfbe44",
+    "catalogs": "e49ab39bfe32e68cc58a2ba13edef045262bf155bfe5a752d54b62892b71cd28",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "e6be310c76227db7b9e2ccb9dd647d889cf7b0de966460a8985012f47646a136"
+  "definition_hash": "ad418177153bd61fe2417efa3927f6819d94b67d76c9398dfea6bd2e320824da"
 }

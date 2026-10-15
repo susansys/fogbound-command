@@ -36,6 +36,13 @@ for(const path of ['src/core/engineering.json','src/core/record-engineering.json
   if(sha(JSON.stringify([]))!==definition.hashes.media)throw Error('registered media hash mismatch');
   definitions.push({id:definition.id,schema:definition.schema,contract:definition.contract,version:definition.version,definition_hash,hashes:definition.hashes,registry_sha256:sha(JSON.stringify(definition.profile.registry)),source_sha256:sha(bytes)});
 }
+// Check the full corridor package internally; publish only its lawful public identity.
+const corridorDefinition=JSON.parse(await fs.readFile('src/core/play-definition.json')),{definition_hash:corridorPrivateHash,...corridorPayload}=corridorDefinition;
+if(sha(JSON.stringify(corridorPayload))!==corridorPrivateHash||!worker.bytes.includes(Buffer.from(corridorPrivateHash)))throw Error('corridor package does not match served worker');
+for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.stringify(corridorDefinition[key]))!==corridorDefinition.hashes[key])throw Error('corridor package component mismatch');
+if(sha(JSON.stringify([]))!==corridorDefinition.hashes.media)throw Error('corridor media mismatch');
+const {map_id,map_version,crs_id,geometry_version}=corridorDefinition.catalogs.map;
+const corridor={id:corridorDefinition.id,schema:corridorDefinition.schema,contract:corridorDefinition.contract,version:corridorDefinition.version,geometry:{map_id,map_version,crs_id,geometry_version},rules_hash:corridorDefinition.hashes.rules,scope:'Public corridor identity; private package/source hashes and private message catalog omitted'};
 for(const match of html.matchAll(/href="([^"]+\.css)"/g)){const item=await asset(match[1]);styles.push({path:item.path,sha256:item.sha256});}
 const browser=await chromium.launch({headless:true,...(process.env.FB01_BROWSER?{executablePath:process.env.FB01_BROWSER}:{})});
 let browserVersion;try{browserVersion=browser.version();}finally{await browser.close();}
@@ -43,5 +50,6 @@ const event=process.env.GITHUB_EVENT_PATH?JSON.parse(await fs.readFile(process.e
 const optional=async path=>{try{return (await fs.readFile(path,'utf8')).trim();}catch{return null;}};
 const fingerprint={tested_sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),worktree_dirty:execFileSync('git',['-C','..','status','--porcelain','--','app','.github'],{encoding:'utf8'}).trim().length>0,pr_head_sha:event?.pull_request?.head?.sha??null,node:process.version,browser:browserVersion,platform:process.platform,architecture:process.arch,workflow_sha256:sha(await fs.readFile('../.github/workflows/fb01.yml')),lock_sha256:sha(await fs.readFile('package-lock.json')),definition_sha256:sha(await fs.readFile('src/core/engineering.json')),definitions,image_id:await optional('image-id.txt'),html_sha256:sha(html),main:{path:main.path,sha256:main.sha256},worker:{path:worker.path,sha256:worker.sha256},styles};
 fingerprint.mapping=mapping;
+fingerprint.corridor=corridor;
 await fs.mkdir('verification-output',{recursive:true});await fs.writeFile('verification-output/fingerprint.json',JSON.stringify(fingerprint,null,2));
 console.log(JSON.stringify(fingerprint,null,2));

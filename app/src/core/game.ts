@@ -19,7 +19,7 @@ import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move, register_record } from "./movement";
 import {initial_record_accounts} from './record-accounting';
-import {canonical,validate_state} from './snapshot';
+import {canonical,json_data,state_hash,validate_state} from './snapshot';
 import {replay_state} from './replay';
 import {preview_corridor} from './play-preview';
 import type {RouteDraft,RoutePlan,PreviewPlan} from '../route-contracts';
@@ -30,22 +30,38 @@ export class Game {
   private epoch: number | null = null;
   private faulted=false;
   private history:StoredState|null=null;
+  private readonly verified_play_states=new Set<string>();
   constructor(readonly store: Persistence) {}
+  private remember_play_state(integrity:string){
+    this.verified_play_states.add(integrity);
+    if(this.verified_play_states.size>64)this.verified_play_states.delete(this.verified_play_states.values().next().value!);
+  }
+  private async validate_package(state:StoredState|undefined){
+    if(state?.schema!==7){await validate_state(state,this.store.play_definitions);return;}
+    try{
+      if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
+      await load_definition(play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions);
+      if(!this.verified_play_states.has(state.integrity)){
+        await validate_state(state,this.store.play_definitions);
+        this.remember_play_state(state.integrity);
+      }
+    }catch{throw new GameError('INVALID_SAVE');}
+  }
   private async validate_stored_state(state:StoredState){
-    await validate_state(state,this.store.play_definitions);
-    if(state.schema!==6)return;
-    const identity=(value:State)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.prestart?.case_ref}));
+    await this.validate_package(state);
+    if(state.schema!==6&&state.schema!==7)return;
+    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined}));
     const seen=new Set<string>();let current=state;
     while(true){
       if(seen.has(current.run_id))throw new GameError('INVALID_SAVE');seen.add(current.run_id);
       const initial=await this.store.snapshot(current.run_id,1);
-      await validate_state(initial,this.store.play_definitions);
-      if(!initial||initial.schema!==6||initial.revision!==1||identity(current)!==identity(initial))throw new GameError('INVALID_SAVE');
+      await this.validate_package(initial);
+      if(!initial||initial.schema!==current.schema||initial.revision!==1||identity(current)!==identity(initial))throw new GameError('INVALID_SAVE');
       if(current.source_run===null)return;
       const parent=await this.store.read_committed(current.source_run);
-      await validate_state(parent,this.store.play_definitions);
-      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||parent.prestart?.case_ref!==current.prestart?.case_ref||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
-      if(parent.schema!==6)throw new GameError('INVALID_SAVE');current=parent;
+      await this.validate_package(parent);
+      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||(current.schema===7&&parent.mode!==current.mode)||(current.schema===6&&(parent.schema!==6||parent.prestart?.case_ref!==current.prestart?.case_ref))||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
+      if(parent.schema!==6&&parent.schema!==7)throw new GameError('INVALID_SAVE');current=parent;
     }
   }
   private assert_current(){if(this.history)throw new GameError('HISTORY_READ_ONLY');}
@@ -85,7 +101,12 @@ export class Game {
     return this.epoch;
   }
   private async commit(state:StoredState,expected:number|null,operation_id:string,fingerprint:string){
-    try{await this.store.commit_batch(state,await this.writer(),expected,operation_id,fingerprint);}
+    try{
+      await this.store.commit_batch(state,await this.writer(),expected,operation_id,fingerprint);
+      // Only successful private Game transitions may seed the bounded cache.
+      // Every later read still hashes the actual body and checks its lineage.
+      if(state.schema===7)this.remember_play_state(state.integrity!);
+    }
     catch(error){
       if(error instanceof GameError&&['STALE_REVISION','HISTORY_READ_ONLY'].includes(error.code))throw error;
       this.faulted=true;

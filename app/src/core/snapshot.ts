@@ -16,7 +16,7 @@ export function canonical(value:unknown):unknown{
   return value;
 }
 export async function state_hash(state:StoredState){const {integrity,...body}=state;return hash(canonical(body));}
-function json_data(value:unknown,seen=new WeakSet<object>()):boolean{
+export function json_data(value:unknown,seen=new WeakSet<object>()):boolean{
   if(value===null||typeof value==='string'||typeof value==='boolean')return true;
   if(typeof value==='number')return Number.isFinite(value);
   if(typeof value!=='object'||seen.has(value))return false;

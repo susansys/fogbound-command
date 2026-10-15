@@ -2,7 +2,8 @@ import type {KnownTime,Mode,LogEntry,PlayerView} from './contracts';
 import type {PublicMap,SpatialScope} from './spatial';
 import type {MovementBasis,RoutePlan} from './route-contracts';
 export type PlayResources={equipment_energy:number;equipment_wear:number;movement_energy:number;movement_energy_reserved:number;record_energy:number;record_wear:number;record_packs:number;hq_energy:number;hq_wear:number;confirmed_at:number};
-export type PlayReport={id:string;origin:'R';target:'HQ';kind:'accepted'|'arrived'|'blocked'|'cutoff'|'refused';command_id:string;activity_id:string|null;source_event_time:KnownTime;observed:KnownTime;reported:KnownTime;position_scope:Exclude<SpatialScope,{kind:'unresolved'}>|null;resources:Omit<PlayResources,'hq_energy'|'hq_wear'>;refusal_reason:'start_mismatch'|'window_closed'|'insufficient_movement_energy'|null};
+export type PlayReport={id:string;origin:'R';target:'HQ';kind:'accepted'|'arrived'|'blocked'|'cutoff'|'refused'|'position';command_id:string|null;activity_id:string|null;source_event_time:KnownTime;observed:KnownTime;reported:KnownTime;position_scope:Exclude<SpatialScope,{kind:'unresolved'}>|null;resources:Omit<PlayResources,'hq_energy'|'hq_wear'>;refusal_reason:'start_mismatch'|'window_closed'|'insufficient_movement_energy'|null};
+export type PositionCatalogEntry={id:string;scope_ref:string|null;observed:KnownTime;reported_at:number;delivery_at:number;source_event_time:KnownTime};
 export type PlayDelivery={id:string;report_id:string;received:{value:number;evidence:string}};
 
 type LocationEvidence={observed:KnownTime;reported:KnownTime;source_event_time:KnownTime;evidence_refs:string[]}&(

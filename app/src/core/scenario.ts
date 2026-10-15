@@ -7,11 +7,12 @@ import {record,fields,valid_id} from '../protocol';
 import {validate_public_map,dense_array} from '../spatial';
 import type {PublicMap} from '../spatial';
 import type {KnownTime} from '../contracts';
+import type {PositionCatalogEntry} from '../play-contracts';
 export const engineeringDefinition = definition;
 export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
 export const playCorridorDefinition=playDefinition;
-export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'>&{map:PublicMap;engine_conditions:{closed_at_x:number|null;report_delivery_delay_ms:number};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
+export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'|'position_reports'>&{map:PublicMap;position_reports:PositionCatalogEntry[];engine_conditions:{closed_at_x:number|null;report_delivery_delay_ms:number};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
 export function is_play_definition(value:Definition|PlayDefinition):value is PlayDefinition{return value.schema===7;}
 export function play_definition_for_package(definitionHash:unknown,registered:readonly PlayDefinition[]=[]):PlayDefinition{
   const selected=[playDefinition,...registered].find(x=>x.definition_hash===definitionHash);
@@ -115,6 +116,14 @@ export async function load_definition(input: unknown,registered:readonly PlayDef
     if(slotFactors.terrain!==parameters.terrain_factor||slotFactors.environment!==parameters.environment_factor)throw new GameError('INVALID_REQUEST','catalogs.movement_causes');
     const conditions=record(input.catalogs)?input.catalogs.engine_conditions:null;
     if(!record(conditions)||!fields(conditions,['closed_at_x','report_delivery_delay_ms'])||!(conditions.closed_at_x===null||typeof conditions.closed_at_x==='number'&&Number.isFinite(conditions.closed_at_x)&&conditions.closed_at_x>=0&&conditions.closed_at_x<=400)||!nonnegative(conditions.report_delivery_delay_ms)||conditions.report_delivery_delay_ms>910000)throw new GameError('INVALID_DEFINITION');
+    const reports=record(input.catalogs)?input.catalogs.position_reports:null,map=record(input.catalogs)?input.catalogs.map:null;
+    if(!dense_array(reports)||reports.length>32||!record(map)||!Array.isArray(map.scopes))throw new GameError('INVALID_DEFINITION');
+    const reportIds=new Set<string>();
+    for(const report of reports){
+      if(!record(report)||!fields(report,['id','scope_ref','observed','reported_at','delivery_at','source_event_time'])||!valid_id(report.id)||reportIds.has(report.id)||!(report.scope_ref===null||typeof report.scope_ref==='string'&&map.scopes.some(scope=>record(scope)&&scope.id===report.scope_ref&&scope.kind!=='unresolved'))||!known_time(report.observed)||!known_time(report.source_event_time)||!nonnegative(report.reported_at)||report.reported_at>910000||!nonnegative(report.delivery_at)||report.delivery_at<report.reported_at+Number(parameters.link_ms)||report.delivery_at>1820000)throw new GameError('INVALID_DEFINITION');
+      if(record(report.observed)&&report.observed.kind==='known'&&Number(report.observed.value)>report.reported_at||record(report.source_event_time)&&report.source_event_time.kind==='known'&&Number(report.source_event_time.value)>report.reported_at)throw new GameError('INVALID_DEFINITION');
+      reportIds.add(report.id);
+    }
   }
   const selected = [...definitions,playDefinition,...registered].find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
   if (!selected)

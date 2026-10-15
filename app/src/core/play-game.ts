@@ -71,7 +71,8 @@ export function replay_play_state(initial:PlayState,inputs:PlayState['inputs'],t
   }
   if(state.sim_time<to){
     const next=apply_play_control({...state,mode:'research'},{run_id:state.run_id,operation_id:'historical-time',expected_revision:state.revision,intent:{kind:'advance',to}},undefined,registered);
-    state.sim_time=next.sim_time;state.status=next.status;state.ended=next.ended;
+    // Keep all due-event effects, but no synthetic administrative commit/input.
+    state={...next,revision:state.revision,inputs:state.inputs,mode:state.mode};delete state.integrity;
   }
   return state;
 }

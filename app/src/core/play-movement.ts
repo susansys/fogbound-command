@@ -3,6 +3,7 @@ import type {SpatialScope,Coordinate} from '../spatial';
 import type {PlayState,PlayActivity,LocalReportDraft} from './play-state';
 import type {PlayDefinition} from './scenario';
 import type {PlayReport,PlayDelivery} from '../play-contracts';
+import {receive_position} from './play-reports';
 import {fraction,number_fraction,multiply_fraction,compare_fraction,ceil_fraction,fraction_to_number,rational_position,movement_basis_for_definition,path_timing,progress_on_path,first_closure_time} from './play-timing';
 
 function public_position_scope(state:PlayState,definition:PlayDefinition,evidence:string):Exclude<SpatialScope,{kind:'unresolved'}>{
@@ -28,15 +29,28 @@ function transmit_report(state:PlayState,definition:PlayDefinition,draft_id:stri
   state.transmissions.push({id:id+':transmission',at,sender:'R',message_ref:id,energy_before,energy_after:resources.equipment_energy,wear_before,wear_after:resources.equipment_wear,energy:p.report_energy_cost,wear:p.report_wear_cost});
   state.queue.push({id:id+':receive',kind:'receive_report',report_id:id,at:at+p.link_ms+definition.catalogs.engine_conditions.report_delivery_delay_ms,phase:20});
 }
+function transmit_catalog_report(state:PlayState,definition:PlayDefinition,index:number,at:number){
+  const entry=definition.catalogs.position_reports[index],p=definition.profile.parameters,r=state.world.resources,id='b21-position-'+(index+1);
+  if(!entry||entry.reported_at!==at||state.reports.some(report=>report.id===id))throw new GameError('ENGINE_UNCONFIRMED');
+  if(at<definition.catalogs.link_authority.from||at>definition.catalogs.link_authority.to||r.equipment_energy<p.report_energy_cost||r.equipment_wear<p.report_wear_cost)return;
+  const scope=entry.scope_ref===null?null:definition.catalogs.map.scopes.find(scope=>scope.id===entry.scope_ref);
+  if(scope?.kind==='unresolved'||scope===undefined)throw new GameError('ENGINE_UNCONFIRMED');
+  const energy_before=r.equipment_energy,wear_before=r.equipment_wear;
+  r.equipment_energy-=p.report_energy_cost;r.equipment_wear-=p.report_wear_cost;
+  const {hq_energy,hq_wear,...portable}=r;
+  state.reports.push({id,origin:'R',target:'HQ',kind:'position',command_id:null,activity_id:null,source_event_time:structuredClone(entry.source_event_time),observed:structuredClone(entry.observed),reported:{kind:'known',value:at,evidence:entry.id},position_scope:structuredClone(scope),resources:{...portable,confirmed_at:at},refusal_reason:null});
+  state.transmissions.push({id:id+':transmission',at,sender:'R',message_ref:id,energy_before,energy_after:r.equipment_energy,wear_before,wear_after:r.equipment_wear,energy:p.report_energy_cost,wear:p.report_wear_cost});
+  state.queue.push({id:id+':receive',kind:'receive_report',report_id:id,at:entry.delivery_at,phase:20});
+}
 function receive_report(state:PlayState,report_id:string,at:number){
   const report=state.reports.find(value=>value.id===report_id);if(!report)throw new GameError('ENGINE_UNCONFIRMED');
   const id='b21-delivery-'+(state.deliveries.length+1),delivery:PlayDelivery={id,report_id,received:{value:at,evidence:id}};
   state.deliveries.push(delivery);
   if(report.resources.confirmed_at>=state.known.resources.confirmed_at)state.known.resources={...state.known.resources,...structuredClone(report.resources)};
-  if(report.position_scope){state.known.position_knowledge={status:'known_scope',scope:structuredClone(report.position_scope),observed:structuredClone(report.observed),reported:structuredClone(report.reported),source_event_time:structuredClone(report.source_event_time),received:at,provenance:{kind:'delivered',report_ref:report.id,delivery_ref:id},evidence_refs:[report.id,id]};}
+  state.known.position_knowledge=receive_position(state.known.position_knowledge,report,delivery);
   if(state.requests.at(-1)?.command_id===report.command_id)state.status=report.kind==='accepted'?'accepted':report.kind==='arrived'?'arrived':report.kind==='blocked'?'blocked':report.kind==='cutoff'?'cutoff_confirmed':'ready';
-  const label=report.kind==='accepted'?'接令回执已收到，定位仍以原依据为准。':report.kind==='arrived'?'抵达定位回报已收到；这不是完整行动胜利。':report.kind==='blocked'?'本地受阻定位回报已收到；没有自动绕行。':report.kind==='cutoff'?'截止截停回报已收到；实体没有在宽限期继续移动。':'任务未接受的回报已收到。';
-  state.log.push({id:id,at,kind:report.kind==='accepted'?'accepted_receipt':report.kind==='arrived'?'complete_receipt':report.kind==='blocked'?'blocked_receipt':report.kind==='cutoff'?'cutoff_receipt':'refused_receipt',text:label,evidence:id,sender:'联络组 R',...(report.observed.kind==='known'?{observed:report.observed.value}:{}),...(report.activity_id===null?{}:{activity_id:report.activity_id})});
+  const label=report.kind==='accepted'?'接令回执已收到，定位仍以原依据为准。':report.kind==='arrived'?'抵达定位回报已收到；这不是完整行动胜利。':report.kind==='blocked'?'本地受阻定位回报已收到；没有自动绕行。':report.kind==='cutoff'?'截止截停回报已收到；实体没有在宽限期继续移动。':report.kind==='position'?'定位依据消息已收到；观察时点与收到时点分别保留。':'任务未接受的回报已收到。';
+  state.log.push({id:id,at,kind:report.kind==='accepted'?'accepted_receipt':report.kind==='arrived'?'complete_receipt':report.kind==='blocked'?'blocked_receipt':report.kind==='cutoff'?'cutoff_receipt':report.kind==='position'?'position_receipt':'refused_receipt',text:label,evidence:id,sender:'联络组 R',...(report.observed.kind==='known'?{observed:report.observed.value}:{}),...(report.activity_id===null?{}:{activity_id:report.activity_id})});
 }
 function update_positions(state:PlayState,at:number){
   for(const activity of state.activities.filter(value=>value.status==='moving')){
@@ -90,7 +104,8 @@ export function advance_play_movement(state:PlayState,to:number,definition:PlayD
         const progress=progress_on_path(activity.path,activity,event.elapsed);state.world.position=progress.position;activity.distance_travelled=progress.distance;activity.segment_index=progress.segment_index;
         complete(state,definition,activity,event.at,'blocked');
       }
-    }else if(event.kind==='deadline'){
+    }else if(event.kind==='catalog_report')transmit_catalog_report(state,definition,event.index,event.at);
+    else if(event.kind==='deadline'){
       for(const activity of state.activities.filter(value=>value.status==='moving'))complete(state,definition,activity,event.at,'cutoff');
     }else if(event.kind==='send_report')transmit_report(state,definition,event.draft_id,event.at);
     else if(event.kind==='receive_report')receive_report(state,event.report_id,event.at);
