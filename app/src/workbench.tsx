@@ -70,6 +70,11 @@ export function Workbench() {
     if(next?.scenario_kind==='play_corridor'){setPlayView(next);setLegacyView(null);}
     else{setPlayView(null);setLegacyView(next);}
   }
+  function adoptNewPlayRun(next:PlayPlayerView){
+    const run=next.run_id;
+    displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});
+    setDisplayStatus('地图关联正在核验');setView(next);liveView.current=next;
+  }
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:GamePlayerView){
@@ -333,7 +338,7 @@ export function Workbench() {
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
   const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];
   const lastActionReport=[...(view?.log??[])].reverse().find(entry=>entry.kind.endsWith('_receipt'));
-  if(playView)return <PlayWorkbench view={playView} channelError={error} storageFault={storageFault} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} displayStatus={displayStatus} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
+  if(playView)return <PlayWorkbench view={playView} channelError={error} storageFault={storageFault} transport={transport} adopt={setView} onNewRun={adoptNewPlayRun} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} displayStatus={displayStatus} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   return (
     <div className="app crisis-app">
       <header className="topbar">

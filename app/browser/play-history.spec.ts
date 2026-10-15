@@ -1,4 +1,19 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Page} from '@playwright/test';
+
+async function ownedDisplay(page:Page){
+  return page.evaluate(()=>new Promise<{heads:Array<{run_id:string;id:string}>;records:Array<{id:string;run_id:string;association_revision:number}>}>((resolve,reject)=>{
+    const open=indexedDB.open('fogbound-map-b-display-1');open.onupgradeneeded=()=>{open.transaction!.abort();reject(Error('Expected owned display database'));};open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['heads','records'],'readonly'),heads=tx.objectStore('heads').getAll(),records=tx.objectStore('records').getAll();tx.oncomplete=()=>{resolve({heads:heads.result,records:records.result});db.close();};};
+  }));
+}
+
+test('PG16 restart creates its own display association and saving the child preserves the readonly parent display',async({page})=>{
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect(page.locator('.map-canvas')).toHaveAttribute('data-region-state','ready',{timeout:25000});await page.getByRole('button',{name:'保存行动',exact:true}).click();await expect(page.getByRole('status')).toContainText('地图显示也已独立保存并读回');const parent=await ownedDisplay(page);expect(parent.heads).toHaveLength(1);
+  await page.getByRole('button',{name:'以相同条件重开',exact:true}).click();await page.getByRole('button',{name:'确认重新开始',exact:true}).click();await expect(page.getByRole('button',{name:'上一场行动（只读）',exact:true})).toBeVisible();await expect(page.locator('.map-canvas')).toHaveAttribute('data-region-state','ready',{timeout:25000});await page.getByRole('button',{name:'保存行动',exact:true}).click();await expect(page.getByRole('status')).toContainText('地图显示也已独立保存并读回');const child=await ownedDisplay(page);expect(child.heads).toHaveLength(2);expect(child.heads.find(h=>h.run_id===parent.heads[0].run_id)).toEqual(parent.heads[0]);expect(child.records.filter(r=>r.run_id===parent.heads[0].run_id)).toEqual(parent.records);const added=child.heads.find(h=>h.run_id!==parent.heads[0].run_id);expect(added).toBeDefined();expect(child.records.find(r=>r.id===added!.id)?.run_id).toBe(added!.run_id);
+});
+
+test('PG16 requesting issue brings its actual confirmation actions into the viewport',async({page})=>{
+  await page.setViewportSize({width:1280,height:720});await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'拟定移动路线',exact:true}).click();await page.getByRole('button',{name:'新增折点',exact:true}).click();await page.getByLabel('折点 2 x',{exact:true}).fill('150');await page.getByRole('button',{name:'预览路线',exact:true}).click();await page.getByRole('button',{name:'下达移动任务',exact:true}).click();await expect(page.getByRole('button',{name:'确认并下达',exact:true})).toBeInViewport();await expect(page.getByRole('button',{name:'返回编辑',exact:true})).toBeInViewport();
+});
 
 test('PG15 saving an unissued draft explicitly distinguishes it from committed progress',async({page})=>{
   await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'拟定移动路线',exact:true}).click();await page.getByRole('button',{name:'新增折点',exact:true}).click();await page.getByLabel('折点 2 x',{exact:true}).fill('150');await page.getByRole('button',{name:'预览路线',exact:true}).click();await page.getByRole('button',{name:'保存行动',exact:true}).click();await expect(page.getByRole('status')).toContainText('未下达路线草案未保存');await expect(page.getByTestId('movement-status')).toContainText('可拟定移动任务');await expect(page.getByTestId('route-preview')).toContainText('100 图上米');
