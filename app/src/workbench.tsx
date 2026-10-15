@@ -59,6 +59,7 @@ export function Workbench() {
     [error, setError] = useState(""),
     [storageFault,setStorageFault]=useState(false),
     [runs, setRuns] = useState<RunSummary[]>([]),
+    [listReady,setListReady]=useState(false),
     [busy, setBusy] = useState(false);
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
@@ -95,9 +96,9 @@ export function Workbench() {
   },[]);
   useEffect(() => {
     void transport.request({ kind: "list" }).then((r) => {
-      if (r.ok) setRuns(r.runs ?? []);
+      if (r.ok) {setRuns(r.runs ?? []);setListReady(true);}
       else setError(r.code);
-    });
+    }).catch(()=>setError('CHANNEL_UNCERTAIN'));
   }, []);
   async function start() {
     setBusy(true);
@@ -135,7 +136,7 @@ export function Workbench() {
       if(!confirmed.view?.paused){setError('CHANNEL_UNCERTAIN');return;}
       const listed=await transport.request({kind:'list'});
       if(!listed.ok){setError(listed.code);return;}
-      setRuns(listed.runs??[]);setView(null);liveView.current=null;
+      setRuns(listed.runs??[]);setListReady(true);setView(null);liveView.current=null;
       createOperation.current=crypto.randomUUID();editing.current++;setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;orderConfirmed.current=null;
       setWorkspace('map');setSelected('R');setReceiptNote('');
     } catch {setError('CHANNEL_UNCERTAIN');}
@@ -390,8 +391,11 @@ export function Workbench() {
           >
             开始演练
           </button>
-          {runs.length>0&&<p>下面列出每项演练最近一局的最新进度，可能晚于手动保存的时刻。接手后保持暂停。</p>}
-          {runs.map((run) => (
+          <p>记录仅属于当前浏览器的用户配置和此访问地址（含端口）：{window.location.origin}。换浏览器、用户配置或地址后，请返回原入口查看；这里没有记录不代表原记录已删除。</p>
+          {!listReady&&<p role="status">{error?'演练记录列表尚未确认，不能判断此入口是否有记录。':'正在读取此入口的演练记录。'}</p>}
+          {listReady&&runs.length===0&&<p role="status">此入口暂无演练记录。</p>}
+          {listReady&&runs.length>0&&<p>下面列出每项演练最近一局的最新进度，可能晚于手动保存的时刻。接手后保持暂停。</p>}
+          {listReady&&runs.map((run) => (
             <p key={run.run_id}>
               已保存的演练记录 · {run.scenario_kind==='record'?'工位记录':run.scenario_kind==='prestart_move'?'准备期替代':'走廊移动'} · {clock(run.sim_time)}
               {!run.read_only&&<button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>}
