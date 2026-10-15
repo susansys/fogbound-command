@@ -120,6 +120,7 @@ small {
   background: #142027;
 }
 .brand {
+  color: #e5ebe6;
   display: flex;
   align-items: center;
   gap: 10px;
