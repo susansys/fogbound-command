@@ -67,6 +67,13 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
     for(const r of reports){
       if(!record(r)||!fields(r,['id','origin','target','scope_ref','observed','source_event_time','reported_at','delivery_at'])||!valid_id(r.id)||r.id===initial.id||!['R','Q'].includes(r.origin)||!['HQ','R'].includes(r.target)||!value.catalogs.map.scopes.some(s=>s.id===r.scope_ref)||!registered_time(r.observed)||!registered_time(r.source_event_time)||!Number.isSafeInteger(r.reported_at)||r.reported_at<0||!Number.isSafeInteger(r.delivery_at)||r.delivery_at<r.reported_at+p.link_ms||r.delivery_at>p.deadline+p.receipt_grace||r.observed.kind==='known'&&r.observed.value>r.reported_at||r.source_event_time.kind==='known'&&r.source_event_time.value>r.reported_at)throw new GameError('INVALID_DEFINITION');
     }
+    const proofs=new Map<number,Set<string>>();
+    if(initial.observed.kind==='known')proofs.set(initial.observed.value,new Set([initial.id]));
+    for(const r of reports){
+      if(r.origin!=='R'||r.target!=='HQ'||r.observed.kind!=='known')continue;
+      const at=r.observed.value,refs=proofs.get(at)??new Set<string>();refs.add(r.id);proofs.set(at,refs);
+      if(refs.size>p.evidence_budget)throw new GameError('INVALID_DEFINITION');
+    }
   }
   for(const [key,limit] of Object.entries(mission_input_limits))if(value.profile.parameters[key as keyof typeof value.profile.parameters]!==limit)throw new GameError('INVALID_DEFINITION');
   return value;

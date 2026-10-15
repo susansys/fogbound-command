@@ -6,6 +6,26 @@ import {mission_draft,mission_variant} from './mission-fixtures';
 import type {ConditionExpr,MissionTruth} from '../src/mission-contracts';
 import type {SpatialScope} from '../src/spatial';
 
+test('B22 a closed possible-position disk touching an isolated excluded union point is unknown',async()=>{
+  const variant=await mission_variant(value=>{
+    const base=value.catalogs.map.scopes.find(s=>s.id==='H')!;
+    const outer:[number,number][]=[[50,130],[150,130],[150,170],[50,170],[50,130]];
+    value.catalogs.map.scopes.push(
+      {...base,id:'first-hole',kind:'area',typed_geometry:{outer,holes:[[[90,140],[100,140],[100,150],[90,150],[90,140]]]}},
+      {...base,id:'second-hole',kind:'area',typed_geometry:{outer,holes:[[[100,150],[110,150],[110,160],[100,160],[100,150]]]}},
+      {...base,id:'point-excluding-union',kind:'region_set',typed_geometry:{area_refs:['first-hole','second-hole']}},
+      {...base,id:'touching-disk',kind:'point',typed_geometry:{position:[100,151]},uncertainty:{kind:'known',value:1,unit:'fictional_metre',evidence:'B22-INITIAL-POSITION'}}
+    );
+    value.catalogs.initial_evidence.scope_ref='touching-disk';
+  }),store=new Persistence('b22-owned-t02-isolated-exclusion',[],[variant]);
+  try{
+    const game=new Game(store),view=await game.create_run(variant,'research','create'),draft=mission_draft(view.run_id);
+    draft.phases[0].entry_gate={kind:'compare',field_ref:'position.scope',operator:'in',typed_value:'point-excluding-union'};
+    expect((await game.preview_plan(view.run_id,view.revision,0,draft)).phases[0].gate.result).toBe('U');
+    expect(await game.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});
+
 test('B22 equal observed point geometry with a different uncertainty proof keeps one position and both lawful proofs',async()=>{
   const variant=await mission_variant(value=>{
     value.catalogs.map.scopes.push({...value.catalogs.map.scopes.find(s=>s.id==='H')!,id:'same-point-other-proof',uncertainty:{kind:'known',value:0,unit:'fictional_metre',evidence:'same-point-report'}});

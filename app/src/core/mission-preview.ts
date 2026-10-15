@@ -29,6 +29,7 @@ export function mission_phase_previews(state:MissionState,draft:MissionDraft,def
     const capability=definition.capabilities.find(c=>c.id==='R:move')!;
     const confirmations=state.known.phase_confirmations.filter(c=>c.phase_id===phase.id&&c.phase_version===phase.version);
     const gate=evaluate_mission_gate(phase.id+'-entry',phase.entry_gate,{evaluated_by:'HQ',revision:state.revision,at:state.sim_time,rule_version:definition.rules.version,route:{permitted:gap===''&&authorization.status==='met',evidence_refs:[...new Set(definition.catalogs.map.scopes.filter(s=>s.kind==='corridor'||s.kind==='area').flatMap(s=>s.evidence_refs))]},confirmation:{confirmed:confirmations.length>0,evidence_refs:confirmations.flatMap(c=>[c.report_ref,c.delivery_ref])},capability:{ready:definition.catalogs.actor.qualification_refs.includes('R:move'),evidence_refs:capability.evidence_refs},position:{knowledge:state.known.position_knowledge,max_age_ms:p.position_max_age_ms,valid_until_time_ms:p.evidence_valid_until},map:definition.catalogs.map});
+    if(gate.evidence_refs.length>p.evidence_budget)throw new GameError('EVIDENCE_REQUIRED');
     return {phase_id:phase.id,distance,estimated_move_ms:gap?null:ceil_fraction(timing.duration_ms),assumptions:phase.dependencies.length?['假设前阶段已确认']:[],gap,authorization,gate};
   });
   return phases;

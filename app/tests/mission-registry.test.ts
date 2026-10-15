@@ -6,6 +6,36 @@ import {load_mission_definition,type MissionDefinition} from '../src/core/missio
 import definition from '../src/core/mission-definition.json';
 import {mission_draft} from './mission-fixtures';
 import {mission_variant} from './mission-fixtures';
+import {valid_response} from '../src/dto';
+import {mission_preview} from '../src/mission-dto';
+
+test('B22 combined position and capability proofs over32 reject preview and save before writing',async()=>{
+  const variant=await mission_variant(value=>{value.catalogs.position_reports=Array.from({length:31},(_,i)=>({id:'combined-'+i,origin:'R',target:'HQ',scope_ref:'H',observed:{kind:'known',value:0,evidence:'combined-'+i},source_event_time:{kind:'unknown'},reported_at:0,delivery_at:1000}));}),store=new Persistence('b22-owned-t02-combined-evidence33',[],[variant]);
+  try{
+    const game=new Game(store),view=await game.create_run(variant,'research','create'),advanced=await game.control_clock({run_id:view.run_id,operation_id:'deliver',expected_revision:1,intent:{kind:'advance',to:1000}}),draft=mission_draft(view.run_id);
+    draft.phases[0].entry_gate={kind:'all',children:[{kind:'compare',field_ref:'position.scope',operator:'eq',typed_value:'H'},{kind:'compare',field_ref:'capability.ready',operator:'eq',typed_value:true}]};
+    await expect(game.preview_plan(view.run_id,advanced.view.revision,0,draft)).rejects.toThrow('EVIDENCE_REQUIRED');
+    await expect(game.save_plan({run_id:view.run_id,operation_id:'save-too-many-proofs',expected_revision:advanced.view.revision,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}})).rejects.toThrow('EVIDENCE_REQUIRED');
+    expect(await game.get_view(view.run_id)).toEqual(advanced.view);expect(await game.get_receipt(view.run_id,'save-too-many-proofs')).toBeNull();
+  }finally{await store.delete();}
+});
+
+test('B22 31 same-time reports plus the initial proof remain publishable without dropping any proof',async()=>{
+  const variant=await mission_variant(value=>{value.catalogs.position_reports=Array.from({length:31},(_,i)=>({id:'same-time-'+i,origin:'R',target:'HQ',scope_ref:'H',observed:{kind:'known',value:0,evidence:'same-time-'+i},source_event_time:{kind:'unknown'},reported_at:0,delivery_at:1000}));}),store=new Persistence('b22-owned-t02-evidence32',[],[variant]);
+  try{
+    const game=new Game(store),view=await game.create_run(variant,'research','create'),advanced=await game.control_clock({run_id:view.run_id,operation_id:'deliver',expected_revision:1,intent:{kind:'advance',to:1000}});
+    if(advanced.view.scenario_kind!=='play_mission'||advanced.view.position_knowledge.status==='conflicting')throw Error('Expected nonconflicting mission view');
+    expect(advanced.view.position_knowledge.evidence_refs).toHaveLength(32);expect(valid_response({request_id:'delivered',ok:true,...advanced})).toBe(true);
+    const draft=mission_draft(view.run_id);draft.phases[0].entry_gate={kind:'compare',field_ref:'position.scope',operator:'eq',typed_value:'H'};
+    const preview=await game.preview_plan(view.run_id,advanced.view.revision,0,draft);
+    expect(preview.phases[0].gate.evidence_refs).toHaveLength(32);expect(mission_preview(preview)).toBe(true);
+  }finally{await store.delete();}
+});
+
+test('B22 32 equal-time report proofs plus the initial proof exceed the evidence budget before any write',async()=>{
+  const variant=await mission_variant(value=>{value.catalogs.position_reports=Array.from({length:32},(_,i)=>({id:'same-time-'+i,origin:'R',target:'HQ',scope_ref:'H',observed:{kind:'known',value:0,evidence:'same-time-'+i},source_event_time:{kind:'unknown'},reported_at:0,delivery_at:1000}));}),store=new Persistence('b22-owned-t02-evidence33',[],[variant]);
+  try{await expect(new Game(store).create_run(variant,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}finally{await store.delete();}
+});
 
 test.each(['link_ms','send_window_ms','hold_ms','deadline','receipt_grace'] as const)('B22 owned %s cannot silently replace its frozen timing contract',async field=>{
   const variant=await mission_variant(value=>{value.profile.parameters[field]=1;}),store=new Persistence('b22-owned-t02-fixed-'+field,[],[variant]);

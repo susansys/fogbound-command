@@ -94,8 +94,8 @@ function boundary_distance(a:Shape,b:Shape):number{
   const ae=segments(a),be=segments(b),ap=[...a.points,...ae.flat()],bp=[...b.points,...be.flat()];
   return Math.min(...ap.flatMap(p=>[...bp.map(q=>Math.hypot(p[0]-q[0],p[1]-q[1])),...be.map(e=>point_segment_distance(p,e))]),...bp.flatMap(p=>ae.map(e=>point_segment_distance(p,e))));
 }
-function union_boundary(target:Shape):Array<{edge:Segment;closed:boolean}>|null{
-  const edges=segments(target),result:Array<{edge:Segment;closed:boolean}>=[];
+function union_boundary(target:Shape):{edges:Array<{edge:Segment;closed:boolean}>;excluded_points:Coordinate[]}|null{
+  const edges=segments(target),result:Array<{edge:Segment;closed:boolean}>=[],excluded_points:Coordinate[]=[];
   for(const [a,b] of edges){
     const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy),cuts=[0,1];
     for(const [c,d] of edges){
@@ -108,6 +108,13 @@ function union_boundary(target:Shape):Array<{edge:Segment;closed:boolean}>|null{
       }
     }
     const sorted=[...new Set(cuts)].sort((x,y)=>x-y);
+    // Two excluded holes can meet at a single excluded point even when every
+    // adjacent edge interior is covered by another legal area in the union.
+    for(const cut of sorted){
+      const p:Coordinate=[a[0]+cut*dx,a[1]+cut*dy],where=contains(target,p);
+      if(where==='uncertain')return null;
+      if(where==='outside')excluded_points.push(p);
+    }
     for(let i=1;i<sorted.length;i++){
       const from=sorted[i-1],to=sorted[i],middle=(from+to)/2,p:Coordinate=[a[0]+middle*dx,a[1]+middle*dy];
       const gaps=edges.map(edge=>point_segment_distance(p,edge)).filter(d=>d>0),margin=Math.min(...gaps,(to-from)*length/4,0.001);
@@ -119,7 +126,7 @@ function union_boundary(target:Shape):Array<{edge:Segment;closed:boolean}>|null{
       if(left!==right||on==='outside'&&(left==='inside'||right==='inside'))result.push({edge:[[a[0]+from*dx,a[1]+from*dy],[a[0]+to*dx,a[1]+to*dy]],closed:on==='inside'});
     }
   }
-  return result;
+  return {edges:result,excluded_points};
 }
 export function compare_mission_position(scope:SpatialScope,target:SpatialScope,operator:'eq'|'in',map:PublicMap):MissionTruth{
   if(scope.uncertainty.kind==='unknown')return 'U';
@@ -133,8 +140,8 @@ export function compare_mission_position(scope:SpatialScope,target:SpatialScope,
   const base=relation(source,destination);if(radius===0)return base;
   if(base==='F')return boundary_distance(source,destination)>radius?'F':'U';
   if(base!=='T')return 'U';
-  const boundary=union_boundary(destination);if(!boundary||!boundary.length)return 'U';
-  return boundary.every(({edge,closed})=>{
+  const boundary=union_boundary(destination);if(!boundary||!boundary.edges.length)return 'U';
+  return boundary.excluded_points.every(point=>distance_to_shape(point,source)>radius)&&boundary.edges.every(({edge,closed})=>{
     const distance=boundary_distance(source,{points:[],lines:[edge],areas:[]});
     return closed?distance>=radius:distance>radius;
   })?'T':'U';
