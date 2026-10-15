@@ -26,7 +26,9 @@ test('B22 matching inline phase and route versions survive saving and public rea
     draft.routes[0].version=2;draft.phases[0].activity.route_ref.version=2;
     const saved=await game.save_plan({run_id:view.run_id,operation_id:'save-matching-version',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
     expect(saved.view.plans[0].draft).toEqual(draft);
-    expect((await game.get_view(view.run_id)).plans[0].draft).toEqual(draft);
+    const current=await game.get_view(view.run_id);
+    if(current.scenario_kind!=='play_mission')throw Error('Expected the mission public view');
+    expect(current.plans[0].draft).toEqual(draft);
   }finally{await store.delete();}
 });
 
