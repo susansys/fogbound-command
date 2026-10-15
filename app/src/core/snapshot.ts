@@ -10,6 +10,7 @@ import {quantity,initial_record_accounts,record_work_at} from './record-accounti
 import {initial_prestart_data} from './prestart-move';
 import type {StoredState} from './state';
 import {validate_play_state} from './play-snapshot';
+import {validate_mission_state} from './mission-snapshot';
 export function canonical(value:unknown):unknown{
   if(Array.isArray(value))return value.map(canonical);
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,item])=>[key,canonical(item)]));
@@ -160,6 +161,7 @@ function prestart_history_matches(state:State,definition:ReturnType<typeof defin
 }
 export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[]):Promise<StoredState>{
   try{
+    if(record(value)&&value.schema===8){if(!json_data(value))throw Error('invalid');return await validate_mission_state(value);}
     if(record(value)&&value.schema===7){if(!json_data(value))throw Error('invalid');return await validate_play_state(value,registered);}
     if(!record(value)||!json_data(value)||![4,5,6].includes(Number(value.schema))||typeof value.schema!=='number'||value.contract!=='0.5.1'||value.phase!=='committed'||!valid_id(value.run_id))throw Error('invalid');
     const state=value as unknown as State;

@@ -1,0 +1,967 @@
+{
+  "schema": 8,
+  "contract": "0.5.1",
+  "id": "B22-MISSION-01",
+  "version": 1,
+  "scenario_kind": "play_mission",
+  "profile": {
+    "id": "B22-MISSION-01",
+    "version": 1,
+    "parameters": {
+      "mission_budget": 1,
+      "objective_budget": 1,
+      "phase_budget": 2,
+      "plan_version_budget": 32,
+      "attempt_budget": 16,
+      "route_point_budget": 64,
+      "total_route_point_budget": 128,
+      "evidence_budget": 32,
+      "expression_depth_budget": 4,
+      "expression_node_budget": 32,
+      "text_budget": 2000,
+      "hold_ms": 5000,
+      "deadline": 900000,
+      "receipt_grace": 10000,
+      "link_ms": 1000,
+      "send_window_ms": 1000,
+      "grant_from": 0,
+      "grant_until": 900000,
+      "position_max_age_ms": 900000,
+      "evidence_valid_until": 900000,
+      "move_capacity": 1,
+      "link_capacity": 1,
+      "send_energy_cost": 1,
+      "send_wear_cost": 1,
+      "base_speed": 4,
+      "terrain_factor": 1,
+      "environment_factor": 1,
+      "load_capacity": 20,
+      "space_capacity": 12,
+      "movement_energy": 20,
+      "equipment_energy": 16,
+      "equipment_wear": 100,
+      "hq_energy": 16,
+      "hq_wear": 100
+    },
+    "registry": [
+      {
+        "id": "mission_budget",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "mission",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "objective_budget",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "objective",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "phase_budget",
+        "entry_version": 1,
+        "value": 2,
+        "unit": "phase",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "plan_version_budget",
+        "entry_version": 1,
+        "value": 32,
+        "unit": "version",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "attempt_budget",
+        "entry_version": 1,
+        "value": 16,
+        "unit": "attempt",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "route_point_budget",
+        "entry_version": 1,
+        "value": 64,
+        "unit": "point",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "total_route_point_budget",
+        "entry_version": 1,
+        "value": 128,
+        "unit": "point",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "evidence_budget",
+        "entry_version": 1,
+        "value": 32,
+        "unit": "reference",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "expression_depth_budget",
+        "entry_version": 1,
+        "value": 4,
+        "unit": "level",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "expression_node_budget",
+        "entry_version": 1,
+        "value": 32,
+        "unit": "node",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "text_budget",
+        "entry_version": 1,
+        "value": 2000,
+        "unit": "unicode_codepoint",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "hold_ms",
+        "entry_version": 1,
+        "value": 5000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "deadline",
+        "entry_version": 1,
+        "value": 900000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "receipt_grace",
+        "entry_version": 1,
+        "value": 10000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "link_ms",
+        "entry_version": 1,
+        "value": 1000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "send_window_ms",
+        "entry_version": 1,
+        "value": 1000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "grant_from",
+        "entry_version": 1,
+        "value": 0,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "grant_until",
+        "entry_version": 1,
+        "value": 900000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "position_max_age_ms",
+        "entry_version": 1,
+        "value": 900000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "evidence_valid_until",
+        "entry_version": 1,
+        "value": 900000,
+        "unit": "ms",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "move_capacity",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "slot",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "link_capacity",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "slot",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "send_energy_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "energy",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "send_wear_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "wear",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "base_speed",
+        "entry_version": 1,
+        "value": 4,
+        "unit": "fictional_metre/s",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "terrain_factor",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "ratio",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "environment_factor",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "ratio",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "load_capacity",
+        "entry_version": 1,
+        "value": 20,
+        "unit": "load",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "space_capacity",
+        "entry_version": 1,
+        "value": 12,
+        "unit": "space",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "movement_energy",
+        "entry_version": 1,
+        "value": 20,
+        "unit": "energy",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "equipment_energy",
+        "entry_version": 1,
+        "value": 16,
+        "unit": "energy",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "equipment_wear",
+        "entry_version": 1,
+        "value": 100,
+        "unit": "wear",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "hq_energy",
+        "entry_version": 1,
+        "value": 16,
+        "unit": "energy",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "hq_wear",
+        "entry_version": 1,
+        "value": 100,
+        "unit": "wear",
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "R:move",
+      "actor": "R",
+      "action": "move",
+      "speed": 4,
+      "unit": "fictional_metre/s",
+      "capacity": 1,
+      "concurrency_group": "R:execution",
+      "evidence_refs": [
+        "B22-INITIAL-CAPABILITY"
+      ]
+    },
+    {
+      "id": "R:link",
+      "actor": "R",
+      "action": "send",
+      "unit": "message",
+      "capacity": 1,
+      "concurrency_group": "R:communication",
+      "evidence_refs": [
+        "B22-INITIAL-LINK"
+      ]
+    }
+  ],
+  "rules": {
+    "version": "b22-mission-1",
+    "movement_rule_ref": "B21-CORRIDOR-01/b21-route-1",
+    "coordinate_grid": 0.01,
+    "length_scale": 1000000,
+    "length_rounding": "round_half_up",
+    "duration_rounding": "ceil_total_only",
+    "load_factor_per_unit": 0.02,
+    "movement_energy_per_distance": 0.01,
+    "cause_policy": "once_per_cause_rule_consumer",
+    "report_policy": "accepted_and_one_terminal_or_hold_and_not_started_or_refused",
+    "reports_per_attempt": 2,
+    "move_concurrency_group": "R:execution",
+    "link_concurrency_group": "R:communication",
+    "condition_fields": [
+      "position.scope",
+      "phase.confirmed",
+      "route.permitted",
+      "capability.ready"
+    ],
+    "disabled_capabilities": [
+      "record",
+      "repair",
+      "handover",
+      "withdrawal",
+      "executing_replacement",
+      "free_surface",
+      "full_play_outcome"
+    ]
+  },
+  "catalogs": {
+    "map": {
+      "map_id": "PLAY-CORRIDOR-MAP",
+      "map_version": 1,
+      "crs_id": "FIC-LOCAL-XY-01",
+      "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7",
+      "extent": [
+        400,
+        300
+      ],
+      "unit": "fictional_metre",
+      "scopes": [
+        {
+          "id": "H",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              50,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "A",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              150,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "B",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              250,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "approximate",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 5,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              75.25,
+              151.5
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "area-with-hole",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                270,
+                40
+              ],
+              [
+                330,
+                40
+              ],
+              [
+                330,
+                100
+              ],
+              [
+                270,
+                100
+              ],
+              [
+                270,
+                40
+              ]
+            ],
+            "holes": [
+              [
+                [
+                  290,
+                  60
+                ],
+                [
+                  300,
+                  60
+                ],
+                [
+                  300,
+                  70
+                ],
+                [
+                  290,
+                  70
+                ],
+                [
+                  290,
+                  60
+                ]
+              ]
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "detached-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                350,
+                220
+              ],
+              [
+                380,
+                220
+              ],
+              [
+                380,
+                250
+              ],
+              [
+                350,
+                250
+              ],
+              [
+                350,
+                220
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "separate-regions",
+          "kind": "region_set",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "area_refs": [
+              "area-with-hole",
+              "detached-area"
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "reference-edge",
+          "kind": "edge",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "line": [
+              [
+                20,
+                20
+              ],
+              [
+                40,
+                30
+              ],
+              [
+                60,
+                20
+              ]
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "HA-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                50,
+                140
+              ],
+              [
+                150,
+                140
+              ],
+              [
+                150,
+                160
+              ],
+              [
+                50,
+                160
+              ],
+              [
+                50,
+                140
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "AB-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                150,
+                140
+              ],
+              [
+                250,
+                140
+              ],
+              [
+                250,
+                160
+              ],
+              [
+                150,
+                160
+              ],
+              [
+                150,
+                140
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "HA",
+          "kind": "corridor",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "centerline": [
+              [
+                50,
+                150
+              ],
+              [
+                150,
+                150
+              ]
+            ],
+            "width": 20,
+            "area_ref": "HA-area"
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "AB",
+          "kind": "corridor",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "centerline": [
+              [
+                150,
+                150
+              ],
+              [
+                250,
+                150
+              ]
+            ],
+            "width": 20,
+            "area_ref": "AB-area"
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "pending-location",
+          "kind": "unresolved",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "unknown"
+          },
+          "typed_geometry": null,
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        }
+      ]
+    },
+    "actor": {
+      "id": "R",
+      "origin": "H",
+      "load_capacity": 20,
+      "space_capacity": 12,
+      "load": 9,
+      "space": 7,
+      "equipment": [
+        "EQ-REC",
+        "EQ-LINK"
+      ],
+      "qualification_refs": [
+        "R:move",
+        "R:link"
+      ]
+    },
+    "equipment": [
+      {
+        "id": "EQ-REC",
+        "load": 4,
+        "space": 3,
+        "energy": 20,
+        "wear": 100
+      },
+      {
+        "id": "EQ-LINK",
+        "load": 3,
+        "space": 2,
+        "energy": 16,
+        "wear": 100
+      }
+    ],
+    "items": [
+      {
+        "id": "record_pack",
+        "count": 2,
+        "load": 1,
+        "space": 1
+      }
+    ],
+    "hq_terminal": {
+      "id": "HQ-TERM",
+      "energy": 16,
+      "wear": 100,
+      "energy_per_send": 1,
+      "wear_per_send": 1
+    },
+    "initial_evidence": {
+      "id": "B22-INITIAL-POSITION",
+      "scope_ref": "H",
+      "observed": {
+        "kind": "known",
+        "value": 0,
+        "evidence": "B22-INITIAL-POSITION"
+      },
+      "source_event_time": {
+        "kind": "unknown"
+      },
+      "origin": "registered_initial_evidence",
+      "max_age_ms": 900000,
+      "valid_until_time_ms": 900000
+    },
+    "authority": {
+      "id": "B22-STATIC-GRANT",
+      "version": 1,
+      "issuer": "commander",
+      "holder": "staff",
+      "mission_scope": [
+        "M1"
+      ],
+      "actors": [
+        "R"
+      ],
+      "action_kinds": [
+        "move"
+      ],
+      "spatial_scope": [
+        "HA",
+        "AB"
+      ],
+      "valid_from_time_ms": 0,
+      "valid_to_time_ms": 900000,
+      "risk_limits": [
+        "registered_low"
+      ],
+      "delegation_allowed": false
+    },
+    "movement_causes": [
+      {
+        "cause_id": "terrain-plain",
+        "rule_ref": "terrain-factor",
+        "consumer": "R:move",
+        "slot": "terrain",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-TERRAIN"
+      },
+      {
+        "cause_id": "environment-normal",
+        "rule_ref": "environment-factor",
+        "consumer": "R:move",
+        "slot": "environment",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-ENVIRONMENT"
+      }
+    ]
+  },
+  "hashes": {
+    "profile": "e48174ee479b1a07dcd7e0af306d777f5ba55439080b8a6e6aea66e9da0ccd34",
+    "capabilities": "351a13165784a2365cce0c72c1bb6f936e9700f3fbeeb83e57d6919f1894355a",
+    "rules": "a1211e66f51c74168ad17fe9b4bf4349c4e5a606f4146b0e3edd6b547903980a",
+    "catalogs": "05bfaa3454fb7547a6d8eee4a6a983061a71e647c4b83f6450a1917758832479",
+    "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "definition_hash": "a84511bca9fdff148ff323c513e2ca68f9a9f9066d0b3e94f9ec6758f9351e9b"
+}

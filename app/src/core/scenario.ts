@@ -2,6 +2,7 @@ import definition from "./engineering.json";
 import recordDefinition from "./record-engineering.json";
 import prestartDefinition from './prestart-engineering.json';
 import playDefinition from './play-definition.json';
+import {load_mission_definition,type MissionDefinition} from './mission-definition';
 import {GameError} from '../contracts';
 import {record,fields,valid_id} from '../protocol';
 import {validate_public_map,dense_array} from '../spatial';
@@ -13,7 +14,7 @@ export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
 export const playCorridorDefinition=playDefinition;
 export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'|'position_reports'>&{map:PublicMap;position_reports:PositionCatalogEntry[];engine_conditions:{closed_at_x:number|null;report_delivery_delay_ms:number};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
-export function is_play_definition(value:Definition|PlayDefinition):value is PlayDefinition{return value.schema===7;}
+export function is_play_definition(value:Definition|PlayDefinition|MissionDefinition):value is PlayDefinition{return value.schema===7;}
 export function play_definition_for_package(definitionHash:unknown,registered:readonly PlayDefinition[]=[]):PlayDefinition{
   const selected=[playDefinition,...registered].find(x=>x.definition_hash===definitionHash);
   if(!selected)throw new GameError('INVALID_SAVE');
@@ -53,7 +54,12 @@ function known_time(value:unknown):boolean{
   if(value.kind==='unknown')return fields(value,['kind']);
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
-export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[]): Promise<Definition|PlayDefinition> {
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition> {
+  if(record(input)&&input.schema===8){
+    if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');
+    if(!Array.isArray(input.profile.registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
+    return load_mission_definition(input);
+  }
   if(record(input)&&input.schema===7){
     if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');
     if(!record(input.catalogs)||!record(input.catalogs.map))throw new GameError('CONFIG_PARAMETER_MISSING','catalogs.map');

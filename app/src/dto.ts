@@ -3,6 +3,7 @@ import {prestart_case_refs} from './contracts';
 import {record,valid_id,valid_envelope,valid_public_field_path} from './protocol';
 import {validate_public_map} from './spatial';
 import {valid_route_plan} from './route-validation';
+import {mission_player_view,mission_preview} from './mission-dto';
 type Check=(value:unknown)=>boolean;
 const text:Check=v=>typeof v==='string'&&v.length<=2000;
 const bool:Check=v=>typeof v==='boolean';
@@ -36,6 +37,7 @@ const common_player_view:Check=v=>shape(v,{
   issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan:legacy_plan},{reason:text})),
 },{replacement:v=>shape(v,{original_command_id:valid_id,replacement_command_id:valid_id,accepted_at:time,received_at:time,evidence:text}),scenario_case:oneOf(prestart_case_refs),scenario_kind:oneOf(['record','prestart_move']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
+  if(record(v)&&v.scenario_kind==='play_mission')return mission_player_view(v);
   if(record(v)&&v.scenario_kind==='play_corridor')return play_player_view(v);
   if(!common_player_view(v)||!record(v)||!record(v.resources))return false;
   const keys=['record_energy','record_wear','record_packs','record_energy_reserved','record_packs_reserved','hq_energy','hq_wear'];
@@ -81,13 +83,13 @@ function play_player_view(v:Record<string,unknown>):boolean{
 }
 const legacy_plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
 const plan:Check=v=>valid_route_plan(v)||legacy_plan(v);
-const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
-const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move','play_corridor']),read_only:bool});
-const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
+const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore','save_plan'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
+const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move','play_corridor','play_mission']),read_only:bool});
+const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','OBJECT_VERSION_CONFLICT','OPERATION_ID_REUSED','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
   if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)},{field_path:path=>['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(String(value.code))&&valid_public_field_path(path)});
-  if(!shape(value,{request_id:valid_id,ok:oneOf([true])},{view:player_view,plan,receipt,runs:list(run)}))return false;
+  if(!shape(value,{request_id:valid_id,ok:oneOf([true])},{view:player_view,plan,mission_preview,receipt,runs:list(run)}))return false;
   const keys=Object.keys(value).filter(key=>key!=='request_id'&&key!=='ok').sort().join(',');
-  return ['view','plan','receipt','runs','receipt,view'].includes(keys);
+  return ['view','plan','mission_preview','receipt','runs','receipt,view'].includes(keys);
 }

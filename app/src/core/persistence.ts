@@ -121,14 +121,14 @@ export class Persistence {
     const ranked=await Promise.all(entries.map(async state=>({state,created:(await this.db.metadata.get(`created:${state.run_id}`))?.value??0,read_only:await this.is_read_only(state.run_id)})));
     ranked.sort((a,b)=>b.created-a.created||Number(a.read_only)-Number(b.read_only)||b.state.revision-a.state.revision);
     const latest=new Map<string,(typeof ranked)[number]>();
-    for(const entry of ranked){const key=entry.state.schema===7?'B21-CORRIDOR-01':entry.state.definition_hash;if(!latest.has(key))latest.set(key,entry);}
+    for(const entry of ranked){const key=entry.state.schema===8?'B22-MISSION-01':entry.state.schema===7?'B21-CORRIDOR-01':entry.state.definition_hash;if(!latest.has(key))latest.set(key,entry);}
     return [...latest.values()].map(({state:x,read_only}) => ({
       run_id: x.run_id,
       sim_time: x.sim_time,
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
-      scenario_kind: x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
+      scenario_kind: x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
       read_only,
     }));
   }

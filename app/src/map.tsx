@@ -30,8 +30,8 @@ const symbol = new ms.Symbol("SFGPU-----*****", {
   outlineWidth: 2,
 }).asSVG();
 export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
-  const play=view.scenario_kind==='play_corridor'?view:null;
-  const legacy=view.scenario_kind==='play_corridor'?null:view;
+  const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'?view:null;
+  const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'?null:view;
   const recording=view.scenario_kind==='record';
   const sites=legacy?(recording?(['H'] as const):legacy.geometry.N?(['H','N','T'] as const):(['H','T'] as const)):[];
   const site=(id:'H'|'N'|'T'):Coordinate=>{if(!legacy)throw Error('Legacy site requested for public scope branch');return legacy.geometry[id]??legacy.geometry.H;};

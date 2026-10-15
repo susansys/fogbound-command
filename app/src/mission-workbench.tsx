@@ -1,0 +1,127 @@
+import {useEffect,useRef,useState} from 'react';
+import type {Envelope,Intent} from './contracts';
+import type {MissionDraft,MissionPlayerView,MissionPreview,SavePlanEnvelope,ConditionExpr} from './mission-contracts';
+import type {GamePlayerView} from './play-contracts';
+import type {Transport,Response} from './transport';
+import type {RegionalDisplaySession} from './regional-display';
+import {MapView} from './map';
+import {clock,error_copy} from './player-copy';
+import {parse_mission_draft} from './mission-protocol';
+
+function initial_draft(view:MissionPlayerView):MissionDraft{
+  if(view.plans.length)return structuredClone(view.plans.at(-1)!.draft);
+  const run_id=view.run_id,ref=<K extends string>(kind:K,id:string)=>({run_id,kind,id,version:1});
+  const ready:ConditionExpr={kind:'compare',field_ref:'capability.ready',operator:'eq',typed_value:true};
+  return {run_id,plan_id:'plan-M1',mission_ref:ref('mission','M1'),intent:{id:'intent-M1',version:1,purpose:'',desired_end_state:'',key_tasks:['沿登记走廊移动'],priorities:['先A后B'],constraint_refs:['registered-corridors'],acceptable_risk:'registered_low',delegation_ref:ref('authority','B22-STATIC-GRANT')},objective:{id:'objective-M1',purpose:'抵达目标点并等待合法确认',success_expr:{kind:'compare',field_ref:'position.scope',operator:'eq',typed_value:'B'},failure_expr:{kind:'not',child:ready},deadline_time_ms:900000,verification_requirements:['matching_arrival_report_and_delivery'],priority:1,dependencies:[]},phases:[{id:'P1',kind:'move',dependencies:[],entry_gate:ready,exit_gate:{kind:'compare',field_ref:'phase.confirmed',operator:'eq',typed_value:true},earliest_start_time_ms:1000,latest_finish_time_ms:31000,activity:{kind:'move',actor:'R',route_ref:ref('route','route-P1')}},{id:'P2',kind:'move',dependencies:[ref('phase','P1')],entry_gate:ready,exit_gate:{kind:'compare',field_ref:'phase.confirmed',operator:'eq',typed_value:true},earliest_start_time_ms:33000,latest_finish_time_ms:64000,activity:{kind:'move',actor:'R',route_ref:ref('route','route-P2')}}],routes:[{id:'route-P1',path:[[50,150],[150,150]]},{id:'route-P2',path:[[150,150],[250,150]]}],actor_assignments:['R'],support_windows:[],assumptions:[],evidence_refs:view.position_knowledge.status==='conflicting'?[]:[...view.position_knowledge.evidence_refs],decision_points:[],note:''};
+}
+function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>[k,canonical(v)])):value;}
+async function digest(value:unknown){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(canonical(value))));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+type Pending={kind:'save_plan';envelope:SavePlanEnvelope;seq:number;digest:string}|{kind:'operate_mission';envelope:Envelope};
+type Props={view:MissionPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;onHistory:(value:boolean)=>void;onLeave:()=>Promise<void>;displaySession?:RegionalDisplaySession;channelError:string};
+export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave,displaySession,channelError}:Props){
+  const [editingDraft,setDraft]=useState(()=>initial_draft(view));
+  const [editingRoutes,setRouteTexts]=useState(()=>Object.fromEntries(initial_draft(view).routes.map(r=>[r.id,r.path.map(p=>p.map(String))])));
+  const [selected,setSelected]=useState('R'),[routeIndex,setRouteIndex]=useState(0),[workspace,setWorkspace]=useState('tasks');
+  const [editingPreview,setPreview]=useState<MissionPreview|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const [dirty,setDirty]=useState(false),[uncertain,setUncertain]=useState(false),[advance,setAdvance]=useState('1'),[historyNode,setHistoryNode]=useState('1');
+  const [noReceipt,setNoReceipt]=useState(false);
+  const sequence=useRef(0),current=useRef(view),historyRef=useRef(history),pending=useRef<Pending|null>(null);
+  const saveInFlight=useRef(false);
+  current.current=view;historyRef.current=history;
+  const draft=history?initial_draft(view):editingDraft;
+  const routeTexts=history?Object.fromEntries(draft.routes.map(r=>[r.id,r.path.map(p=>p.map(String))])):editingRoutes;
+  const preview=history?view.plans.at(-1)?.preview??null:editingPreview;
+  const activeRoute=draft.routes[routeIndex]??draft.routes[0];
+  function changed(){sequence.current++;setDirty(true);setPreview(null);setError('');}
+  function update(change:(value:MissionDraft)=>void){const next=structuredClone(draft);change(next);setDraft(next);changed();}
+  function form():MissionDraft{
+    const value=structuredClone(draft);
+    for(const route of value.routes)route.path=(routeTexts[route.id]??[]).map(p=>{
+      if(p.length!==2||p.some(s=>!s.trim()||!Number.isFinite(Number(s))))throw Error('INVALID_REQUEST');
+      return [Number(p[0]),Number(p[1])];
+    });
+    return parse_mission_draft(value,current.current.run_id);
+  }
+  function adoptCurrent(next:GamePlayerView){if(next.scenario_kind==='play_mission'&&next.run_id===current.current.run_id&&next.revision>=current.current.revision){current.current=next;adopt(next);}}
+  async function readCurrent(){const result=await transport.request({kind:'view',run_id:current.current.run_id});if(!result.ok)throw Error(result.code);if(!result.view)throw Error('CHANNEL_UNCERTAIN');adoptCurrent(result.view);return result.view;}
+  async function handle(result:Response,original:Pending){
+    if(!result.ok){setError(result.code);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(result.code)){setUncertain(true);return;}
+      pending.current=null;setUncertain(false);setNoReceipt(false);if(['STALE_REVISION','OBJECT_VERSION_CONFLICT'].includes(result.code)){setPreview(null);await readCurrent();setNotice('情况已更新；输入保留，请重新预览后保存。');}return;
+    }
+    if(!result.receipt||!result.view||result.receipt.operation_id!==original.envelope.operation_id||result.view.run_id!==original.envelope.run_id){setUncertain(true);setError('CHANNEL_UNCERTAIN');return;}
+    adoptCurrent(result.view);pending.current=null;setUncertain(false);setNoReceipt(false);setError('');
+    if(original.kind==='save_plan'){
+      const matched=sequence.current===original.seq?await digest(form()):null;
+      if(sequence.current===original.seq&&matched===original.digest){setDirty(false);setNotice('任务草案已保存；尚未下达，不会执行或占用资源。');}
+      else setNotice('原编辑已保存；当前输入仍有未保存改动。');
+    }else setNotice(original.envelope.intent.kind==='save'?'当前行动已保存；任务编辑仍须单独保存草案。':result.view.paused?'暂停已确认，请明确继续。':'控制操作已确认。');
+  }
+  async function send(original:Pending){if(historyRef.current)return;setBusy(true);setError('');try{const result=await transport.request(original.kind==='save_plan'?{kind:'save_plan',envelope:original.envelope}:{kind:'operate_mission',envelope:original.envelope});await handle(result,original);return result;}catch{setUncertain(true);setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function previewDraft(){
+    if(history||busy)return;setBusy(true);setError('');const seq=sequence.current,revision=current.current.revision,run=current.current.run_id;
+    try{const value=form(),expected=await digest(value),result=await transport.request({kind:'preview_mission',run_id:run,revision,editing_seq:seq,draft:value});
+      if(!result.ok){setError(result.code);if(result.code==='STALE_REVISION')await readCurrent();return;}
+      const next=result.mission_preview;
+      if(next&&current.current.run_id===run&&sequence.current===seq&&current.current.revision===revision&&next.run_id===run&&next.revision===revision&&next.editing_seq===seq&&next.draft_digest===expected)setPreview(next);
+    }catch(e){setError(e instanceof Error&&e.message==='INVALID_REQUEST'?'INVALID_REQUEST':'CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function saveDraft(){
+    if(history||busy||pending.current||saveInFlight.current)return;saveInFlight.current=true;setBusy(true);
+    try{
+      const value=form(),expected=await digest(value),seq=sequence.current;
+      if(!editingPreview||editingPreview.editing_seq!==seq||editingPreview.draft_digest!==expected){setPreview(null);setNotice('请先按当前情况预览任务，再保存草案。');return;}
+      for(let attempt=0;attempt<3;attempt++){
+        if(historyRef.current||sequence.current!==seq)return;
+        const v=current.current,fresh=await transport.request({kind:'preview_mission',run_id:v.run_id,revision:v.revision,editing_seq:seq,draft:value});
+        if(!fresh.ok){if(fresh.code==='STALE_REVISION'){await readCurrent();continue;}setError(fresh.code);return;}
+        const checked=fresh.mission_preview;
+        if(!checked||checked.run_id!==v.run_id||checked.revision!==v.revision||checked.editing_seq!==seq||checked.draft_digest!==expected){setError('CHANNEL_UNCERTAIN');return;}
+        if(historyRef.current||sequence.current!==seq)return;setPreview(checked);
+        const envelope:SavePlanEnvelope={run_id:v.run_id,operation_id:crypto.randomUUID(),expected_revision:v.revision,intent:{kind:'save_plan',base_plan_ref:v.mission?.current_plan_ref??null,expected_object_revision:v.mission?.object_revision??0,draft:value}};
+        const original:Pending={kind:'save_plan',envelope,seq,digest:expected};pending.current=original;
+        const result=await send(original);
+        if(!result||result.ok||result.code!=='STALE_REVISION'||pending.current)return;
+        // Only this definitive rejected write permits a fresh operation identity.
+      }
+      setNotice('情况持续更新；输入仍保留，请重新核对任务后再保存。');
+    }catch{setError('INVALID_REQUEST');}finally{saveInFlight.current=false;setBusy(false);}
+  }
+  async function control(intent:Intent){if(historyRef.current||busy||pending.current)return;const original:Pending={kind:'operate_mission',envelope:{run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent}};pending.current=original;await send(original);}
+  async function query(){const original=pending.current;if(!original||busy)return;setBusy(true);try{const r=await transport.request({kind:'receipt',run_id:original.envelope.run_id,operation_id:original.envelope.operation_id});if(!r.ok){setError(r.code);return;}if(!r.receipt){setNoReceipt(true);setNotice('尚未查到已提交结果；原操作身份与输入均已保留。');return;}await handle({request_id:r.request_id,ok:true,receipt:r.receipt,view:await readCurrent()},original);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function recover(){
+    const original=pending.current;if(!original||busy||!noReceipt)return;setBusy(true);
+    try{
+      const restored=await transport.request({kind:'takeover',run_id:original.envelope.run_id,operation_id:crypto.randomUUID()});
+      if(!restored.ok){setError(restored.code);return;}if(!restored.view){setError('CHANNEL_UNCERTAIN');return;}
+      adoptCurrent(restored.view);setNoReceipt(false);
+      // Resolve the original identity after the real restore. Only an actual
+      // stale rejection clears it for a fresh user preview and operation.
+      await send(original);
+    }catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  useEffect(()=>{
+    const pause=()=>{if(current.current.mode!=='command'||current.current.paused)return;void transport.request({kind:'management_pause',reason:document.hidden?'application_hidden':'focus_lost'}).then(r=>{if(r.ok&&r.view){if(!historyRef.current)adoptCurrent(r.view);}else if(!r.ok)setError(r.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));};
+    const hidden=()=>{if(document.hidden)pause();};window.addEventListener('blur',pause);document.addEventListener('visibilitychange',hidden);return()=>{window.removeEventListener('blur',pause);document.removeEventListener('visibilitychange',hidden);};
+  },[transport]);
+  function chooseGoal(target:'A'|'B'){const base=initial_draft({...view,plans:[]});if(target==='A'){base.phases=base.phases.slice(0,1);base.routes=base.routes.slice(0,1);}update(x=>{x.objective.success_expr={kind:'compare',field_ref:'position.scope',operator:'eq',typed_value:target};x.phases=base.phases;x.routes=base.routes;});setRouteTexts(Object.fromEntries(base.routes.map(r=>[r.id,r.path.map(p=>p.map(String))])));setRouteIndex(0);}
+  async function review(){setBusy(true);try{const r=await transport.request({kind:'replay',run_id:view.run_id,to:0,node_revision:Number(historyNode)});if(r.ok&&r.view){onHistory(true);adopt(r.view);}else if(!r.ok)setError(r.code);}finally{setBusy(false);}}
+  async function returnCurrent(){const r=await transport.request({kind:'current',run_id:view.run_id});if(r.ok&&r.view){onHistory(false);adopt(r.view);}else if(!r.ok)setError(r.code);}
+  const blocked=history||busy||uncertain;
+  return <div className="app crisis-app mission-app">
+    <header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong><span className="brand-sub">联合任务指挥部</span></span><span className="demo-badge">任务规划</span><div className="clock"><strong>{clock(view.sim_time)}</strong><span>{history?'历史只读':view.paused?'已暂停':'指挥进行中'}</span></div><button disabled={blocked||view.mode!=='command'} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{view.paused?'继续行动':'暂停行动'}</button><button disabled={blocked} onClick={()=>void control({kind:'save'})}>保存行动</button></header>
+    {(error||channelError)&&<div role="alert" className="fault">{error_copy(error||channelError)}</div>}
+    {uncertain&&<div className="fault"><span>保存状态待查核，输入与原操作已保留。</span><button disabled={busy} onClick={()=>void query()}>查询保存结果</button><button disabled={busy} onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button>{noReceipt&&<button disabled={busy} onClick={()=>void recover()}>恢复最近记录并重新核对</button>}</div>}
+    <div className="contextbar"><strong>R · H—A—B 公开走廊</strong><span>仅移动；支援未安排。总部以合法收到的回报确认结果。</span></div>
+    <div className="shell"><nav className="rail">{[['map','态势地图'],['report','情报报告'],['tasks','任务规划'],['log','指挥记录'],['review','行动复盘']].map(([id,label])=><button key={id} className={workspace===id?'active':''} onClick={()=>setWorkspace(id)}>{label}</button>)}<button disabled={busy||uncertain} onClick={()=>void (async()=>{if(!current.current.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></nav>
+    <main className="main"><div className="workspacebar"><h1>结构化任务</h1><span className="outline-tag">总部视图 · 未安排支援</span></div><p className="operation-status" data-testid="mission-save-state">{view.mission?`已保存版本 ${view.mission.current_plan_ref.version} · 未下达${dirty?' · 有未保存编辑':''}`:'尚未保存 · 未下达'}</p>{notice&&<p role="status" className="operation-status">{notice}</p>}
+      <div className="workbody mission-body">
+        {(workspace==='tasks'||workspace==='map')&&<MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={history?undefined:displaySession} routeDraft={(routeTexts[activeRoute.id]??[]).filter(p=>p.length===2&&p.every(v=>v.trim()&&Number.isFinite(Number(v)))).map(p=>[Number(p[0]),Number(p[1])])} onRoutePoint={history?undefined:p=>{setRouteTexts(old=>({...old,[activeRoute.id]:[...(old[activeRoute.id]??[]),p.map(String)]}));changed();}}/>}
+        {workspace==='tasks'?<section className="mission-editor" aria-label="任务草案"><div className="mission-fields"><label>任务目的<input aria-label="任务目的" value={draft.intent.purpose} readOnly={history} onChange={e=>update(x=>{x.intent.purpose=e.target.value;})}/></label><label>期望结果<input aria-label="期望结果" value={draft.intent.desired_end_state} readOnly={history} onChange={e=>update(x=>{x.intent.desired_end_state=e.target.value;})}/></label><label>窄目标<select aria-label="窄目标" disabled={history} value={draft.objective.success_expr.kind==='compare'?String(draft.objective.success_expr.typed_value):'B'} onChange={e=>chooseGoal(e.target.value as 'A'|'B')}><option value="A">抵达 A 并等待确认</option><option value="B">经 A 抵达 B 并等待确认</option></select></label>
+          {draft.phases.map((phase,index)=><fieldset key={phase.id} disabled={history}><legend>阶段 {index+1} · R 移动</legend><label>前置阶段<select aria-label={`阶段 ${index+1} 前置阶段`} value={phase.dependencies[0]?.id??''} onChange={e=>update(x=>{x.phases[index].dependencies=e.target.value?[{run_id:view.run_id,kind:'phase',id:e.target.value,version:1}]:[];})}><option value="">无前置</option>{draft.phases.map(p=><option key={p.id} value={p.id}>{p.id}</option>)}</select></label><div className="mission-window">{(['earliest_start_time_ms','latest_finish_time_ms'] as const).map((field,i)=><label key={field}>{i?'最晚结束（毫秒）':'最早开始（毫秒）'}<input aria-label={`阶段 ${index+1} ${i?'最晚结束':'最早开始'}`} type="number" value={phase[field]} onChange={e=>update(x=>{x.phases[index][field]=Number(e.target.value);})}/></label>)}</div></fieldset>)}
+          <label>编辑阶段路线<select aria-label="编辑阶段路线" value={routeIndex} onChange={e=>setRouteIndex(Number(e.target.value))}>{draft.routes.map((r,i)=><option key={r.id} value={i}>阶段 {i+1}</option>)}</select></label><ol className="mission-points">{(routeTexts[activeRoute.id]??[]).map((p,i)=><li key={i}><span>{i+1}</span>{p.map((v,axis)=><input key={axis} aria-label={`路线点 ${i+1} ${axis?'y':'x'}`} value={v} inputMode="decimal" readOnly={history} onChange={e=>{setRouteTexts(old=>({...old,[activeRoute.id]:old[activeRoute.id].map((point,j)=>j===i?point.map((n,a)=>a===axis?e.target.value:n):point)}));changed();}}/>)}<button aria-label={`删除路线点 ${i+1}`} disabled={history} onClick={()=>{setRouteTexts(old=>({...old,[activeRoute.id]:old[activeRoute.id].filter((_,j)=>j!==i)}));changed();}}>删</button></li>)}</ol><button disabled={history} onClick={()=>{setRouteTexts(old=>({...old,[activeRoute.id]:[...(old[activeRoute.id]??[]),['','']]}));changed();}}>新增路线点</button><label>任务备注（仅供记录）<textarea aria-label="任务备注（仅供记录）" value={draft.note} readOnly={history} onChange={e=>update(x=>{x.note=e.target.value;})}/></label><p>执行字段仅为 R 移动。备注不会触发维修或其他行动；阅读和编辑不会暂停时间。</p>
+          {preview&&<section data-testid="mission-preview"><h2>公开估计与假设</h2>{preview.phases.map(p=><p key={p.phase_id}>{p.phase_id} · {p.distance} 图上米 · {p.estimated_move_ms===null?'耗时待核实':`${p.estimated_move_ms/1000} 秒`} {p.assumptions.join('；')} {p.gap}</p>)}<p>估计不含消息等待，不能代替下达或现场接令。</p></section>}
+        </div><div className="mission-actions"><button disabled={blocked} onClick={()=>void previewDraft()}>预览任务</button><button className="primary" disabled={blocked||!preview} onClick={()=>void saveDraft()}>保存草案</button></div></section>:workspace==='map'?<aside className="inspector"><h2>公开位置依据</h2><p>{selected}</p><p>仅显示总部已有的位置范围；绘制路线不会下达命令。</p><button onClick={()=>setWorkspace('tasks')}>返回任务规划</button></aside>:<article className="content-view">{workspace==='report'?<><h2>位置依据</h2><p>当前依据：{view.position_knowledge.status==='known_scope'?view.position_knowledge.scope.id:'位置尚未核实'}</p></>:workspace==='review'?<><h2>保存版本与历史记录</h2><p>历史只能查看；返回当前行动后才能编辑与保存。</p><label>历史节点<select aria-label="历史节点" value={historyNode} onChange={e=>setHistoryNode(e.target.value)}><option value="1">开局</option>{view.replay_nodes.map(n=><option key={n.revision} value={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy} onClick={()=>void review()}>查看历史节点</button>{history&&<button onClick={()=>void returnCurrent()}>返回当前行动</button>}</>:<><h2>指挥记录</h2>{view.log.map(x=><p key={x.id}>{clock(x.at)} · {x.text}</p>)}</>}</article>}
+      </div><footer className="mission-footer"><span data-testid="mission-resources">移动能量 {view.resources.movement_energy} · 联络能量 {view.resources.equipment_energy} · 总部能量 {view.resources.hq_energy}</span><span data-testid="mission-orders">尚未下达；无执行或预约</span>{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={e=>setAdvance(e.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
+    </main></div>
+  </div>;
+}

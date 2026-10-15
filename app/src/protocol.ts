@@ -26,13 +26,16 @@ export function valid_request(
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['focus_lost','application_hidden'].includes(value.reason);
+  if(value.kind==='preview_mission')return fields(value,['kind','request_id','run_id','revision','editing_seq','draft'])&&valid_id(value.run_id)&&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>=1&&typeof value.editing_seq==='number'&&Number.isSafeInteger(value.editing_seq)&&value.editing_seq>=0;
+  if(value.kind==='save_plan')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='operate_mission')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (
       fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref']),...(value.case_ref===undefined?[]:['case_ref'])]) &&
       (value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&
       (value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE')&&
-      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01') &&
+      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );

@@ -3,16 +3,20 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
+import type {MissionPreview} from './mission-contracts';
 export type RunSummary = {
   run_id: string;
   revision: number;
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission';
   read_only?:boolean;
 };
 export type Request =
+  |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
+  |{kind:'save_plan';envelope:unknown}
+  |{kind:'operate_mission';envelope:Envelope}
   | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
@@ -34,6 +38,7 @@ export type Response =
       view?: PlayerView;
       runs?: RunSummary[];
       plan?: PreviewPlan;
+      mission_preview?:MissionPreview;
       receipt?: Receipt | null;
     }
   | { request_id: string; ok: false; code: string;field_path?:string };
