@@ -120,6 +120,7 @@ small {
   background: #142027;
 }
 .brand {
+  color: #e5ebe6;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -229,6 +230,14 @@ small {
   align-items: center;
   gap: 14px;
   padding: 0 20px;
+  background: #17232b;
+  border-bottom: 1px solid var(--line);
+}
+.operation-status {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 20px;
+  font-size: 12px;
   background: #17232b;
   border-bottom: 1px solid var(--line);
 }

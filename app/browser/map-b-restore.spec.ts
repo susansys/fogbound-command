@@ -140,9 +140,15 @@ for(const fault of ['denied','abort','readback'] as const)test(`MB19 ${fault} di
  await page.evaluate(fault=>(window as any).ownedDisplayFault=fault,fault);await page.getByRole('button',{name:'保存记录',exact:true}).click();await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
  await expect(page.locator('.display-record-status')).toContainText(fault==='readback'?'待核查':'失败');const records=await readRecords();expect(records).toContainEqual(original[0]);expect(records).toHaveLength(fault==='readback'?2:1);
  if(fault==='readback'){
+  const committed=(await trace(page)).views.at(-1)!;
   await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:'态势地图',exact:true}).click();await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');
   await expect(page.locator('.display-record-status')).toContainText('待核查');
-  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'核查地图保存结果',exact:true}).click();await expect(page.locator('.display-record-status')).toContainText('已核查保存');expect(await readRecords()).toHaveLength(2);
+  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'核查地图保存结果',exact:true}).click();
+  // Reconnecting the rendered map can replace the reconciliation message with
+  // the equally confirmed readback message. Verify the committed identity too.
+  await expect(page.locator('.display-record-status')).toHaveText(/^(地图关联已核查保存|地图关联已保存并读回核验)$/);
+  const head=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{const open=indexedDB.open('fogbound-map-b-display-1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,read=db.transaction('heads','readonly').objectStore('heads').getAll();read.onsuccess=()=>{db.close();resolve(read.result[0].id);};read.onerror=()=>{db.close();reject(read.error);};};}));
+  expect(head).toBe(records.find(record=>record.id!==original[0].id)!.id);expect(await readRecords()).toEqual(records);expect((await trace(page)).views.at(-1)).toEqual(committed);
  }
 });
 
