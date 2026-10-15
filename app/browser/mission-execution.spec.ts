@@ -47,3 +47,26 @@ test('B22 an already received pause has its turn before a queued automatic tick'
   const requests=trace.requests.filter(r=>r.kind==='operate_mission'&&r.envelope?.intent.kind==='pause');const probe=trace.requests.find(r=>r.request_id.startsWith('queue-read-'))!;expect(trace.times[probe.request_id].received-trace.times[probe.request_id].sent).toBeGreaterThanOrEqual(750);expect(trace.times[requests[0].request_id].sent).toBeLessThan(trace.times[probe.request_id].received);expect(requests).toHaveLength(1);expect(trace.responses.find(r=>r.request_id===requests[0].request_id)).toMatchObject({ok:true,view:{paused:true}});
   const read=trace.responses.find(r=>r.request_id.startsWith('queue-read-'));expect(read?.ok).toBe(true);expect(trace.responses.find(r=>r.request_id===requests[0].request_id)!.view!.sim_time).toBeGreaterThan(read!.view!.sim_time);
 });
+
+test('B22 a definite stale pause returns its legal current view without a separate racing read',async({page})=>{
+  await page.addInitScript(()=>{
+    const Native=window.Worker,requests:unknown[]=[],responses:unknown[]=[];let delayed=false;
+    class Observed extends Native{
+      constructor(url:string|URL,options?:WorkerOptions){
+        super(url,options);if(!String(url).includes('/assets/worker-'))return;
+        const post=this.postMessage.bind(this);this.postMessage=(message:Record<string,unknown>)=>{
+          requests.push(structuredClone(message));const envelope=message.envelope as {intent?:{kind:string}}|undefined;
+          if(!delayed&&message.kind==='operate_mission'&&envelope?.intent?.kind==='pause'){delayed=true;setTimeout(()=>post(message),600);}else post(message);
+        };this.addEventListener('message',event=>responses.push(structuredClone(event.data)));
+      }
+    }
+    window.Worker=Observed;Reflect.set(window,'__b22StalePauseTrace',{requests,responses});
+  });
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption('command');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'暂停行动',exact:true})).toBeEnabled();
+  const before=await page.evaluate(()=>{const t=Reflect.get(window,'__b22StalePauseTrace') as {requests:Array<{kind:string}>};return t.requests.filter(r=>r.kind==='view').length;});
+  await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  const t=await page.evaluate(()=>Reflect.get(window,'__b22StalePauseTrace') as {requests:Array<{kind:string;request_id:string;envelope?:{operation_id:string;expected_revision:number;run_id:string;intent:{kind:string}}}>;responses:Array<{request_id:string;ok:boolean;code?:string;mission_view?:{run_id:string;revision:number;scenario_kind:string}} >});
+  const pauses=t.requests.filter(r=>r.kind==='operate_mission'&&r.envelope?.intent.kind==='pause');expect(pauses).toHaveLength(2);
+  const stale=t.responses.find(r=>r.request_id===pauses[0].request_id)!;expect(stale).toMatchObject({ok:false,code:'STALE_REVISION',mission_view:{scenario_kind:'play_mission',run_id:pauses[0].envelope!.run_id}});
+  expect(Object.keys(stale).sort()).toEqual(['code','mission_view','ok','request_id']);expect(pauses[1].envelope!.expected_revision).toBe(stale.mission_view!.revision);expect(pauses[1].envelope!.operation_id).not.toBe(pauses[0].envelope!.operation_id);expect(t.requests.filter(r=>r.kind==='view')).toHaveLength(before);
+});

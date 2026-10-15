@@ -60,3 +60,14 @@ test.each(['private_condition','false_authorization'] as const)('B22 strict gate
     expect(valid_response({request_id:'corrupt',ok:true,mission_preview:preview})).toBe(false);
   }finally{await store.delete();}
 });
+
+test('B22 a definite stale pause can carry only a strict legal current mission view',async()=>{
+  const store=new Persistence('b22-owned-t03-stale-pause-view');
+  try{
+    const view=await new Game(store).create_run(definition,'research','create');
+    expect(valid_response({request_id:'stale-pause',ok:false,code:'STALE_REVISION',mission_view:view})).toBe(true);
+    expect(valid_response({request_id:'wrong-error',ok:false,code:'AUTHORITY_DENIED',mission_view:view})).toBe(false);
+    expect(valid_response({request_id:'private-view',ok:false,code:'STALE_REVISION',mission_view:{...view,world:{position:[250,150]}}})).toBe(false);
+    expect(valid_response({request_id:'not-current-proof',ok:false,code:'STALE_REVISION',mission_view:{...view,mission:{id:'M1',status:'completed'}}})).toBe(false);
+  }finally{await store.delete();}
+});

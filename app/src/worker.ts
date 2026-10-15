@@ -80,11 +80,13 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
   const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
   if(pause)pendingPauses++;
   queue = queue.then(async () => {
+    let stalePauseView:import('./mission-contracts').MissionPlayerView|undefined;
     const raw: unknown = event.data,
       request_id = correlation(raw);
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
+      if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
       if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
       if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
@@ -181,7 +183,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       const code =
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
       if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
-      scope.postMessage({ request_id, ok: false, code,...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
+      scope.postMessage({ request_id, ok: false, code,...(code==='STALE_REVISION'&&stalePauseView?{mission_view:stalePauseView}:{}),...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
     } finally {if(pause)pendingPauses--;}
   });
 };

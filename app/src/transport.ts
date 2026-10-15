@@ -3,7 +3,7 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
-import type {MissionPreview} from './mission-contracts';
+import type {MissionPreview,MissionPlayerView} from './mission-contracts';
 export type RunSummary = {
   run_id: string;
   revision: number;
@@ -42,7 +42,7 @@ export type Response =
       mission_preview?:MissionPreview;
       receipt?: Receipt | null;
     }
-  | { request_id: string; ok: false; code: string;field_path?:string };
+  | { request_id: string; ok: false; code: string;field_path?:string;mission_view?:MissionPlayerView };
 export class Transport {
   private listeners=new Set<(response:Response)=>void>();
   subscribe(listener:(response:Response)=>void){this.listeners.add(listener);return ()=>{this.listeners.delete(listener);};}

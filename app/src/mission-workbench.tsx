@@ -74,7 +74,7 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
   async function readCurrent(){const result=await transport.request({kind:'view',run_id:current.current.run_id});if(!result.ok)throw Error(result.code);if(!result.view)throw Error('CHANNEL_UNCERTAIN');adoptCurrent(result.view);return result.view;}
   async function handle(result:Response,original:Pending){
     if(!result.ok){setError(result.code,result.field_path);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(result.code)){setUncertain(true);return;}
-      pending.current=null;setUncertain(false);setNoReceipt(false);if(['STALE_REVISION','OBJECT_VERSION_CONFLICT'].includes(result.code)){setPreview(null);await readCurrent();setNotice('情况已更新；输入保留，请重新预览后保存。');}return;
+      pending.current=null;setUncertain(false);setNoReceipt(false);if(['STALE_REVISION','OBJECT_VERSION_CONFLICT'].includes(result.code)){setPreview(null);if(result.mission_view&&result.mission_view.run_id===original.envelope.run_id)adoptCurrent(result.mission_view);else await readCurrent();setNotice('情况已更新；输入保留，请重新预览后保存。');}return;
     }
     if(!result.receipt||!result.view||result.receipt.operation_id!==original.envelope.operation_id||result.view.run_id!==original.envelope.run_id){setUncertain(true);setError('CHANNEL_UNCERTAIN');return;}
     adoptCurrent(result.view);pending.current=null;setUncertain(false);setNoReceipt(false);setError('');

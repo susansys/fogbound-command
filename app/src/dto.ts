@@ -88,7 +88,7 @@ const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:one
 const codes=['AUTHORITY_DENIED','EVIDENCE_REQUIRED','CONSTRAINT_HOLD','CONSTRAINT_DENIED','CAPACITY_CONFLICT','STATE_CONFIRMATION_REQUIRED','WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','OBJECT_VERSION_CONFLICT','OPERATION_ID_REUSED','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
-  if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)},{field_path:path=>['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(String(value.code))&&valid_public_field_path(path)});
+  if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)},{field_path:path=>['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(String(value.code))&&valid_public_field_path(path),mission_view:view=>value.code==='STALE_REVISION'&&mission_player_view(view)});
   if(!shape(value,{request_id:valid_id,ok:oneOf([true])},{view:player_view,plan,mission_preview,receipt,runs:list(run)}))return false;
   const keys=Object.keys(value).filter(key=>key!=='request_id'&&key!=='ok').sort().join(',');
   return ['view','plan','mission_preview','receipt','runs','receipt,view'].includes(keys);
