@@ -36,6 +36,7 @@ let active:PlayerView|null=null;
 let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
+let pendingPauses=0;
 function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
@@ -52,11 +53,11 @@ async function pauseActiveRun(){
   remember(result.view);
 }
 setInterval(()=>{
-  if(clockQueued||!locked||!active||active.mode!=='command'||active.paused)return;
+  if(clockQueued||pendingPauses||!locked||!active||active.mode!=='command'||active.paused)return;
   clockQueued=true;
   queue=queue.then(async()=>{
     try{
-      if(!active||active.mode!=='command'||active.paused)return;
+      if(pendingPauses||!active||active.mode!=='command'||active.paused)return;
       const to=clockTarget(active);
       if(to<=active.sim_time)return;
       const result=await game.tick(active.run_id,to,crypto.randomUUID());
@@ -70,6 +71,14 @@ setInterval(()=>{
   });
 },250);
 scope.onmessage = (event: MessageEvent<unknown>) => {
+  // Give an already received pause its turn before another automatic tick.
+  // Other requests do not suppress clock scheduling. Game still checks
+  // revisions and derives actual elapsed time when it commits the operation.
+  const kind=event.data&&typeof event.data==='object'?Reflect.get(event.data,'kind'):null;
+  const envelope=event.data&&typeof event.data==='object'?Reflect.get(event.data,'envelope'):null;
+  const intent=envelope&&typeof envelope==='object'?Reflect.get(envelope,'intent'):null;
+  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
+  if(pause)pendingPauses++;
   queue = queue.then(async () => {
     const raw: unknown = event.data,
       request_id = correlation(raw);
@@ -173,6 +182,6 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
       if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
       scope.postMessage({ request_id, ok: false, code,...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
-    }
+    } finally {if(pause)pendingPauses--;}
   });
 };
