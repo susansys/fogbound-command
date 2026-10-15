@@ -1,5 +1,17 @@
 # FB01 engineering verification
 
+## B21 — continuous corridor candidate (#45, #46–#49)
+
+2026-10-15: this batch introduces the separate B21-CORRIDOR-01/schema7 package. Original schema4/5/6 definitions and MAP-B assets remain unchanged. Public spatial scopes and route previews use lawful Headquarters evidence; private movement, source observations, message delivery and resource settlement remain distinct. A signed route is revalidated before issue, follows registered rational timing, and produces at most acceptance plus one terminal report for each normal movement. The inclusive deadline stops actual movement; receipt grace never extends work.
+
+Local T04 candidate evidence covers late/equal-time/unknown position observations, conflict preservation, forged/stale-plan atomic refusal, exact-time read-only replay, same-origin native process-close takeover, writer exclusion and explicit continue. Chrome155 and Edge155 each completed a real native command movement/recovery/focus journey. Eight viewport/DPR grids passed. One actual hardware Edge observation completed 60054ms/204 edit-pan-zoom-preview-clear cycles; raw rAF, response latency, heap and renderer values are retained without a new FPS threshold. That observation's subsequent combined recovery attempt failed because the test paused after arrival; separate fresh-profile recovery samples passed. A Chrome run paused again after an additional genuine focus loss and timed out; its original failure remains, and a separate fresh run passed. These are candidate-level observations, not final-SHA CI or main acceptance.
+
+Repeated schema7 validation uses a bounded cache only for exact previously validated or successfully committed private Game states. Every read still checks the actual complete JSON body hash, registered definition and current initial/parent lineage. Cold or modified contents undergo semantic replay. Rehashed corruption and invalid JSON data are rejected on the same live Game. The initial preview-starvation failures, measurement baselines and subsequent real-browser observation remain separate evidence.
+
+History and restart have real GUI coverage, including a genuinely lost successful restart reply: retry keeps the original operation ID and creates one child. New runs clear unissued reasons. Save feedback distinguishes committed progress and independently confirmed map display from an unissued draft. The frozen0.2.1 comparable shell, fonts and map controls require separate full-frame inspection; H/A/B, scopes and the new route editor are explicit approved differences.
+
+The batch remains a local candidate until independent fixed-base Standards/Spec review, final same-SHA remote quality/browser CI, PR review/merge, main CI, public artifact verification, safe local synchronization and exact owned cleanup are recorded. Original244AT, complete first playable, formal human information pressure and real military fidelity remain unaccepted. Raw profiles, private designs and diagnostic files are not public artifacts.
+
 ## FB03 T02 — readable records and frozen commands (#21)
 
 2026-10-13: PlayerView exposes only the HQ's registered command/plan/original optional reason, copied from committed HQ inputs. Delivered receipt navigation marks meaningful public records and administrative actions; quiet time advances remain available through the full-history control. Same-time snapshots keep their own revision and committed time. Legacy persisted schema4/schema5 fields and hashes are unchanged.

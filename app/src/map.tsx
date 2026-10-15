@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Application, Container, Graphics,Sprite,Texture } from "pixi.js";
 import ms from "milsymbol";
 import { Plus, Minus, Crosshair, Stack, Compass } from "@phosphor-icons/react";
-import type { PlayerView } from "./contracts";
+import type {GamePlayerView as PlayerView} from './play-contracts';
+import type {Coordinate,SpatialScope} from './spatial';
 import { clock } from "./player-copy";
 import {createMapSurface,type MapSurface} from './map-surface';
 import mapManifest from './map-assets/manifest.json';
@@ -16,6 +17,9 @@ type Props = {
   planned: boolean;
   plannedTarget?:'N'|'T';
   displaySession?:RegionalDisplaySession;
+  routeDraft?:Coordinate[];
+  onRoutePoint?:(point:Coordinate)=>void;
+  onRouteCancel?:()=>void;
 };
 const symbol = new ms.Symbol("SFGPU-----*****", {
   size: 30,
@@ -25,11 +29,13 @@ const symbol = new ms.Symbol("SFGPU-----*****", {
   outlineColor: "#e4eee2",
   outlineWidth: 2,
 }).asSVG();
-export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession }: Props) {
+export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
+  const play=view.scenario_kind==='play_corridor'?view:null;
+  const legacy=view.scenario_kind==='play_corridor'?null:view;
   const recording=view.scenario_kind==='record';
-  const sites=recording?(['H'] as const):view.geometry.N?(['H','N','T'] as const):(['H','T'] as const);
-  const site=(id:'H'|'N'|'T')=>view.geometry[id]??view.geometry.H;
-  const routeTarget=site(plannedTarget);
+  const sites=legacy?(recording?(['H'] as const):legacy.geometry.N?(['H','N','T'] as const):(['H','T'] as const)):[];
+  const site=(id:'H'|'N'|'T'):Coordinate=>{if(!legacy)throw Error('Legacy site requested for public scope branch');return legacy.geometry[id]??legacy.geometry.H;};
+  const routeTarget=legacy?site(plannedTarget):null;
   const host = useRef<HTMLDivElement>(null),
     app = useRef<Application | null>(null),
     scene = useRef<Container | null>(null);
@@ -107,7 +113,13 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
   }
   function focusSelection(){
     const el=host.current;if(!el)return;
-    const position=selected==='R'?[view.position.x,view.position.y]:site(selected==='N'?'N':selected==='T'?'T':'H');
+    let position:Coordinate;
+    if(play){
+      const scope=selected==='R'?(play.position_knowledge.status==='known_scope'?play.position_knowledge.scope:null):play.geometry.scopes.find(x=>x.id===selected);
+      if(scope?.kind!=='point')return;
+      position=scope.typed_geometry.position;
+    }else if(legacy)position=selected==='R'?[legacy.position.x,legacy.position.y]:site(selected==='N'?'N':selected==='T'?'T':'H');
+    else return;
     if(surface.current){surface.current.focus([position[0],position[1]]);apply();return;}
     camera.current.x=el.clientWidth/2-position[0]*camera.current.s;camera.current.y=el.clientHeight/2-position[1]*camera.current.s;apply();
   }
@@ -183,7 +195,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
         scene.current = world;
         instance.stage.addChild(world);
         world.addChild(graphics);
-        const { plain, rough, H, T, corridor_width } = view.geometry;
+        if(legacy){
+        const { plain, rough, H, T, corridor_width } = legacy.geometry;
         graphics
           .rect(plain[0], plain[1], plain[2] - plain[0], plain[3] - plain[1])
           .fill({color:0x283a33,alpha:.12})
@@ -203,6 +216,18 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           .moveTo(H[0], H[1])
           .lineTo(T[0], T[1])
           .stroke({ color: "#9baf9a", width: 2 });
+        }else if(play){
+          const draw=(scope:SpatialScope,region=false)=>{
+            if(scope.kind==='area'){
+              graphics.poly(scope.typed_geometry.outer.flat()).fill({color:region?0xb8a36d:0x8fa8a0,alpha:region ? .12 : .16}).stroke({color:region?0xd2b87e:0x91a99b,width:region?1.5:1});
+              for(const hole of scope.typed_geometry.holes)graphics.poly(hole.flat()).cut();
+            }else if(scope.kind==='edge')graphics.poly(scope.typed_geometry.line.flat(),false).stroke({color:0x98b4c6,width:1.5});
+            else if(scope.kind==='corridor')graphics.poly(scope.typed_geometry.centerline.flat(),false).stroke({color:0xb7c7ab,width:2});
+            else if(scope.kind==='point'&&scope.uncertainty.kind==='known'&&scope.uncertainty.value>0)graphics.circle(...scope.typed_geometry.position,scope.uncertainty.value).fill({color:0xc8b574,alpha:.15}).stroke({color:0xc8b574,width:1});
+            else if(scope.kind==='region_set')for(const ref of scope.typed_geometry.area_refs){const area=play.geometry.scopes.find(x=>x.id===ref);if(area)draw(area,true);}
+          };
+          for(const scope of play.geometry.scopes)draw(scope);
+        }
         fit();
         observer = new ResizeObserver(() => {
           if (!drag.current) apply();
@@ -273,7 +298,8 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       left: surface.current?.project([x,y]).x??c.x + x * c.s,
       top: surface.current?.project([x,y]).y??c.y + y * c.s,
     });
-  const start=point(...view.geometry.H),end=point(...routeTarget);
+  const start=legacy?point(...legacy.geometry.H):null,end=routeTarget?point(...routeTarget):null;
+  const knownPoint=play?.position_knowledge.status==='known_scope'&&play.position_knowledge.scope.kind==='point'?play.position_knowledge.scope:null;
   const scaleTarget=100/c.s,scalePower=10**Math.floor(Math.log10(scaleTarget));
   const scaleMetres=([1,2,5,10].filter(value=>value<=scaleTarget/scalePower).at(-1)??1)*scalePower;
   const pointerPoint=pointerPixel?[(pointerPixel[0]-c.x)/c.s,(pointerPixel[1]-c.y)/c.s]:null;
@@ -281,7 +307,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
   const insideRegion=regionPoint?.every(value=>value>=0&&value<=10000);
   const height=regionPoint&&regional.current?sampleSimulationHeight({...regional.current.manifest.field,values:regional.current.values,mask:regional.current.mask},regionPoint[0],regionPoint[1]):null;
   return (
-    <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
+    <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){if(routeDraft)onRouteCancel?.();setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
     <section
       className="map map-canvas"
       ref={host}
@@ -348,6 +374,12 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       onPointerUp={(e) => {
         const d = drag.current;
         if (d && d.id === e.pointerId && !d.moved) {
+          if(onRoutePoint){
+            const box=e.currentTarget.getBoundingClientRect(),pixel:[number,number]=[e.clientX-box.left,e.clientY-box.top];
+            const world=surface.current?.unproject(pixel)??[(pixel[0]-c.x)/c.s,(pixel[1]-c.y)/c.s];
+            onRoutePoint([Math.round(world[0]*100)/100,Math.round(world[1]*100)/100]);
+            drag.current=null;return;
+          }
           const marker = document
             .elementFromPoint(e.clientX, e.clientY)
             ?.closest<HTMLElement>("[data-marker]");
@@ -371,7 +403,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
         <span>最后确认 · 不是现场实时位置</span>
       </div>
       {pointerPoint&&<div className="map-coordinate" data-ui>图上{pointerPoint.map(value=>value.toFixed(2)).join(', ')} · {regionPoint?insideRegion?`区域${regionPoint.map(value=>value.toFixed(2)).join(', ')} 图上米（仅背景阅读）`:'区域界外：无地形资料':'区域资料未就绪'} · 模拟高程（相对虚构基准，图上米）：{height===null?'未知':height.toFixed(2)}</div>}
-      {planned && !recording && (
+      {planned && !recording && start&&end&&(
         <svg className="plan-route" aria-hidden="true">
           <path
             d={`M${start.left} ${start.top} L${end.left} ${end.top}`}
@@ -382,6 +414,11 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           />
         </svg>
       )}
+      {play&&play.issued_orders.length>0&&<svg className="plan-route" aria-label="已下达计划，不表示实际进度" data-testid="issued-plan-line"><polyline points={play.issued_orders.at(-1)!.plan.path.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#8dafa6" strokeWidth="3" strokeDasharray="7 5" fill="none"/></svg>}
+      {routeDraft&&<svg className="plan-route" aria-label="未下达路线草案" data-testid="route-draft-line">
+        <polyline points={routeDraft.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#d2b87e" strokeWidth="3" strokeDasharray="7 5" fill="none"/>
+        {routeDraft.map(([x,y],index)=><circle key={index} data-route-anchor={index} data-coordinate={`${x},${y}`} cx={point(x,y).left} cy={point(x,y).top} r="3" fill="#d2b87e"/>)}
+      </svg>}
       {!recording&&<svg className="plan-route" aria-hidden="true">
         {sites.map((id) => {
           const [x, y] = site(id);
@@ -398,7 +435,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       </svg>}
       <div className="world-overlay">
         {sites.map(id=><i key={id} className="map-anchor" data-anchor={id} aria-hidden="true" style={point(...site(id))}/>)}
-        {recording&&<span className="record-leader" style={point(...view.geometry.H)} aria-hidden="true"/>}
+        {recording&&legacy&&<span className="record-leader" style={point(...legacy.geometry.H)} aria-hidden="true"/>}
         {sites.map((id) => {
           const [x, y] = site(id);
           return (
@@ -406,22 +443,22 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
               key={id}
               aria-label={recording?'工位H':id==='N'?'近联络点N':id === "T" ? "联络点T" : "起点H"}
               data-marker={id}
-              className={`site-marker ${view.geometry.N?'prestart-site':''} ${selected === id ? "selected" : ""}`}
+              className={`site-marker ${legacy?.geometry.N?'prestart-site':''} ${selected === id ? "selected" : ""}`}
               style={{ ...point(x, y), marginTop: recording?'-3.2em':id==='N'?-90:-44 }}
               onClick={(e) => {
                 if (e.detail === 0) onSelect(id);
               }}
             >
               <span className="site-shape">{id}</span>
-              {labels && <b>{recording?'工位H · 档案A':id==='N'?'近联络点':id === "T" ? view.geometry.N?'远联络点':'目标联络点' : "总部起点"}</b>}
+              {labels && <b>{recording?'工位H · 档案A':id==='N'?'近联络点':id === "T" ? legacy?.geometry.N?'远联络点':'目标联络点' : "总部起点"}</b>}
             </button>
           );
         })}
-        <button
+        {legacy&&<button
           aria-label="编组R最后确认位置"
           data-marker="R"
           className={`unit-marker ${selected === "R" ? "selected" : ""}`}
-          style={point(view.position.x, view.position.y)}
+          style={point(legacy.position.x, legacy.position.y)}
           onClick={(e) => {
             if (e.detail === 0) onSelect("R");
           }}
@@ -433,10 +470,14 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           />
           {labels && (
             <b>
-              R<small>最后确认 · {clock(view.position.observed)}</small>
+              R<small>最后确认 · {clock(legacy.position.observed)}</small>
             </b>
           )}
-        </button>
+        </button>}
+        {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<i key={scope.id} className="map-anchor" data-anchor={scope.id} aria-hidden="true" style={point(...scope.typed_geometry.position)}/>)}
+        {play&&<svg className="plan-route" aria-hidden="true">{play.geometry.scopes.map(scope=>scope.kind==='point'&&<path key={scope.id} d={`M${point(...scope.typed_geometry.position).left} ${point(...scope.typed_geometry.position).top} v${scope.id==='approximate'?54:-44}`} stroke="#aabbb6" strokeWidth="1"/>)}</svg>}
+        {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<button key={scope.id} className={`site-marker ${selected===scope.id?'selected':''}`} data-marker={scope.id} data-scope-kind="point" aria-label={`图上地点 ${scope.id}`} style={{...point(...scope.typed_geometry.position),marginTop:scope.id==='approximate'?54:-44}} onClick={()=>onSelect(scope.id)}><span className="site-shape">{scope.id==='approximate'?'?':scope.id}</span>{labels&&scope.uncertainty.kind==='known'&&scope.uncertainty.value>0&&<b>误差 {scope.uncertainty.value} 图上米</b>}</button>)}
+        {play&&knownPoint&&<button className={`unit-marker play-unit ${selected==='R'?'selected':''}`} data-marker="R" aria-label="编组R最后确认位置" style={point(...knownPoint.typed_geometry.position)} onClick={()=>onSelect('R')}><img className="mil-symbol" alt="虚构编组R" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(symbol)}`}/>{labels&&<b>R · 最后收到的位置</b>}</button>}
       </div>
       <div className="map-tools map-controls" data-ui>
         <button aria-label="放大地图" onClick={() => magnify(1.2)}>
@@ -502,7 +543,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(recording?(['R','H'] as const):view.geometry.N?(['R','H','N','T'] as const):(['R','H','T'] as const)).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(play?['R','H','A','B']:recording?['R','H']:legacy?.geometry.N?['R','H','N','T']:['R','H','T']).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
     </div>
   );
 }

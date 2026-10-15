@@ -1,20 +1,22 @@
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {State} from './state';
 import {GameError} from '../contracts';
-import {hash,load_definition,definition_for_package,record_definition_for_package,prestart_parameters,prestart_case} from './scenario';
+import {hash,load_definition,definition_for_package,record_definition_for_package,prestart_parameters,prestart_case,type PlayDefinition} from './scenario';
 import {record,valid_id,fields,valid_envelope} from '../protocol';
 import {player_view,position,resources} from '../dto';
 import {project_player_view} from './knowledge';
 import {replay_committed_state} from './replay';
 import {quantity,initial_record_accounts,record_work_at} from './record-accounting';
 import {initial_prestart_data} from './prestart-move';
+import type {StoredState} from './state';
+import {validate_play_state} from './play-snapshot';
 export function canonical(value:unknown):unknown{
   if(Array.isArray(value))return value.map(canonical);
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,item])=>[key,canonical(item)]));
   return value;
 }
-export async function state_hash(state:State){const {integrity,...body}=state;return hash(canonical(body));}
-function json_data(value:unknown,seen=new WeakSet<object>()):boolean{
+export async function state_hash(state:StoredState){const {integrity,...body}=state;return hash(canonical(body));}
+export function json_data(value:unknown,seen=new WeakSet<object>()):boolean{
   if(value===null||typeof value==='string'||typeof value==='boolean')return true;
   if(typeof value==='number')return Number.isFinite(value);
   if(typeof value!=='object'||seen.has(value))return false;
@@ -156,8 +158,9 @@ function prestart_history_matches(state:State,definition:ReturnType<typeof defin
   initial.schedule=[];initial.log=[{id:'initial-report',at:0,kind:'report',text:'原始工位报告已递交；R最后确认在H。',evidence:c.delivery.id}];
   return equal(replay_committed_state(initial,state.inputs),state);
 }
-export async function validate_state(value:unknown):Promise<State>{
+export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[]):Promise<StoredState>{
   try{
+    if(record(value)&&value.schema===7){if(!json_data(value))throw Error('invalid');return await validate_play_state(value,registered);}
     if(!record(value)||!json_data(value)||![4,5,6].includes(Number(value.schema))||typeof value.schema!=='number'||value.contract!=='0.5.1'||value.phase!=='committed'||!valid_id(value.run_id))throw Error('invalid');
     const state=value as unknown as State;
     const definition=definition_for_package(state.schema,state.definition_hash);

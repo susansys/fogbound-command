@@ -45,14 +45,13 @@ async function backgroundControls(page:Page){
   },{base64:png.toString('base64'),camera,width:box.width,height:box.height});
 }
 
-for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR${dpr} three public scenes/complete-region P stay aligned under real camera actions`,async({browser},info)=>{
- // Three independent fresh scenes share this wrapper; each assertion keeps its
- // original bound. Software screenshot encoding is included, not a startup gate.
+for(const width of [1366,1920])for(const dpr of [1,2])for(const definition of ['FB01-ENG-MOVE','FB02-ENG-RECORD','ENG-PRESTART-REPLACE'])test(`MB07/08 ${width} DPR${dpr} ${definition} complete-region P stays aligned under real camera actions`,async({browser},info)=>{
+ // Independent scenes have separate screenshot/teardown budgets. Every original
+ // control point, full screenshot and numeric bound remains unchanged.
  test.setTimeout(90000);
  const audit=[];
  const sourceSha256=createHash('sha256').update(await fs.readFile(new URL(import.meta.url))).digest('hex');
  info.annotations.push({type:'test-source-sha256',description:sourceSha256});
- for(const definition of ['FB01-ENG-MOVE','FB02-ENG-RECORD','ENG-PRESTART-REPLACE']){
   const context=await browser.newContext({viewport:{width,height:width===1366?768:1080},deviceScaleFactor:dpr}),page=await context.newPage();
   try{
   await observeGame(page);await start(page,definition);
@@ -100,7 +99,6 @@ for(const width of [1366,1920])for(const dpr of [1,2])test(`MB07/08 ${width} DPR
   await expect(map.locator('canvas')).toHaveCount(1);
   await page.screenshot({path:info.outputPath(`${definition}-action-area-full-workbench.png`),fullPage:true});
   }finally{await context.close();}
- }
  const file=info.outputPath('independent-projection-audit.json');await fs.writeFile(file,JSON.stringify(audit,null,2));
  await info.attach('independent-projection-audit',{path:file,contentType:'application/json'});
 });

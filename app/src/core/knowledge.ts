@@ -1,6 +1,7 @@
 import type { PlayerView } from "../contracts";
 import type {PrestartCaseRef} from '../contracts';
-import {is_task_intent} from '../contracts';
+import {is_task_intent,GameError} from '../contracts';
+import {is_legacy_plan} from '../route-contracts';
 import type { State } from "./state";
 import {public_replay_nodes} from './public-records';
 import {can_register_prestart} from './prestart-move';
@@ -31,7 +32,9 @@ export function project_player_view(state: State): PlayerView {
     resources: structuredClone(state.known.resources),
     issued_orders: state.inputs.flatMap(input=>{
       const intent=input.envelope.intent;
-      return is_task_intent(intent)?[{command_id:intent.command_id,issued:input.at,plan:structuredClone(intent.plan),...(intent.reason===undefined?{}:{reason:intent.reason})}]:[];
+      if(!is_task_intent(intent))return [];
+      if(!is_legacy_plan(intent.plan))throw new GameError('INVALID_SAVE');
+      return [{command_id:intent.command_id,issued:input.at,plan:structuredClone(intent.plan),...(intent.reason===undefined?{}:{reason:intent.reason})}];
     }),
     ...(state.schema===5?{artifacts: structuredClone(state.known.artifacts??[])}:{}),
     replay_nodes:public_replay_nodes(state),

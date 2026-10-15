@@ -1,0 +1,788 @@
+{
+  "schema": 7,
+  "contract": "0.5.1",
+  "id": "B21-CORRIDOR-01",
+  "version": 1,
+  "scenario_kind": "play_corridor",
+  "profile": {
+    "id": "B21-CORRIDOR-01",
+    "version": 1,
+    "parameters": {
+      "deadline": 900000,
+      "receipt_grace": 10000,
+      "link_ms": 1000,
+      "base_speed": 4,
+      "terrain_factor": 1,
+      "environment_factor": 1,
+      "load_capacity": 20,
+      "space_capacity": 12,
+      "movement_energy": 20,
+      "record_energy": 20,
+      "record_wear": 100,
+      "equipment_energy": 16,
+      "equipment_wear": 100,
+      "record_packs": 2,
+      "hq_energy": 16,
+      "hq_wear": 100,
+      "report_budget": 2,
+      "report_energy_cost": 1,
+      "report_wear_cost": 1
+    },
+    "registry": [
+      {
+        "id": "deadline",
+        "entry_version": 1,
+        "value": 900000,
+        "unit": "ms",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "receipt_grace",
+        "entry_version": 1,
+        "value": 10000,
+        "unit": "ms",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "link_ms",
+        "entry_version": 1,
+        "value": 1000,
+        "unit": "ms",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "base_speed",
+        "entry_version": 1,
+        "value": 4,
+        "unit": "fictional_metre/s",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "terrain_factor",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "ratio",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "environment_factor",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "ratio",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "load_capacity",
+        "entry_version": 1,
+        "value": 20,
+        "unit": "load",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "space_capacity",
+        "entry_version": 1,
+        "value": 12,
+        "unit": "space",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "movement_energy",
+        "entry_version": 1,
+        "value": 20,
+        "unit": "energy",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "record_energy",
+        "entry_version": 1,
+        "value": 20,
+        "unit": "energy",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "record_wear",
+        "entry_version": 1,
+        "value": 100,
+        "unit": "wear",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "equipment_energy",
+        "entry_version": 1,
+        "value": 16,
+        "unit": "energy",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "equipment_wear",
+        "entry_version": 1,
+        "value": 100,
+        "unit": "wear",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "record_packs",
+        "entry_version": 1,
+        "value": 2,
+        "unit": "item",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "hq_energy",
+        "entry_version": 1,
+        "value": 16,
+        "unit": "energy",
+        "source_ref": "ENG-PRESTART-REPLACE/version1/catalogs.hq_terminal",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "hq_wear",
+        "entry_version": 1,
+        "value": 100,
+        "unit": "wear",
+        "source_ref": "ENG-PRESTART-REPLACE/version1/catalogs.hq_terminal",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_budget",
+        "entry_version": 1,
+        "value": 2,
+        "unit": "message",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_energy_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "energy",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_wear_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "wear",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "R-MOVE-4",
+      "actor": "R",
+      "action": "move",
+      "speed": 4,
+      "unit": "fictional_metre/s",
+      "evidence_refs": [
+        "B21-INITIAL-CAPABILITY"
+      ]
+    }
+  ],
+  "rules": {
+    "version": "b21-route-1",
+    "coordinate_grid": 0.01,
+    "length_scale": 1000000,
+    "length_rounding": "round_half_up",
+    "duration_rounding": "ceil_total_only",
+    "load_factor_per_unit": 0.02,
+    "movement_energy_per_distance": 0.01,
+    "report_policy": "accepted_and_one_terminal",
+    "report_budget": 2,
+    "report_energy_cost": 1,
+    "report_wear_cost": 1,
+    "cause_policy": "once_per_cause_rule_consumer",
+    "route_point_budget": 64,
+    "conflict_candidate_budget": 32,
+    "disabled_capabilities": [
+      "record",
+      "repair",
+      "handover",
+      "withdrawal",
+      "replacement",
+      "free_surface",
+      "mission_outcome"
+    ]
+  },
+  "catalogs": {
+    "map": {
+      "map_id": "PLAY-CORRIDOR-MAP",
+      "map_version": 1,
+      "crs_id": "FIC-LOCAL-XY-01",
+      "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7",
+      "extent": [
+        400,
+        300
+      ],
+      "unit": "fictional_metre",
+      "scopes": [
+        {
+          "id": "H",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              50,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "A",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              150,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "B",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              250,
+              150
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "approximate",
+          "kind": "point",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 5,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "position": [
+              75.25,
+              151.5
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "area-with-hole",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                270,
+                40
+              ],
+              [
+                330,
+                40
+              ],
+              [
+                330,
+                100
+              ],
+              [
+                270,
+                100
+              ],
+              [
+                270,
+                40
+              ]
+            ],
+            "holes": [
+              [
+                [
+                  290,
+                  60
+                ],
+                [
+                  300,
+                  60
+                ],
+                [
+                  300,
+                  70
+                ],
+                [
+                  290,
+                  70
+                ],
+                [
+                  290,
+                  60
+                ]
+              ]
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "detached-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                350,
+                220
+              ],
+              [
+                380,
+                220
+              ],
+              [
+                380,
+                250
+              ],
+              [
+                350,
+                250
+              ],
+              [
+                350,
+                220
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "separate-regions",
+          "kind": "region_set",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "area_refs": [
+              "area-with-hole",
+              "detached-area"
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "reference-edge",
+          "kind": "edge",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "line": [
+              [
+                20,
+                20
+              ],
+              [
+                40,
+                30
+              ],
+              [
+                60,
+                20
+              ]
+            ]
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "HA-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                50,
+                140
+              ],
+              [
+                150,
+                140
+              ],
+              [
+                150,
+                160
+              ],
+              [
+                50,
+                160
+              ],
+              [
+                50,
+                140
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "AB-area",
+          "kind": "area",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "outer": [
+              [
+                150,
+                140
+              ],
+              [
+                250,
+                140
+              ],
+              [
+                250,
+                160
+              ],
+              [
+                150,
+                160
+              ],
+              [
+                150,
+                140
+              ]
+            ],
+            "holes": []
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "HA",
+          "kind": "corridor",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "centerline": [
+              [
+                50,
+                150
+              ],
+              [
+                150,
+                150
+              ]
+            ],
+            "width": 20,
+            "area_ref": "HA-area"
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "AB",
+          "kind": "corridor",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "known",
+            "value": 0,
+            "unit": "fictional_metre",
+            "evidence": "B21-INITIAL-GEOMETRY"
+          },
+          "typed_geometry": {
+            "centerline": [
+              [
+                150,
+                150
+              ],
+              [
+                250,
+                150
+              ]
+            ],
+            "width": 20,
+            "area_ref": "AB-area"
+          },
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        },
+        {
+          "id": "pending-location",
+          "kind": "unresolved",
+          "map_id": "PLAY-CORRIDOR-MAP",
+          "map_version": 1,
+          "crs_id": "FIC-LOCAL-XY-01",
+          "precision": 0.01,
+          "uncertainty": {
+            "kind": "unknown"
+          },
+          "typed_geometry": null,
+          "evidence_refs": [
+            "B21-INITIAL-GEOMETRY"
+          ],
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
+        }
+      ]
+    },
+    "actor": {
+      "id": "R",
+      "origin": "H",
+      "load_capacity": 20,
+      "space_capacity": 12,
+      "load": 9,
+      "space": 7,
+      "equipment": [
+        "EQ-REC",
+        "EQ-LINK"
+      ],
+      "qualification_refs": [
+        "R-MOVE-4"
+      ]
+    },
+    "equipment": [
+      {
+        "id": "EQ-REC",
+        "load": 4,
+        "space": 3,
+        "energy": 20,
+        "wear": 100
+      },
+      {
+        "id": "EQ-LINK",
+        "load": 3,
+        "space": 2,
+        "energy": 16,
+        "wear": 100
+      }
+    ],
+    "items": [
+      {
+        "id": "record_pack",
+        "count": 2,
+        "load": 1,
+        "space": 1
+      }
+    ],
+    "hq_terminal": {
+      "id": "HQ-TERM",
+      "energy": 16,
+      "wear": 100,
+      "energy_per_send": 1,
+      "wear_per_send": 1
+    },
+    "initial_evidence": {
+      "id": "B21-INITIAL-POSITION",
+      "scope_ref": "H",
+      "observed": {
+        "kind": "known",
+        "value": 0,
+        "evidence": "B21-INITIAL-POSITION"
+      },
+      "source_event_time": {
+        "kind": "unknown"
+      },
+      "origin": "registered_initial_evidence"
+    },
+    "authority": {
+      "subject": "R",
+      "action": "move",
+      "from": 0,
+      "to": 900000
+    },
+    "link_authority": {
+      "subject": "R",
+      "recipient": "HQ",
+      "from": 0,
+      "to": 910000
+    },
+    "engine_conditions": {
+      "closed_at_x": null,
+      "report_delivery_delay_ms": 0
+    },
+    "movement_causes": [
+      {
+        "cause_id": "terrain-plain",
+        "rule_ref": "terrain-factor",
+        "consumer": "R:move",
+        "slot": "terrain",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-TERRAIN"
+      },
+      {
+        "cause_id": "environment-normal",
+        "rule_ref": "environment-factor",
+        "consumer": "R:move",
+        "slot": "environment",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-ENVIRONMENT"
+      }
+    ],
+    "position_reports": []
+  },
+  "hashes": {
+    "profile": "3f28ac965b9a041afee2da7bc52c1bd9031f0466bedcf651f9b1993d90a80820",
+    "capabilities": "6896de3a9499f5d9cb68d9b789755ad6d8615b17c7904e29a5d62c1fd78763e3",
+    "rules": "cbe2e1c7d850f4549a443520d3281fcc6f91600af5bdaf74dd586883a671554e",
+    "catalogs": "e49ab39bfe32e68cc58a2ba13edef045262bf155bfe5a752d54b62892b71cd28",
+    "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "definition_hash": "ad418177153bd61fe2417efa3927f6819d94b67d76c9398dfea6bd2e320824da"
+}

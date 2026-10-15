@@ -1,10 +1,11 @@
 /// <reference lib="webworker" />
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
-import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,load_definition,prestart_case } from "./core/scenario";
-import { GameError,is_task_intent, type PlayerView } from "./contracts";
+import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,load_definition,prestart_case } from "./core/scenario";
+import { GameError,is_task_intent } from "./contracts";
+import type {GamePlayerView as PlayerView} from './play-contracts';
 import type { Request, Response } from "./transport";
-import { valid_request, correlation } from "./protocol";
+import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-map-b-game-1");
@@ -33,7 +34,7 @@ let active:PlayerView|null=null;
 let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
-function clockTarget(view:PlayerView){return Math.min(610000,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
@@ -73,8 +74,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
-      if(history&&['create','takeover','restart','operate'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -90,7 +91,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
@@ -132,13 +133,15 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response = {
           request_id: input.request_id,
           ok: true,
-          plan: await (history??game).preview_plan(
+          plan: 'route_draft' in input?await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,input.route_draft):await (history??game).preview_plan(
             input.run_id,
             input.revision,
             input.editing_seq,
           ),
         };
-      else if (input.kind === "operate" && locked) {
+      else if ((input.kind === "operate"||input.kind==='operate_corridor') && locked) {
+        const context=await game.get_view(input.envelope.run_id);
+        if((input.kind==='operate_corridor')!==(context.scenario_kind==='play_corridor'))throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
           is_task_intent(input.envelope.intent)
@@ -159,7 +162,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       const code =
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
       if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
-      scope.postMessage({ request_id, ok: false, code } satisfies Response);
+      scope.postMessage({ request_id, ok: false, code,...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
     }
   });
 };

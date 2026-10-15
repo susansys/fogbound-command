@@ -1,3 +1,4 @@
+import {legacy_view,legacy_state} from './legacy-branch';
 import { expect, test } from "vitest";
 import { Game } from "../src/core/game";
 import { Persistence } from "../src/core/persistence";
@@ -6,11 +7,11 @@ import { engineeringDefinition } from "../src/core/scenario";
 test("FB01-S01 creates a committed run with one original Report and a distinct Delivery", async () => {
   const store = new Persistence("start-test");
   const game = new Game(store);
-  const view = await game.create_run(
+  const view = legacy_view(await game.create_run(
     engineeringDefinition,
     "research",
     "create-1",
-  );
+  ));
   expect(view.position).toEqual({
     x: 50,
     y: 150,
@@ -22,7 +23,7 @@ test("FB01-S01 creates a committed run with one original Report and a distinct D
   expect(view.report.id).toBe("REPORT-T");
   expect(view.delivery.report_id).toBe("REPORT-T");
   expect(view.delivery.id).toBe("DELIVERY-T");
-  expect((await store.read_committed(view.run_id))?.revision).toBe(
+  expect((legacy_state(await store.read_committed(view.run_id)))?.revision).toBe(
     view.revision,
   );
   await store.delete();
@@ -55,16 +56,16 @@ test("invalid versions, missing registry/hash and unregistered geometry do not c
 test("creation retry returns the original committed run instead of creating a second one", async () => {
   const store = new Persistence("create-retry"),
     game = new Game(store);
-  const first = await game.create_run(
+  const first = legacy_view(await game.create_run(
     engineeringDefinition,
     "research",
     "same-create",
-  );
-  const again = await game.create_run(
+  ));
+  const again = legacy_view(await game.create_run(
     engineeringDefinition,
     "research",
     "same-create",
-  );
+  ));
   expect(again).toEqual(first);
   expect(await store.list_runs()).toHaveLength(1);
   await expect(

@@ -1,13 +1,15 @@
-import type { Mode, PlayerView, Plan, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
+import type { Mode, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
+import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
+import type {RouteDraft,PreviewPlan} from './route-contracts';
 export type RunSummary = {
   run_id: string;
   revision: number;
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor';
   read_only?:boolean;
 };
 export type Request =
@@ -15,7 +17,9 @@ export type Request =
   | { kind: "list" }
   | { kind: "view"; run_id: string }
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
+  | {kind:'preview';run_id:string;revision:number;editing_seq:number;route_draft:RouteDraft}
   | { kind: "operate"; envelope: Envelope }
+  | {kind:'operate_corridor';envelope:Envelope}
   | { kind: "receipt"; run_id: string; operation_id: string }
   | { kind:'takeover';run_id:string;operation_id:string }
   | {kind:'restart';run_id:string;operation_id:string}
@@ -29,10 +33,10 @@ export type Response =
       ok: true;
       view?: PlayerView;
       runs?: RunSummary[];
-      plan?: Plan;
+      plan?: PreviewPlan;
       receipt?: Receipt | null;
     }
-  | { request_id: string; ok: false; code: string };
+  | { request_id: string; ok: false; code: string;field_path?:string };
 export class Transport {
   private listeners=new Set<(response:Response)=>void>();
   subscribe(listener:(response:Response)=>void){this.listeners.add(listener);return ()=>{this.listeners.delete(listener);};}

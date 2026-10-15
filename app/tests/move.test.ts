@@ -1,3 +1,4 @@
+import {legacy_view,legacy_result,legacy_state} from './legacy-branch';
 import { expect, test } from "vitest";
 import { Game } from "../src/core/game";
 import { Persistence } from "../src/core/persistence";
@@ -6,10 +7,10 @@ import type { Envelope, PlayerView, Intent } from "../src/contracts";
 test("one large advance and boundary steps preserve the same causal feedback and resource ledger", async () => {
   async function play(name: string, steps: number[]) {
     const store = new Persistence(name), game = new Game(store);
-    let view = await game.create_run(engineeringDefinition, "research", "create");
+    let view = legacy_view(await game.create_run(engineeringDefinition, "research", "create"));
     const plan = await game.preview_plan(view.run_id, view.revision, 1);
-    view = (await game.issue_order({run_id:view.run_id,operation_id:"issue",expected_revision:view.revision,intent:{kind:"issue",command_id:"move",plan}})).view;
-    for (const to of steps) view = (await game.control_clock({run_id:view.run_id,operation_id:`advance-${to}`,expected_revision:view.revision,intent:{kind:"advance",to}})).view;
+    view = (legacy_result(await game.issue_order({run_id:view.run_id,operation_id:"issue",expected_revision:view.revision,intent:{kind:"issue",command_id:"move",plan}}))).view;
+    for (const to of steps) view = (legacy_result(await game.control_clock({run_id:view.run_id,operation_id:`advance-${to}`,expected_revision:view.revision,intent:{kind:"advance",to}}))).view;
     const result = {position:view.position,resources:view.resources,log:view.log,sim_time:view.sim_time,status:view.status,finished:view.finished};
     await store.delete();
     return result;
@@ -19,7 +20,7 @@ test("one large advance and boundary steps preserve the same causal feedback and
 test("S04/S05 legal feedback lags physical arrival and records independent literal times and resources", async () => {
   const store = new Persistence("move-test"),
     game = new Game(store);
-  let view = await game.create_run(engineeringDefinition, "research", "create");
+  let view = legacy_view(await game.create_run(engineeringDefinition, "research", "create"));
   const plan = await game.preview_plan(view.run_id, view.revision, 1);
   const order: Envelope = {
     run_id: view.run_id,
@@ -27,18 +28,18 @@ test("S04/S05 legal feedback lags physical arrival and records independent liter
     expected_revision: view.revision,
     intent: { kind: "issue", command_id: "command-1", plan },
   };
-  const issued = await game.issue_order(order);
+  const issued = legacy_result(await game.issue_order(order));
   view = issued.view;
   expect(view.status).toBe("queued");
   expect(view.sim_time).toBe(0);
   expect(view.resources.equipment_energy).toBe(16);
   async function advance(to: number) {
-    const result = await game.control_clock({
+    const result = legacy_result(await game.control_clock({
       run_id: view.run_id,
       operation_id: `advance-${to}`,
       expected_revision: view.revision,
       intent: { kind: "advance", to },
-    });
+    }));
     view = result.view;
     return view;
   }
@@ -71,15 +72,15 @@ test("S04/S05 legal feedback lags physical arrival and records independent liter
     equipment_wear: 92,
     movement_energy: 18,
   });
-  const retry = await game.issue_order(order);
+  const retry = legacy_result(await game.issue_order(order));
   expect(retry.receipt).toEqual(issued.receipt);
-  expect((await game.get_view(view.run_id)).resources).toEqual(view.resources);
+  expect((legacy_view(await game.get_view(view.run_id))).resources).toEqual(view.resources);
   await store.delete();
 });
 test("S07 operation retries are idempotent, changed contents conflict and a second task is not eligible", async () => {
   const store = new Persistence("move-retry"),
     game = new Game(store);
-  let view = await game.create_run(engineeringDefinition, "research", "create");
+  let view = legacy_view(await game.create_run(engineeringDefinition, "research", "create"));
   const plan = await game.preview_plan(view.run_id, view.revision, 1);
   const envelope: Envelope = {
     run_id: view.run_id,
@@ -87,8 +88,8 @@ test("S07 operation retries are idempotent, changed contents conflict and a seco
     expected_revision: view.revision,
     intent: { kind: "issue", command_id: "move", plan },
   };
-  view = (await game.issue_order(envelope)).view;
-  const original = await store.read_committed(view.run_id);
+  view = (legacy_result(await game.issue_order(envelope))).view;
+  const original = legacy_state(await store.read_committed(view.run_id));
   await expect(
     game.issue_order({
       ...envelope,
@@ -108,42 +109,42 @@ test("S07 operation retries are idempotent, changed contents conflict and a seco
       intent: { kind: "issue", command_id: "another", plan: again },
     }),
   ).rejects.toThrow("ORDER_EXISTS");
-  expect(await store.read_committed(view.run_id)).toEqual(original);
+  expect(legacy_state(await store.read_committed(view.run_id))).toEqual(original);
   await store.delete();
 });
 test("S13 grace accepts pre-deadline completion but never permits work finishing after the deadline", async () => {
   async function run(issuedAt: number, name: string) {
     const store = new Persistence(name),
       game = new Game(store);
-    let view = await game.create_run(
+    let view = legacy_view(await game.create_run(
       engineeringDefinition,
       "research",
       "create",
-    );
+    ));
     view = (
-      await game.control_clock({
+      legacy_result(await game.control_clock({
         run_id: view.run_id,
         operation_id: "before-issue",
         expected_revision: view.revision,
         intent: { kind: "advance", to: issuedAt },
-      })
+      }))
     ).view;
     const plan = await game.preview_plan(view.run_id, view.revision, 1);
     view = (
-      await game.issue_order({
+      legacy_result(await game.issue_order({
         run_id: view.run_id,
         operation_id: "issue",
         expected_revision: view.revision,
         intent: { kind: "issue", command_id: "move", plan },
-      })
+      }))
     ).view;
     view = (
-      await game.control_clock({
+      legacy_result(await game.control_clock({
         run_id: view.run_id,
         operation_id: "finish",
         expected_revision: view.revision,
         intent: { kind: "advance", to: 610000 },
-      })
+      }))
     ).view;
     await store.delete();
     return view;

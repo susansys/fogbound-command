@@ -5,6 +5,7 @@ import gridUrl from './map-assets/grid.png?url&no-inline';
 import colourUrl from './map-assets/colour.png?url&no-inline';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type {PlayerView} from './contracts';
+import type {PublicMap} from './spatial';
 import {backgroundExtent,bytesDigest,fromDisplayLngLat,publicGeometryDigest,toDisplayLngLat,type MapPoint} from './map-binding';
 
 export type MapSurface={
@@ -40,7 +41,7 @@ async function verifiedImages(signal:AbortSignal):Promise<string[]>{
   return images.map(image=>URL.createObjectURL(image));
 }
 
-export async function createMapSurface(host:HTMLElement,geometry:PlayerView['geometry'],signal:AbortSignal,onChange:()=>void,onFailure:()=>void):Promise<MapSurface>{
+export async function createMapSurface(host:HTMLElement,geometry:PlayerView['geometry']|PublicMap,signal:AbortSignal,onChange:()=>void,onFailure:()=>void):Promise<MapSurface>{
   const public_geometry_digest=await publicGeometryDigest(geometry);
   const urls=await verifiedImages(signal);
   let map:GeographicMap|undefined,removed=false,observer:ResizeObserver|undefined,fitScale=1;
