@@ -25,13 +25,14 @@ export function parse_mission_draft(value:unknown,run:string):MissionDraft{
   if(!valid_id(objective.id)||!text(objective.purpose)||!expression(objective.success_expr)||!expression(objective.failure_expr)||!integer(objective.deadline_time_ms)||!integer(objective.priority)||!list(objective.verification_requirements,valid_id)||!list(objective.dependencies,x=>mission_ref(x,run,'objective')))throw new GameError('INVALID_REQUEST');
   if(!dense_array(value.phases)||value.phases.length<1||value.phases.length>mission_input_limits.phase_budget||!dense_array(value.routes)||!value.routes.length||value.routes.length>mission_input_limits.total_route_point_budget/2)throw new GameError('INVALID_REQUEST');
   for(const phase of value.phases){
-    object(phase,['id','kind','dependencies','entry_gate','exit_gate','earliest_start_time_ms','latest_finish_time_ms','activity']);
+    object(phase,['id','version','kind','dependencies','entry_gate','exit_gate','earliest_start_time_ms','latest_finish_time_ms','activity']);
+    if(!integer(phase.version)||phase.version<1)throw new GameError('INVALID_REQUEST');
     object(phase.activity,['kind','actor','route_ref']);
     if(!valid_id(phase.id)||phase.kind!=='move'||!list(phase.dependencies,x=>mission_ref(x,run,'phase'))||!expression(phase.entry_gate)||!expression(phase.exit_gate)||!integer(phase.earliest_start_time_ms)||!integer(phase.latest_finish_time_ms)||phase.latest_finish_time_ms<=phase.earliest_start_time_ms||phase.activity.kind!=='move'||phase.activity.actor!=='R'||!mission_ref(phase.activity.route_ref,run,'route'))throw new GameError('INVALID_REQUEST');
     if((phase.dependencies as Array<{id:string}>).some(ref=>ref.id===phase.id))throw new GameError('INVALID_REQUEST','mission_draft.phases.self_dependency');
   }
   let total_points=0;
-  for(const route of value.routes){object(route,['id','path']);if(!valid_id(route.id)||!dense_array(route.path)||route.path.length<2||route.path.length>mission_input_limits.route_point_budget||!route.path.every(coordinate))throw new GameError('INVALID_REQUEST');total_points+=route.path.length;}
+  for(const route of value.routes){object(route,['id','version','path']);if(!valid_id(route.id)||!integer(route.version)||route.version<1||!dense_array(route.path)||route.path.length<2||route.path.length>mission_input_limits.route_point_budget||!route.path.every(coordinate))throw new GameError('INVALID_REQUEST');total_points+=route.path.length;}
   if(total_points>mission_input_limits.total_route_point_budget)throw new GameError('INVALID_REQUEST','mission_draft.routes.total_points');
   if(!dense_array(value.actor_assignments)||value.actor_assignments.length!==1||value.actor_assignments[0]!=='R'||!dense_array(value.support_windows)||value.support_windows.length!==0||!list(value.assumptions,text)||!list(value.evidence_refs,valid_id)||!list(value.decision_points,text))throw new GameError('INVALID_REQUEST');
   const draft=structuredClone(value) as MissionDraft;

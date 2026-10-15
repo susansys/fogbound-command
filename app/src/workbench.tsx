@@ -350,7 +350,7 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
-  if(missionView)return <MissionWorkbench key={missionView.run_id} view={missionView} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
+  if(missionView)return <MissionWorkbench key={missionView.run_id} view={missionView} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   const prestart=view?.scenario_kind==='prestart_move';
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
   const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];

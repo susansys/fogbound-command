@@ -1,22 +1,33 @@
 import {test,expect,type Page} from '@playwright/test';
-async function begin(page:Page){
-  await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+async function begin(page:Page,mode:'command'|'research'='research'){
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption(mode);await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
   await page.getByLabel('任务目的',{exact:true}).fill('核对两处联络点');await page.getByLabel('期望结果',{exact:true}).fill('总部收到两阶段合法抵达凭证');
 }
-async function observer(page:Page,fault:'abort'|'drop_save'|'hold_preview'|'hold_save'|'observe'){
+async function observer(page:Page,fault:'abort'|'clock_abort'|'delay_pause'|'drop_save'|'hold_preview'|'hold_save'|'observe'){
   await page.addInitScript(fault=>{
-    const Native=window.Worker,requests:Array<Record<string,unknown>>=[],responses:unknown[]=[],control={held:false,release:()=>{}};
+    const Native=window.Worker,requests:Array<Record<string,unknown>>=[],responses:unknown[]=[],errors:string[]=[],control={held:false,release:()=>{}};
     let once=false;
     class OwnedWorker extends Native{
       constructor(url:string|URL,options?:WorkerOptions){
         const actual=String(url),owned=actual.includes('/assets/worker-');
-        const prefix=`const original=IDBObjectStore.prototype.put;let fired=false;IDBObjectStore.prototype.put=function(...args){const request=original.apply(this,args);if(!fired&&this.transaction.db.name==='fogbound-map-b-game-1'&&this.name==='runs'&&args[0]?.schema===8&&args[0]?.inputs?.at(-1)?.envelope?.intent?.kind==='save_plan'){fired=true;request.addEventListener('success',()=>this.transaction.abort(),{once:true});}return request;};await import(${JSON.stringify(actual)});`;
-        super(owned&&fault==='abort'?URL.createObjectURL(new Blob([prefix],{type:'text/javascript'})):url,options);
-        if(owned){const post=this.postMessage.bind(this);this.postMessage=(message:Record<string,unknown>)=>{requests.push(structuredClone(message));post(message);};
+        const predicate=fault==='clock_abort'?"args[0]?.plans?.length===1&&args[0]?.inputs?.at(-1)?.envelope?.intent?.kind==='tick'":"args[0]?.inputs?.at(-1)?.envelope?.intent?.kind==='save_plan'";
+        // Static import completes the real Worker's handler registration before
+        // queued messages can run; patch the external DB boundary before any input.
+        const prefix=`import ${JSON.stringify(actual)};const original=IDBObjectStore.prototype.put;let fired=false;IDBObjectStore.prototype.put=function(...args){const request=original.apply(this,args);if(!fired&&this.transaction.db.name==='fogbound-map-b-game-1'&&this.name==='runs'&&args[0]?.schema===8&&(${predicate})){fired=true;request.addEventListener('success',()=>this.transaction.abort(),{once:true});}return request;};`;
+        super(owned&&['abort','clock_abort'].includes(fault)?URL.createObjectURL(new Blob([prefix],{type:'text/javascript'})):url,options);
+        if(owned){const post=this.postMessage.bind(this);this.postMessage=(message:Record<string,unknown>)=>{
+          requests.push(structuredClone(message));
+          const envelope=message.envelope as {intent?:{kind:string}}|undefined;
+          if(fault==='delay_pause'&&!once&&message.kind==='operate_mission'&&envelope?.intent?.kind==='pause'){once=true;setTimeout(()=>post(message),600);}
+          else post(message);
+        };
+          Object.assign(window,{__b22OwnedWorker:this});
+          this.addEventListener('error',event=>errors.push(event.message));
+          this.addEventListener('messageerror',()=>errors.push('messageerror'));
           this.addEventListener('message',event=>{
             const request=requests.find(r=>r.request_id===event.data.request_id);responses.push(structuredClone(event.data));
             const target=fault==='hold_preview'?'preview_mission':'save_plan';
-            if(!once&&request?.kind===target&&event.data.ok&&fault!=='abort'&&fault!=='observe'){
+            if(!once&&request?.kind===target&&event.data.ok&&!['abort','clock_abort','delay_pause','observe'].includes(fault)){
               once=true;event.stopImmediatePropagation();
               if(fault!=='drop_save'){control.held=true;const data=structuredClone(event.data);control.release=()=>{control.held=false;this.dispatchEvent(new MessageEvent('message',{data}));};}
             }
@@ -24,9 +35,15 @@ async function observer(page:Page,fault:'abort'|'drop_save'|'hold_preview'|'hold
         }
       }
     }
-    window.Worker=OwnedWorker;Object.assign(window,{__b22Observed:{requests,responses},__b22Held:control});
+    window.Worker=OwnedWorker;Object.assign(window,{__b22Observed:{requests,responses,errors},__b22Held:control});
   },fault);
 }
+test.afterEach(async({page},info)=>{
+  if(info.status!==info.expectedStatus&&!page.isClosed()){
+    const trace=await page.evaluate(()=>{const value=Reflect.get(window,'__b22Observed');return value?{requests:value.requests.slice(-20),responses:value.responses.slice(-20),errors:value.errors}:null;});
+    if(trace)await info.attach('actual-worker-trace',{body:JSON.stringify(trace,null,2),contentType:'application/json'});
+  }
+});
 test('B22 command mode saving rechecks a readable preview while the clock continues',async({page})=>{
   await observer(page,'observe');await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption('command');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
   await page.getByRole('button',{name:'暂停行动',exact:true}).click();await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
@@ -38,6 +55,74 @@ test('B22 command mode saving rechecks a readable preview while the clock contin
   await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');
   await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 1 · 未下达');
   await expect(page.getByRole('button',{name:'暂停行动',exact:true})).toBeEnabled();await expect(page.getByTestId('mission-orders')).toContainText('尚未下达');
+});
+
+test('B22 PG03 self dependency is publicly explained and keeps the editable draft',async({page})=>{
+  await begin(page);
+  await page.getByLabel('任务备注（仅供记录）').fill('自环拒绝后保留的备注');
+  await page.getByLabel('阶段 1 前置阶段').selectOption('P1');
+  await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');
+  await expect(page.getByRole('alert')).toContainText('阶段不能依赖自身');
+  await expect(page.getByTestId('mission-preview')).toHaveCount(0);
+  await expect(page.getByLabel('阶段 1 前置阶段')).toHaveValue('P1');
+  await expect(page.getByLabel('任务备注（仅供记录）')).toHaveValue('自环拒绝后保留的备注');
+  await page.getByLabel('阶段 1 前置阶段').selectOption('');
+  await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');
+  await expect(page.getByTestId('mission-preview')).toBeVisible();
+});
+
+test('B22 real Worker publishes only the safe self dependency explanation field',async({page})=>{
+  await observer(page,'observe');await begin(page);
+  await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');await expect(page.getByTestId('mission-preview')).toBeVisible();
+  const response=await page.evaluate(async()=>{
+    const trace=Reflect.get(window,'__b22Observed') as {requests:Array<{kind:string;draft?:{run_id:string;phases:Array<{dependencies:unknown[]}>}}>};
+    const input=structuredClone(trace.requests.find(r=>r.kind==='preview_mission')!);
+    input.draft!.phases[0].dependencies=[{run_id:input.draft!.run_id,kind:'phase',id:'P1',version:1}];
+    const request={...input,request_id:crypto.randomUUID()},worker=Reflect.get(window,'__b22OwnedWorker') as Worker;
+    return await new Promise(resolve=>{
+      const timeout=setTimeout(()=>{worker.removeEventListener('message',receive);resolve({timeout:true});},5000);
+      function receive(event:MessageEvent){if(event.data.request_id===request.request_id){clearTimeout(timeout);worker.removeEventListener('message',receive);resolve(event.data);}}
+      worker.addEventListener('message',receive);worker.postMessage(request);
+    });
+  });
+  expect(response).toMatchObject({ok:false,code:'INVALID_REQUEST',field_path:'mission_draft.phases.self_dependency'});
+  expect(Object.keys(response as object).sort()).toEqual(['code','field_path','ok','request_id']);
+});
+
+test('B22 clock transaction failure blocks controls until explicit recovery without losing input',async({page})=>{
+  await observer(page,'clock_abort');await begin(page,'command');
+  await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');
+  await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');await expect(page.getByTestId('mission-preview')).toBeVisible();
+  await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 1');
+  await page.getByLabel('任务备注（仅供记录）').fill('时钟写入失败仍保留的新编辑');
+  await page.getByRole('button',{name:'继续行动',exact:true}).press('Enter');
+  await expect(page.getByRole('alert')).toContainText('尚未确认保存');
+  await expect(page.locator('.clock')).toContainText('进度未确认');
+  await expect(page.getByRole('button',{name:'暂停行动',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'保存草案',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'恢复最近记录并重新核对',exact:true}).press('Enter');
+  await expect(page.locator('.clock')).toContainText('已暂停');
+  await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  await expect(page.getByLabel('任务备注（仅供记录）')).toHaveValue('时钟写入失败仍保留的新编辑');
+  const before=await page.locator('.clock strong').innerText();await page.waitForTimeout(1100);await expect(page.locator('.clock strong')).toHaveText(before);
+  await page.getByRole('button',{name:'继续行动',exact:true}).press('Enter');await expect(page.locator('.clock strong')).not.toHaveText(before);
+  const faults=await page.evaluate(()=>Reflect.get(window,'__b22Observed').responses.filter((x:{request_id:string;ok:boolean})=>x.request_id==='clock-fault'&&!x.ok).length);
+  expect(faults).toBe(1);
+});
+
+test('B22 manual pause rechecks a definite stale rejection caused by a real intervening clock commit',async({page})=>{
+  await observer(page,'delay_pause');await begin(page,'command');
+  await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');
+  await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  await expect(page.locator('.clock')).toContainText('已暂停');
+  const before=await page.locator('.clock strong').innerText();await page.waitForTimeout(800);await expect(page.locator('.clock strong')).toHaveText(before);
+  const proof=await page.evaluate(()=>{
+    const trace=Reflect.get(window,'__b22Observed') as {requests:Array<{kind:string;envelope?:{operation_id:string;intent:{kind:string}}}>;responses:Array<{ok:boolean;code?:string}>};
+    return {ids:trace.requests.filter(r=>r.kind==='operate_mission'&&r.envelope?.intent.kind==='pause').map(r=>r.envelope!.operation_id),stale:trace.responses.some(r=>!r.ok&&r.code==='STALE_REVISION')};
+  });
+  expect(proof.stale).toBe(true);expect(proof.ids).toHaveLength(2);expect(proof.ids[1]).not.toBe(proof.ids[0]);
 });
 test('B22 PG09 abort preserves input through actual transaction failure and explicit recovery',async({page})=>{
   test.setTimeout(60000);await observer(page,'abort');await begin(page);

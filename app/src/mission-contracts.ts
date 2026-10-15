@@ -12,8 +12,8 @@ export type MissionDraft={
   run_id:string;plan_id:string;mission_ref:MissionRef<'mission'>;
   intent:{id:string;version:number;purpose:string;desired_end_state:string;key_tasks:string[];priorities:string[];constraint_refs:string[];acceptable_risk:string;delegation_ref:MissionRef<'authority'>};
   objective:{id:string;purpose:string;success_expr:ConditionExpr;failure_expr:ConditionExpr;deadline_time_ms:number;verification_requirements:string[];priority:number;dependencies:MissionRef<'objective'>[]};
-  phases:Array<{id:string;kind:'move';dependencies:MissionRef<'phase'>[];entry_gate:ConditionExpr;exit_gate:ConditionExpr;earliest_start_time_ms:number;latest_finish_time_ms:number;activity:{kind:'move';actor:'R';route_ref:MissionRef<'route'>}}>;
-  routes:Array<{id:string;path:Coordinate[]}>;actor_assignments:['R'];support_windows:[];assumptions:string[];evidence_refs:string[];decision_points:string[];note:string;
+  phases:Array<{id:string;version:number;kind:'move';dependencies:MissionRef<'phase'>[];entry_gate:ConditionExpr;exit_gate:ConditionExpr;earliest_start_time_ms:number;latest_finish_time_ms:number;activity:{kind:'move';actor:'R';route_ref:MissionRef<'route'>}}>;
+  routes:Array<{id:string;version:number;path:Coordinate[]}>;actor_assignments:['R'];support_windows:[];assumptions:string[];evidence_refs:string[];decision_points:string[];note:string;
 };
 export type MissionPreview={kind:'mission_plan';run_id:string;revision:number;editing_seq:number;draft_digest:string;phases:Array<{phase_id:string;distance:number;estimated_move_ms:number|null;assumptions:string[];gap:string}>};
 export type SavedMissionPlan={plan_id:string;version:number;draft:MissionDraft;preview:MissionPreview};

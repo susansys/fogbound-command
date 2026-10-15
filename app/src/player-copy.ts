@@ -29,7 +29,14 @@ const errors:Record<string,string>={
   STORAGE_UNCONFIRMED:'本次操作尚未确认保存。请保留输入，恢复最近的可靠记录后再继续。',
   ENGINE_UNCONFIRMED:'当前行动记录无法核对，本次操作未确认保存。请保留输入并恢复最近记录。',
 };
-export function error_copy(code:string):string {return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';}
+export function error_copy(code:string,field_path?:string):string {
+  if(code==='INVALID_REQUEST'){
+    if(field_path==='mission_draft.phases.self_dependency')return '阶段不能依赖自身（自环）。请修改前置阶段；原记录与输入仍保留。';
+    if(field_path==='mission_draft.phases.cyclic_dependencies')return '阶段前置关系形成循环。请修改依赖；原记录与输入仍保留。';
+    if(field_path==='mission_draft.phases.dangling_dependency')return '前置阶段不存在。请核对引用；原记录与输入仍保留。';
+  }
+  return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';
+}
 export function log_copy(entry:LogEntry):string {
   if(entry.text.startsWith('准备期'))return entry.observed===undefined?entry.text:`${entry.text} 观察 ${clock(entry.observed)} · 总部收到 ${clock(entry.at)}。`;
   if(entry.text.startsWith('档案任务'))return '档案简报已送达，记录组 R 最后确认位于工位 H。';

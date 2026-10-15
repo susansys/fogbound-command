@@ -10,6 +10,7 @@ export function valid_id(value: unknown): value is string {
 }
 export function valid_public_field_path(value:unknown):value is string{
   if(typeof value!=='string'||value.length>180)return false;
+  if(['mission_draft.phases.self_dependency','mission_draft.phases.cyclic_dependencies','mission_draft.phases.dangling_dependency'].includes(value))return true;
   if(/^route_draft(?:\.(?:actor|map_id|map_version|crs_id|geometry_version|path)|\[(?:0|[1-9]\d{0,2})\])*$/.test(value))return true;
   if(['catalogs.movement_causes','catalogs.hq_terminal'].includes(value)||/^(?:profile\.parameters|rules)\.(?:report_budget|report_energy_cost|report_wear_cost|cause_policy)$/.test(value))return true;
   if(/^(?:capabilities(?:\[0\])?(?:\.(?:unit|speed|evidence_refs))?|catalogs\.actor(?:\.(?:load|space|qualification_refs))?)$/.test(value))return true;

@@ -4,6 +4,32 @@ import {Persistence} from '../src/core/persistence';
 import definition from '../src/core/mission-definition.json';
 import {mission_draft} from './mission-fixtures';
 
+test.each(['mission','phase','route'] as const)('B22 unresolved %s reference version is rejected before preview or save',async kind=>{
+  const store=new Persistence('b22-owned-t01-reference-version-'+kind);
+  try{
+    const game=new Game(store),view=await game.create_run(definition,'research','create'),draft=mission_draft(view.run_id);
+    if(kind==='mission')draft.mission_ref.version=999;
+    if(kind==='phase')draft.phases[1].dependencies[0].version=999;
+    if(kind==='route')draft.phases[0].activity.route_ref.version=999;
+    await expect(game.preview_plan(view.run_id,view.revision,0,draft)).rejects.toThrow('INVALID_REQUEST');
+    await expect(game.save_plan({run_id:view.run_id,operation_id:'invalid-version',expected_revision:view.revision,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}})).rejects.toThrow('INVALID_REQUEST');
+    expect(await game.get_view(view.run_id)).toEqual(view);
+    expect(await game.get_receipt(view.run_id,'invalid-version')).toBeNull();
+  }finally{await store.delete();}
+});
+
+test('B22 matching inline phase and route versions survive saving and public readback',async()=>{
+  const store=new Persistence('b22-owned-t01-matching-version');
+  try{
+    const game=new Game(store),view=await game.create_run(definition,'research','create'),draft=mission_draft(view.run_id);
+    draft.phases[0].version=2;draft.phases[1].dependencies[0].version=2;
+    draft.routes[0].version=2;draft.phases[0].activity.route_ref.version=2;
+    const saved=await game.save_plan({run_id:view.run_id,operation_id:'save-matching-version',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
+    expect(saved.view.plans[0].draft).toEqual(draft);
+    expect((await game.get_view(view.run_id)).plans[0].draft).toEqual(draft);
+  }finally{await store.delete();}
+});
+
 test.each(['depth5','nodes33','route65','total129','text2001','wrong_type'] as const)('B22 PG05 %s rejects the complete input without truncating or committing',async variant=>{
   const store=new Persistence('b22-owned-t01-budget-'+variant);
   try{
@@ -13,7 +39,7 @@ test.each(['depth5','nodes33','route65','total129','text2001','wrong_type'] as c
     if(variant==='depth5')input.objective={...draft.objective,success_expr:{kind:'not',child:{kind:'not',child:{kind:'not',child:{kind:'not',child:leaf}}}}};
     if(variant==='nodes33')input.objective={...draft.objective,success_expr:{kind:'any',children:Array.from({length:32},()=>({...leaf}))}};
     if(variant==='route65')draft.routes[0].path=Array.from({length:65},(_,i)=>[50+i,150]);
-    if(variant==='total129')draft.routes=Array.from({length:3},(_,i)=>({id:'route-P'+(i+1),path:Array.from({length:43},(_,j)=>[50+j,150])}));
+    if(variant==='total129')draft.routes=Array.from({length:3},(_,i)=>({id:'route-P'+(i+1),version:1,path:Array.from({length:43},(_,j)=>[50+j,150])}));
     if(variant==='text2001')draft.note='💡'.repeat(2001);
     if(variant==='wrong_type')input.note=5;
     await expect(game.save_plan({run_id:view.run_id,operation_id:'invalid',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft:input}})).rejects.toThrow('INVALID_REQUEST');
