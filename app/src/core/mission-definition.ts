@@ -8,8 +8,9 @@ import {record,fields,valid_id} from '../protocol';
 import type {KnownTime} from '../contracts';
 import {dense_array} from '../spatial';
 export type MissionPositionRecord={id:string;origin:'R'|'Q';target:'HQ'|'R';scope_ref:string;observed:KnownTime;source_event_time:KnownTime;reported_at:number;delivery_at:number};
+export type MissionLocalInitialEvidence={id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;max_age_ms:number;valid_until_time_ms:number};
 export type MissionDefinition=Omit<typeof registered,'schema'|'scenario_kind'|'catalogs'>&{
-  schema:8;scenario_kind:'play_mission';catalogs:Omit<typeof registered.catalogs,'map'|'initial_evidence'>&{map:PublicMap;position_reports?:MissionPositionRecord[];initial_evidence:Omit<typeof registered.catalogs.initial_evidence,'observed'|'source_event_time'>&{observed:KnownTime;source_event_time:KnownTime}};
+  schema:8;scenario_kind:'play_mission';catalogs:Omit<typeof registered.catalogs,'map'|'initial_evidence'>&{map:PublicMap;position_reports?:MissionPositionRecord[];local_initial_evidence?:MissionLocalInitialEvidence;local_reservations?:Array<{id:string;capability_ref:'R:move'|'R:link';from:number;to:number}>;local_resources?:{movement_energy:number;equipment_energy:number;equipment_wear:number};local_conditions?:{command_delivery_delay_ms:number};movement_changes?:Array<{id:string;at:number;time_factor:number}>;movement_obstacles?:Array<{id:string;closed_at_x:number}>;initial_evidence:Omit<typeof registered.catalogs.initial_evidence,'observed'|'source_event_time'>&{observed:KnownTime;source_event_time:KnownTime}};
 };
 function registered_time(value:unknown):value is KnownTime{
   return record(value)&&(value.kind==='unknown'&&fields(value,['kind'])||value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence));
@@ -61,6 +62,45 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
   const initial=value.catalogs.initial_evidence;
   if(!registered_time(initial.observed)||!registered_time(initial.source_event_time)||!valid_id(initial.id)||!value.catalogs.map.scopes.some(scope=>scope.id===initial.scope_ref)||initial.max_age_ms!==p.position_max_age_ms||initial.valid_until_time_ms!==p.evidence_valid_until)throw new GameError('INVALID_DEFINITION');
   if(initial.observed.kind==='known'&&initial.observed.value>0||initial.source_event_time.kind==='known'&&initial.source_event_time.value>0)throw new GameError('INVALID_DEFINITION');
+  const local=value.catalogs.local_initial_evidence;
+  if(local!==undefined&&(!record(local)||!fields(local,['id','scope_ref','observed','source_event_time','max_age_ms','valid_until_time_ms'])||!valid_id(local.id)||local.id===initial.id||!map.scopes.some(s=>s.id===local.scope_ref)||!registered_time(local.observed)||!registered_time(local.source_event_time)||local.observed.kind==='known'&&local.observed.value>0||local.source_event_time.kind==='known'&&local.source_event_time.value>0||local.max_age_ms!==p.position_max_age_ms||local.valid_until_time_ms!==p.evidence_valid_until))throw new GameError('INVALID_DEFINITION');
+  const conditions=value.catalogs.local_conditions;
+  const registered_parameter=(id:string,amount:number,unit:string)=>{
+    const entries=value.profile.registry.filter(r=>record(r)&&r.id===id),entry=entries[0];
+    if(!valid_id(id)||entries.length!==1||entry.value!==amount||Reflect.get(p,id)!==amount||entry.unit!==unit||entry.entry_version!==1||entry.source_type!=='design_assumption'||entry.calibration_status!=='uncalibrated'||typeof entry.source_ref!=='string'||!entry.source_ref.trim())throw new GameError('INVALID_DEFINITION');
+  };
+  const local_resources=value.catalogs.local_resources;
+  if(local_resources!==undefined){
+    if(!record(local_resources)||!fields(local_resources,['movement_energy','equipment_energy','equipment_wear']))throw new GameError('INVALID_DEFINITION');
+    for(const [field,id,unit] of [['movement_energy','R-local-movement-energy','energy'],['equipment_energy','R-local-equipment-energy','energy'],['equipment_wear','R-local-equipment-wear','wear']] as const){const amount=local_resources[field];if(!Number.isSafeInteger(amount)||amount<0||amount>p[field])throw new GameError('INVALID_DEFINITION');registered_parameter(id,amount,unit);}
+  }
+  const reservations=value.catalogs.local_reservations;
+  if(reservations!==undefined){
+    if(!dense_array(reservations)||reservations.length>p.evidence_budget||new Set(reservations.map(r=>r.id)).size!==reservations.length)throw new GameError('INVALID_DEFINITION');
+    for(const r of reservations){if(!record(r)||!fields(r,['id','capability_ref','from','to'])||!valid_id(r.id)||!['R:move','R:link'].includes(r.capability_ref)||!Number.isSafeInteger(r.from)||!Number.isSafeInteger(r.to)||r.from<0||r.to<=r.from||r.to>(r.capability_ref==='R:move'?p.deadline:p.deadline+p.receipt_grace))throw new GameError('INVALID_DEFINITION');registered_parameter(r.id+'-from',r.from,'ms');registered_parameter(r.id+'-to',r.to,'ms');}
+  }
+  if(conditions!==undefined){
+    if(!record(conditions)||!fields(conditions,['command_delivery_delay_ms'])||!Number.isSafeInteger(conditions.command_delivery_delay_ms)||conditions.command_delivery_delay_ms<0||conditions.command_delivery_delay_ms>p.deadline)throw new GameError('INVALID_DEFINITION');
+    registered_parameter('command_delivery_delay_ms',conditions.command_delivery_delay_ms,'ms');
+  }
+  const changes=value.catalogs.movement_changes;
+  if(changes!==undefined){
+    if(!dense_array(changes)||changes.length>32||new Set(changes.map(c=>c.id)).size!==changes.length)throw new GameError('INVALID_DEFINITION');
+    for(const c of changes){
+      if(!record(c)||!fields(c,['id','at','time_factor'])||!valid_id(c.id)||!Number.isSafeInteger(c.at)||c.at<0||c.at>p.deadline||typeof c.time_factor!=='number'||!Number.isFinite(c.time_factor)||c.time_factor<=0)throw new GameError('INVALID_DEFINITION');
+      registered_parameter(c.id+'-at',c.at,'ms');registered_parameter(c.id+'-factor',c.time_factor,'ratio');
+        // Bound numeric scheduler timestamps from the largest possible admitted
+        // polyline, not from an arbitrary gameplay limit on the owned factor.
+        const maxLength=(p.route_point_budget-1)*(Math.ceil(Math.hypot(...map.extent)*1000000)+1)/1000000;
+        const maxNominalMs=maxLength*1000/p.base_speed*(1+value.catalogs.actor.load*value.rules.load_factor_per_unit)*value.catalogs.movement_causes.reduce((factor,cause)=>factor*cause.factor,1);
+        if(!Number.isSafeInteger(Math.ceil(maxNominalMs*Math.max(1,c.time_factor))+p.deadline+p.receipt_grace))throw new GameError('INVALID_DEFINITION');
+    }
+  }
+  const obstacles=value.catalogs.movement_obstacles;
+  if(obstacles!==undefined){
+    if(!dense_array(obstacles)||obstacles.length>32||new Set(obstacles.map(o=>o.id)).size!==obstacles.length)throw new GameError('INVALID_DEFINITION');
+    for(const o of obstacles){if(!record(o)||!fields(o,['id','closed_at_x'])||!valid_id(o.id)||typeof o.closed_at_x!=='number'||!Number.isFinite(o.closed_at_x)||o.closed_at_x<0||o.closed_at_x>map.extent[0]||Math.round(o.closed_at_x*100)/100!==o.closed_at_x)throw new GameError('INVALID_DEFINITION');registered_parameter(o.id+'-x',o.closed_at_x,'fictional_metre');}
+  }
   const reports=value.catalogs.position_reports;
   if(reports!==undefined){
     if(!dense_array(reports)||reports.length>32||new Set(reports.map(r=>r.id)).size!==reports.length)throw new GameError('INVALID_DEFINITION');

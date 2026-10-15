@@ -1,10 +1,10 @@
 import type {ConditionExpr,MissionGateEvaluation,MissionTruth,MissionExpiry} from '../mission-contracts';
-import type {PositionKnowledge} from '../play-contracts';
+import type {MissionLocalPositionKnowledge} from '../mission-contracts';
 import type {PublicMap} from '../spatial';
 import {GameError} from '../contracts';
 import {compare_mission_position} from './mission-geometry';
 
-type GateContext={evaluated_by:'HQ'|'R';revision:number;at:number;rule_version:string;capability:{ready:boolean;evidence_refs:string[]};route:{permitted:boolean;evidence_refs:string[]};confirmation:{confirmed:boolean;evidence_refs:string[]};position:{knowledge:PositionKnowledge;max_age_ms:number;valid_until_time_ms:number};map:PublicMap};
+type GateContext={evaluated_by:'HQ'|'R';revision:number;at:number;rule_version:string;capability:{ready:boolean;evidence_refs:string[]};route:{permitted:boolean;evidence_refs:string[]};confirmation:{confirmed:boolean;evidence_refs:string[]};position:{knowledge:MissionLocalPositionKnowledge;max_age_ms:number;valid_until_time_ms:number};map:PublicMap};
 type Result={result:MissionTruth;conditions:MissionGateEvaluation['conditions'];evidence_refs:string[];expires_at_time_ms:MissionExpiry};
 function support_expiry(values:MissionExpiry[],latest:boolean):MissionExpiry{
   if(values.some(x=>x.kind==='unknown'))return {kind:'unknown'};

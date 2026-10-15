@@ -3,14 +3,17 @@ import type {MissionState} from './mission-state';
 import type {MissionDefinition} from './mission-definition';
 import type {PositionKnowledge} from '../play-contracts';
 import {canonical} from './snapshot';
+import type {MissionLocalPositionKnowledge,MissionLocalPositionCandidate} from '../mission-contracts';
 
-type Candidate=Extract<PositionKnowledge,{status:'conflicting'}>['candidates'][number];
+type Candidate=MissionLocalPositionCandidate;
 const scope_identity=(scope:Candidate['scope'])=>{
   const {id,evidence_refs,uncertainty,...geometry}=scope;
   const error=uncertainty.kind==='known'?{kind:uncertainty.kind,value:uncertainty.value,unit:uncertainty.unit}:uncertainty;
   return JSON.stringify(canonical({...geometry,uncertainty:error}));
 };
-function merge_position(current:PositionKnowledge,incoming:Candidate):PositionKnowledge{
+export function merge_mission_position(current:PositionKnowledge,incoming:Extract<PositionKnowledge,{status:'conflicting'}>['candidates'][number]):PositionKnowledge;
+export function merge_mission_position(current:MissionLocalPositionKnowledge,incoming:Candidate):MissionLocalPositionKnowledge;
+export function merge_mission_position(current:MissionLocalPositionKnowledge,incoming:Candidate):MissionLocalPositionKnowledge{
   if(incoming.observed.kind==='unknown')return current;
   if(current.observed.kind==='known'&&incoming.observed.value<current.observed.value)return current;
   if(current.observed.kind==='known'&&incoming.observed.value===current.observed.value){
@@ -36,7 +39,7 @@ export function deliver_mission_position_records(state:MissionState,definition:M
     state.position_deliveries.push(delivery);
     const scope=definition.catalogs.map.scopes.find(s=>s.id===record.scope_ref)!;
     if(scope.kind==='unresolved')continue;
-    state.known.position_knowledge=merge_position(state.known.position_knowledge,{scope:structuredClone(scope),observed:structuredClone(record.observed),reported:{kind:'known',value:record.reported_at,evidence:record.id},source_event_time:structuredClone(record.source_event_time),received:delivery.received,provenance:{kind:'delivered',report_ref:record.id,delivery_ref:delivery.id},evidence_refs:[record.id]});
+    state.known.position_knowledge=merge_mission_position(state.known.position_knowledge,{scope:structuredClone(scope),observed:structuredClone(record.observed),reported:{kind:'known',value:record.reported_at,evidence:record.id},source_event_time:structuredClone(record.source_event_time),received:delivery.received,provenance:{kind:'delivered',report_ref:record.id,delivery_ref:delivery.id},evidence_refs:[record.id]});
   }
 }
 
@@ -47,6 +50,7 @@ export function validate_mission_evidence(refs:string[],state:MissionState,defin
     ...definition.catalogs.map.scopes.flatMap(scope=>scope.evidence_refs),
     ...definition.catalogs.movement_causes.map(c=>c.evidence_ref),
     ...state.known.phase_confirmations.flatMap(c=>[c.report_ref,c.delivery_ref]),
+    ...state.deliveries.filter(d=>d.received<=state.sim_time&&state.reports.some(r=>r.id===d.report_ref&&r.run_id===state.run_id&&r.actor==='R'&&r.target==='HQ')).flatMap(d=>[d.report_ref,d.id]),
     ...state.position_deliveries.filter(d=>d.run_id===state.run_id&&d.received<=state.sim_time).flatMap(d=>[d.report_ref,d.id])
   ]);
   if(refs.some(ref=>!legal.has(ref)))throw new GameError('EVIDENCE_REQUIRED');

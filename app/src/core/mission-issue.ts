@@ -11,10 +11,12 @@ import {hash} from './scenario';
 const equal=(a:unknown,b:unknown)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 export function assert_mission_phase(state:MissionState,draft:MissionDraft,phase:MissionDraft['phases'][number],checked:MissionPreview['phases'][number],definition:MissionDefinition){
   const p=definition.profile.parameters;
+  if(state.mission?.status==='completed')throw new GameError('STATE_CONFIRMATION_REQUIRED');
   if(checked.authorization.status!=='met')throw new GameError('AUTHORITY_DENIED');
   if(checked.gate.result!=='T')throw new GameError(checked.gate.result==='F'?'CONSTRAINT_DENIED':'CONSTRAINT_HOLD');
   if(phase.dependencies.some(ref=>!state.known.phase_confirmations.some(c=>c.phase_id===ref.id&&c.phase_version===ref.version)))throw new GameError('STATE_CONFIRMATION_REQUIRED');
-  if(state.orders.some(o=>o.phase_ref.id===phase.id))throw new GameError('STATE_CONFIRMATION_REQUIRED');
+  const prior=state.orders.filter(o=>o.phase_ref.id===phase.id);
+  if(prior.some(o=>!['refused','not_started'].includes(o.status)||o.phase_ref.version>=phase.version||o.plan_ref.version>=(state.mission?.current_plan_ref.version??0)))throw new GameError('STATE_CONFIRMATION_REQUIRED');
   if(state.orders.length>=p.attempt_budget)throw new GameError('INVALID_REQUEST');
   const route=draft.routes.find(r=>r.id===phase.activity.route_ref.id&&r.version===phase.activity.route_ref.version)!;
   const location=state.known.position_knowledge;
@@ -50,9 +52,9 @@ export async function apply_issue_mission(state:MissionState,input:IssueMissionE
   const frozen_payload_digest=await hash(canonical(frozen_payload));
   candidate.orders.push({id,origin:'staff',mission_ref:structuredClone(plan.draft.mission_ref),phase_ref:structuredClone(intent.phase_ref),plan_ref:structuredClone(intent.plan_ref),intent_ref:{run_id:state.run_id,kind:'intent',id:plan.draft.intent.id,version:plan.draft.intent.version},grant_ref:structuredClone(intent.grant_ref),frozen_payload_digest,message_ref,execution_ref:null,supersedes_id:null,issued:state.sim_time,sent:state.sim_time,expiry_time_ms:Math.min(phase.latest_finish_time_ms,p.deadline,definition.catalogs.authority.valid_to_time_ms),hq_gate:structuredClone(checked.gate),status:'sent',...(intent.reason===undefined?{}:{reason:intent.reason}),frozen_payload});
   candidate.held_windows.push({order_ref:id,capability_ref:'R:move',concurrency_group:'R:execution',from:phase.earliest_start_time_ms,to:phase.latest_finish_time_ms,amount:1,status:'held'});
-  candidate.outbound_messages.push({id:message_ref,order_ref:id,origin:'HQ',target:'R',sent:state.sim_time,deliver_at:state.sim_time+p.link_ms,payload_digest:frozen_payload_digest});
+  candidate.outbound_messages.push({id:message_ref,order_ref:id,origin:'HQ',target:'R',sent:state.sim_time,deliver_at:state.sim_time+p.link_ms+(definition.catalogs.local_conditions?.command_delivery_delay_ms??0),payload_digest:frozen_payload_digest});
   for(const resources of [candidate.world.resources,candidate.known.resources]){resources.hq_energy-=p.send_energy_cost;resources.hq_wear-=p.send_wear_cost;}
-  candidate.status='active';candidate.mission!.status='active';candidate.mission!.object_revision++;
+  candidate.status='active';candidate.actual_mission_status='active';candidate.mission!.status='active';candidate.mission!.object_revision++;
   candidate.revision++;candidate.inputs.push({envelope:structuredClone(envelope),at:state.sim_time,revision:candidate.revision});
   return candidate;
 }
