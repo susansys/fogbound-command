@@ -33,10 +33,7 @@ async function pausedObservation(label,before){
   const at=performance.now();await new Promise(resolve=>setTimeout(resolve,5100));const after=await readState();expect(after).toEqual(before);evidence.observations.push({label,elapsed_ms:performance.now()-at,same_full_committed_snapshot:true,sim_time:after.sim_time,revision:after.revision});
 }
 async function capture(label){await page.evaluate(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));});const file=path.join(output,label+'.png');await page.screenshot({path:file,fullPage:true});evidence.events.push({label,at:elapsed(),file,sha256:sha(await fs.readFile(file)),view:await view(page),text:await page.locator('body').innerText()});}
-async function realFocusPause(){
-  const other=await context.newPage();await other.goto('about:blank');
-  for(const target of[page,other]){const session=await context.newCDPSession(target);await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});await session.detach();}
-  await page.bringToFront();await expect.poll(()=>page.evaluate(()=>document.hasFocus()&&!document.hidden)).toBe(true);
+async function realFocusPause(other){
   const since=(await trace(page)).requests.length;await other.bringToFront();
   await expect.poll(()=>page.evaluate(()=>document.hidden||!document.hasFocus())).toBe(true);await expect.poll(()=>other.evaluate(()=>document.hasFocus()&&!document.hidden)).toBe(true);
   let pair;await expect.poll(async()=>{const t=await trace(page);for(const request of t.requests.slice(since).filter(r=>r.kind==='operate'&&r.envelope.intent.kind==='pause'&&['focus_lost','application_hidden'].includes(r.envelope.intent.reason))){const response=t.responses.find(r=>r.message.request_id===request.request_id&&r.message.ok&&r.message.receipt?.result==='committed');if(response)pair={request,response};}return !!pair;},{timeout:10000,intervals:[100]}).toBe(true);
@@ -64,8 +61,10 @@ try{
   await closeBrowser();await launch();
   const restore2=await operation(page,'restore',()=>keyboardActivate(page,page.getByRole('button',{name:'接手这场演练',exact:true}))),restored2=await readState();assertRestore(restored1,restore2,restored2);evidence.restore2={pair:restore2,state:restored2};await pausedObservation('second restored paused window',restored2);
   for(const width of [1366,1920]){await page.setViewportSize({width,height:width===1366?768:1080});await capture('paused-natural-reopen-'+width);}
+  let focusTarget;
+  if(focusCase){focusTarget=await context.newPage();await focusTarget.goto('about:blank');for(const target of[page,focusTarget]){const session=await context.newCDPSession(target);await session.send('Emulation.setFocusEmulationEnabled',{enabled:false});await session.detach();}await page.bringToFront();await expect.poll(()=>page.evaluate(()=>document.hasFocus()&&!document.hidden)).toBe(true);}
   evidence.continue=await operation(page,'continue',()=>keyboardActivate(page,page.getByRole('button',{name:'继续',exact:true})));
-  if(focusCase)await realFocusPause();
+  if(focusCase)await realFocusPause(focusTarget);
   await expect.poll(async()=>(await view(page)).finished,{timeout:30000,intervals:[100]}).toBe(true);
   const completed=await view(page),state=await readState();expect(completed.run_id).toBe(before.run_id);expect(completed.artifacts).toHaveLength(1);expect(completed.artifacts[0].completed).toBe(I+46000);expect(completed.resources).toMatchObject(evidence.expected.resources);expect(completed.log.filter(row=>row.kind==='complete_receipt')).toHaveLength(1);expect(completed.log.find(row=>row.kind==='complete_receipt').at).toBe(I+47000);await expect(page.locator('.bottom-log').getByText(/记录成果回报已收到/)).toHaveCount(1);expect(state.rng).toEqual(before.rng);expect(state.world.record_artifacts).toHaveLength(1);evidence.completed={view:completed,state};await capture('unique-natural-completion');
   await keyboardActivate(page,page.getByRole('button',{name:'行动复盘',exact:true}));await page.getByLabel('回看时刻（秒）').fill('0');await keyboardActivate(page,page.getByRole('button',{name:'查看当时情况',exact:true}));await expect(page.getByText('历史记录 · 只读',{exact:true})).toBeVisible();expect(await page.getByRole('button',{name:'保存记录',exact:true}).count()).toBe(0);expect(await page.getByRole('button',{name:'继续',exact:true}).count()).toBe(0);await capture('keyboard-readonly-history');await keyboardActivate(page,page.getByRole('button',{name:'返回当前行动',exact:true}));await expect(page.locator('.clock')).toContainText('任务完成');evidence.keyboard_history=true;
