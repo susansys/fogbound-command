@@ -1,8 +1,6 @@
 import {GameError} from './contracts';
-import {coordinate,dense_array,type Coordinate,type PublicMap} from './spatial';
+import {coordinate,dense_array,same_coordinate as same,grid_cross as cross,segments_intersect as intersects,type Coordinate,type PublicMap} from './spatial';
 import type {RouteDraft,RoutePlan} from './route-contracts';
-const same=(a:Coordinate,b:Coordinate)=>a[0]===b[0]&&a[1]===b[1];
-const cross=(a:Coordinate,b:Coordinate,c:Coordinate)=>(Math.round(b[0]*100)-Math.round(a[0]*100))*(Math.round(c[1]*100)-Math.round(a[1]*100))-(Math.round(b[1]*100)-Math.round(a[1]*100))*(Math.round(c[0]*100)-Math.round(a[0]*100));
 function invalid(index?:number):never{throw new GameError('INVALID_REQUEST','route_draft.path'+(index===undefined?'':`[${index}]`));}
 function exact(input:unknown,names:string[]):input is Record<string,unknown>{
   return typeof input==='object'&&input!==null&&Object.getPrototypeOf(input)===Object.prototype&&Reflect.ownKeys(input).length===names.length&&Reflect.ownKeys(input).every(key=>typeof key==='string'&&names.includes(key)&&Object.getOwnPropertyDescriptor(input,key)?.enumerable===true&&Object.hasOwn(Object.getOwnPropertyDescriptor(input,key)!,'value'));
@@ -19,11 +17,6 @@ export function valid_route_plan(input:unknown):input is RoutePlan{
     if(input.estimated_move_ms!==null||input.estimate_range!==null||input.allowed!==false)return false;
   }else if(input.estimate_kind!=='known'||!time(input.estimated_move_ms)||!exact(input.estimate_range,['min_ms','max_ms','basis'])||input.estimate_range.min_ms!==input.estimated_move_ms||input.estimate_range.max_ms!==input.estimated_move_ms||input.estimate_range.basis!=='registered_rule_time')return false;
   try{return JSON.stringify(canonical_route(input.path))===JSON.stringify(input.path);}catch{return false;}
-}
-const on_segment=(p:Coordinate,a:Coordinate,b:Coordinate)=>cross(a,b,p)===0&&p[0]>=Math.min(a[0],b[0])&&p[0]<=Math.max(a[0],b[0])&&p[1]>=Math.min(a[1],b[1])&&p[1]<=Math.max(a[1],b[1]);
-function intersects(a:Coordinate,b:Coordinate,c:Coordinate,d:Coordinate){
-  const abC=cross(a,b,c),abD=cross(a,b,d),cdA=cross(c,d,a),cdB=cross(c,d,b);
-  return abC*abD<0&&cdA*cdB<0||abC===0&&on_segment(c,a,b)||abD===0&&on_segment(d,a,b)||cdA===0&&on_segment(a,c,d)||cdB===0&&on_segment(b,c,d);
 }
 export function canonical_route(input:unknown):Coordinate[]{
   if(!dense_array(input)||input.length<2||input.length>64)invalid();

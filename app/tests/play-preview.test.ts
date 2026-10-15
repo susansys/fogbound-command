@@ -2,7 +2,7 @@ import {test,expect} from 'vitest';
 import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import definition from './fixtures/play-corridor.json';
-import {load_definition,is_play_definition,hash,type PlayDefinition} from '../src/core/scenario';
+import {load_definition,is_play_definition,hash,engineeringDefinition,type PlayDefinition} from '../src/core/scenario';
 import type {RouteDraft} from '../src/route-contracts';
 import {valid_request} from '../src/protocol';
 import {valid_response} from '../src/dto';
@@ -162,4 +162,20 @@ test('PG07 self-signed capability or load metadata cannot make an invalid regist
       expect(await store.list_runs()).toEqual([]);expect(await store.creation('invalid-capability')).toBeUndefined();
     }finally{await store.delete();}
   }
+});
+
+test('PG05 legacy and schema7 issued-order DTOs reject plans from the other scenario branch',async()=>{
+  const oldStore=new Persistence('b21-owned-dto-legacy-orders'),newStore=new Persistence('b21-owned-dto-corridor-orders');
+  try{
+    const oldGame=new Game(oldStore),newGame=new Game(newStore);
+    const legacy=await oldGame.create_run(engineeringDefinition,'research','create-legacy-dto'),view=await newGame.create_run(definition,'research','create-corridor-dto');
+    if(legacy.scenario_kind==='play_corridor'||view.scenario_kind!=='play_corridor')throw Error('Expected distinct registered branches');
+    const {map_id,map_version,crs_id,geometry_version}=view.geometry;
+    const route=await newGame.preview_plan(view.run_id,view.revision,1,{actor:'R',map_id,map_version,crs_id,geometry_version,path});
+    const oldPlan=await oldGame.preview_plan(legacy.run_id,legacy.revision,1);
+    expect(valid_response({request_id:'legacy-good',ok:true,view:legacy})).toBe(true);
+    expect(valid_response({request_id:'corridor-good',ok:true,view})).toBe(true);
+    expect(valid_response({request_id:'legacy-cross',ok:true,view:{...legacy,issued_orders:[{command_id:'wrong-branch',issued:0,plan:route}]}})).toBe(false);
+    expect(valid_response({request_id:'corridor-cross',ok:true,view:{...view,issued_orders:[{command_id:'wrong-branch',issued:0,plan:oldPlan}]}})).toBe(false);
+  }finally{await oldStore.delete();await newStore.delete();}
 });

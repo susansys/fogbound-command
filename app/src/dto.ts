@@ -33,7 +33,7 @@ const common_player_view:Check=v=>shape(v,{
   geometry:v=>shape(v,{H:vector(2),T:vector(2),extent:vector(2),corridor_width:number,plain:vector(4),rough:vector(4)},{N:vector(2)}),
   authority:v=>shape(v,{from:time,to:time}),can_issue:bool,next_action:text,gap:text,
   log:list(log),
-  issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan},{reason:text})),
+  issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan:legacy_plan},{reason:text})),
 },{replacement:v=>shape(v,{original_command_id:valid_id,replacement_command_id:valid_id,accepted_at:time,received_at:time,evidence:text}),scenario_case:oneOf(prestart_case_refs),scenario_kind:oneOf(['record','prestart_move']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
   if(record(v)&&v.scenario_kind==='play_corridor')return play_player_view(v);
@@ -63,10 +63,11 @@ function play_player_view(v:Record<string,unknown>):boolean{
   return shape(v,{
     scenario_kind:oneOf(['play_corridor']),run_id:valid_id,revision:x=>time(x)&&Number(x)>=1,sim_time:x=>time(x)&&Number(x)<=910000,mode:oneOf(['command','research']),rate:oneOf([1,2,4]),paused:bool,finished:oneOf([false]),source_run:x=>x===null||valid_id(x),status:oneOf(['ready','queued','accepted','arrived','blocked','cutoff_confirmed','window_ended_unconfirmed','window_sealed_unconfirmed']),
     geometry:public_map,position_knowledge:positionKnowledge,authority:x=>shape(x,{from:time,to:time}),public_rules:x=>shape(x,{deadline:oneOf([900000]),receipt_grace:oneOf([10000]),link_ms:oneOf([1000]),rules_hash:x=>typeof x==='string'&&/^[a-f0-9]{64}$/.test(x)}),movement_basis:x=>shape(x,{capability_ref:valid_id,speed:x=>number(x)&&Number(x)>0,unit:oneOf(['fictional_metre/s']),load:time,terrain_factor:x=>number(x)&&Number(x)>0,environment_factor:x=>number(x)&&Number(x)>0,load_factor_per_unit:oneOf([0.02]),length_scale:oneOf([1000000]),evidence_refs:list(valid_id,32)}),resources,can_issue:bool,next_action:text,gap:text,
-    issued_orders:list(x=>shape(x,{command_id:valid_id,issued:time,plan},{reason:text})),replay_nodes:list(x=>shape(x,{revision:x=>time(x)&&Number(x)>=1,at:time,meaningful:bool,label:text})),log:list(x=>shape(x,{id:text,at:time,kind:oneOf(['initial_evidence']),text,evidence:text}))
+    issued_orders:list(x=>shape(x,{command_id:valid_id,issued:time,plan:valid_route_plan},{reason:text})),replay_nodes:list(x=>shape(x,{revision:x=>time(x)&&Number(x)>=1,at:time,meaningful:bool,label:text})),log:list(x=>shape(x,{id:text,at:time,kind:oneOf(['initial_evidence']),text,evidence:text}))
   });
 }
-const plan:Check=v=>valid_route_plan(v)||valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
+const legacy_plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
+const plan:Check=v=>valid_route_plan(v)||legacy_plan(v);
 const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
 const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move','play_corridor']),read_only:bool});
 const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
