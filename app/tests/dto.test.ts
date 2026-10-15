@@ -1,3 +1,4 @@
+import {legacy_view} from './legacy-branch';
 import {test,expect} from 'vitest';
 import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
@@ -5,7 +6,7 @@ import {engineeringDefinition,recordEngineeringDefinition} from '../src/core/sce
 import {valid_response} from '../src/dto';
 test('the outbound whitelist rejects private, nested extra and malformed unknown-time fields',async()=>{
   const store=new Persistence('dto-whitelist'),game=new Game(store);
-  const view=await game.create_run(engineeringDefinition,'research','create');
+  const view=legacy_view(await game.create_run(engineeringDefinition,'research','create'));
   const response={request_id:'response',ok:true,view};
   expect(valid_response(response)).toBe(true);
   expect(valid_response({...response,view:{...view,world_canary:'private-a'}})).toBe(false);
@@ -21,7 +22,7 @@ test('the outbound whitelist rejects private, nested extra and malformed unknown
   expect(valid_response(null)).toBe(false);await store.delete();
 });
 test('outbound vectors and lists reject attached private array properties and sparse indices',async()=>{
-  const store=new Persistence('dto-arrays'),game=new Game(store);const view=await game.create_run(engineeringDefinition,'research','create');
+  const store=new Persistence('dto-arrays'),game=new Game(store);const view=legacy_view(await game.create_run(engineeringDefinition,'research','create'));
   expect(valid_response({request_id:'dto',ok:true,view:{...view,geometry:{...view.geometry,H:Object.assign([50,150],{private_canary:'ENGINE_ONLY'})}}})).toBe(false);
   expect(valid_response({request_id:'dto',ok:true,view:{...view,log:Object.assign([...view.log],{constructor:'ENGINE_ONLY'})}})).toBe(false);
   const runs=Object.assign([{run_id:view.run_id,revision:1,sim_time:0,mode:'research',finished:false}],{private_canary:'ENGINE_ONLY'});
@@ -32,10 +33,10 @@ test('outbound vectors and lists reject attached private array properties and sp
 test('DTOs require the complete Record fields and reject Record fields added to a Move view',async()=>{
   const store=new Persistence('dto-scene-fields'),game=new Game(store);
   try{
-    const move=await game.create_run(engineeringDefinition,'research','move');
+    const move=legacy_view(await game.create_run(engineeringDefinition,'research','move'));
     expect(valid_response({request_id:'dto',ok:true,view:{...move,resources:{...move.resources,record_energy:20}}})).toBe(false);
     expect(valid_response({request_id:'dto',ok:true,view:{...move,artifacts:[]}})).toBe(false);
-    const record=await game.create_run(recordEngineeringDefinition,'research','record');
+    const record=legacy_view(await game.create_run(recordEngineeringDefinition,'research','record'));
     expect(valid_response({request_id:'dto',ok:true,view:record})).toBe(true);
     const {record_energy,...incomplete}=record.resources;
     expect(valid_response({request_id:'dto',ok:true,view:{...record,resources:incomplete}})).toBe(false);

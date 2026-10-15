@@ -1,5 +1,5 @@
 export type Mode = "command" | "research";
-export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE';
+export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01';
 export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
 export type PrestartCaseRef=typeof prestart_case_refs[number];
 export type Position = {

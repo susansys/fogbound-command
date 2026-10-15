@@ -1,4 +1,5 @@
 import type {PlayerView} from './contracts';
+import {validate_public_map,type PublicMap} from './spatial';
 
 export type MapPoint=readonly [number,number];
 export const backgroundExtent=[-200,-150,600,450] as const;
@@ -16,7 +17,8 @@ export function fromDisplayLngLat([longitude,latitude]:MapPoint):[number,number]
 export function withinExtent(point:MapPoint,extent:readonly number[]):boolean{
   return point.every(Number.isFinite)&&point[0]>=extent[0]&&point[0]<=extent[2]&&point[1]>=extent[1]&&point[1]<=extent[3];
 }
-export async function publicGeometryDigest(geometry:PlayerView['geometry']):Promise<string>{
+export async function publicGeometryDigest(geometry:PlayerView['geometry']|PublicMap):Promise<string>{
+  if('map_id' in geometry){validate_public_map(geometry);return geometry.geometry_version;}
   const {H,T,N,extent,corridor_width,plain,rough}=geometry;
   const points=[H,T,...(N?[N]:[])];
   const rectangles=[plain,rough];

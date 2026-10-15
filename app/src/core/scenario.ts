@@ -1,10 +1,23 @@
 import definition from "./engineering.json";
 import recordDefinition from "./record-engineering.json";
 import prestartDefinition from './prestart-engineering.json';
+import playDefinition from './play-definition.json';
 import {GameError} from '../contracts';
+import {record,fields,valid_id} from '../protocol';
+import {validate_public_map} from '../spatial';
+import type {PublicMap} from '../spatial';
+import type {KnownTime} from '../contracts';
 export const engineeringDefinition = definition;
 export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
+export const playCorridorDefinition=playDefinition;
+export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'>&{map:PublicMap;engine_conditions:{closed_at_x:number|null};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
+export function is_play_definition(value:Definition|PlayDefinition):value is PlayDefinition{return value.schema===7;}
+export function play_definition_for_package(definitionHash:unknown,registered:readonly PlayDefinition[]=[]):PlayDefinition{
+  const selected=[playDefinition,...registered].find(x=>x.definition_hash===definitionHash);
+  if(!selected)throw new GameError('INVALID_SAVE');
+  return structuredClone(selected) as PlayDefinition;
+}
 const definitions=[definition,recordDefinition,prestartDefinition];
 export type Definition = typeof definition | typeof recordDefinition | typeof prestartDefinition;
 export function prestart_parameters(state:{schema:unknown;definition_hash:unknown}):typeof prestartDefinition.profile.parameters{
@@ -34,8 +47,39 @@ export async function hash(value: unknown): Promise<string> {
     b.toString(16).padStart(2, "0"),
   ).join("");
 }
-export async function load_definition(input: unknown): Promise<Definition> {
-  const selected = definitions.find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
+function known_time(value:unknown):boolean{
+  if(!record(value))return false;
+  if(value.kind==='unknown')return fields(value,['kind']);
+  return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
+}
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[]): Promise<Definition|PlayDefinition> {
+  if(record(input)&&input.schema===7&&(!record(input.profile)||!record(input.profile.parameters)||!record(input.catalogs)||!record(input.catalogs.map)))
+    throw new GameError('CONFIG_PARAMETER_MISSING');
+  if(record(input)&&input.schema===7&&record(input.catalogs)){
+    const map=input.catalogs.map;validate_public_map(map);
+    if(!record(input.rules))throw new GameError('CONFIG_PARAMETER_MISSING');
+    const publicRules:Record<string,unknown>={};
+    for(const key of Object.keys(playDefinition.rules).filter(key=>key!=='disabled_capabilities')){
+      if(!Object.hasOwn(input.rules,key))throw new GameError('CONFIG_PARAMETER_MISSING');
+      publicRules[key]=input.rules[key];
+    }
+    const identity={map_id:map.map_id,map_version:map.map_version,crs_id:map.crs_id};
+    const scopes=map.scopes.map(({geometry_version,...scope})=>scope);
+    if(await hash({identity,extent:map.extent,unit:map.unit,scopes,rules:publicRules})!==map.geometry_version)throw new GameError('INVALID_REQUEST');
+    const initial=input.catalogs.initial_evidence;
+    if(!record(initial)||!fields(initial,['id','scope_ref','observed','source_event_time','origin'])||!valid_id(initial.id)||!valid_id(initial.scope_ref)||initial.origin!=='registered_initial_evidence'||!known_time(initial.observed)||!known_time(initial.source_event_time)||!map.scopes.some(scope=>scope.id===initial.scope_ref))throw new GameError('INVALID_REQUEST');
+  }
+  if(record(input)&&input.schema===7&&record(input.profile)&&record(input.profile.parameters)){
+    const parameters=input.profile.parameters,registry=input.profile.registry;
+    if(!Array.isArray(registry))throw new GameError('CONFIG_PARAMETER_MISSING');
+    for(const required of playDefinition.profile.registry){
+      const entries=registry.filter(entry=>record(entry)&&entry.id===required.id);
+      if(!Object.hasOwn(parameters,required.id)||entries.length===0||!record(entries[0])||entries[0].unit===undefined)throw new GameError('CONFIG_PARAMETER_MISSING');
+      if(entries[0].unit!==required.unit)throw new GameError('CONFIG_UNIT_MISMATCH');
+      if(entries.length!==1||typeof parameters[required.id]!=='number'||!Number.isFinite(parameters[required.id])||parameters[required.id]!==entries[0].value)throw new GameError('INVALID_DEFINITION');
+    }
+  }
+  const selected = [...definitions,playDefinition,...registered].find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
   if (!selected)
     throw new GameError("INVALID_DEFINITION");
   const { definition_hash, ...payload } = selected;
@@ -45,7 +89,7 @@ export async function load_definition(input: unknown): Promise<Definition> {
     if (await hash(selected[key]) !== selected.hashes[key]) throw new GameError('INVALID_DEFINITION');
   }
   if (await hash([]) !== selected.hashes.media) throw new GameError('INVALID_DEFINITION');
-  return structuredClone(selected);
+  return selected.schema===7?structuredClone(selected) as PlayDefinition:structuredClone(selected) as Definition;
 }
 export function describe_capabilities() {
   return [...definition.capabilities];

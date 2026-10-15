@@ -1,3 +1,4 @@
+import {legacy_view,legacy_result,legacy_state} from './legacy-branch';
 import {createHash} from 'node:crypto';
 import {expect,test} from 'vitest';
 import type {Envelope, PlayerView} from '../src/contracts';
@@ -21,26 +22,26 @@ async function writeState(store:Persistence,state:State){
 }
 async function recordIssued(name:string,preIssue=0){
   const store=new Persistence(name),game=new Game(store);
-  let start=await game.create_run(recordEngineeringDefinition,'research','create');
-  if(preIssue)start=(await game.control_clock({run_id:start.run_id,operation_id:'pre-issue',expected_revision:start.revision,intent:{kind:'advance',to:preIssue}})).view;
+  let start=legacy_view(await game.create_run(recordEngineeringDefinition,'research','create'));
+  if(preIssue)start=(legacy_result(await game.control_clock({run_id:start.run_id,operation_id:'pre-issue',expected_revision:start.revision,intent:{kind:'advance',to:preIssue}}))).view;
   const plan=await game.preview_plan(start.run_id,start.revision,1);
   const envelope:Envelope={run_id:start.run_id,operation_id:'issue',expected_revision:start.revision,intent:{kind:'issue',command_id:'record',plan}};
-  const issued=await game.issue_order(envelope);
+  const issued=legacy_result(await game.issue_order(envelope));
   return {store,game,view:issued.view,envelope,receipt:issued.receipt};
 }
 
 test('record frozen operation retry reuses the original receipt and conflicting reuse does not spend or produce again',async()=>{
   const {store,game,view,envelope,receipt}=await recordIssued('record-retry');
   try{
-    const repeat=await game.issue_order(envelope);
+    const repeat=legacy_result(await game.issue_order(envelope));
     expect(repeat.receipt).toEqual(receipt);
     expect(repeat.view).toEqual(view);
     const changed=structuredClone(envelope);
     if(changed.intent.kind!=='issue')throw new Error('bad fixture');
     changed.intent.command_id='record-other';
     await expect(game.issue_order(changed)).rejects.toThrow('OPERATION_CONFLICT');
-    expect(await game.get_view(view.run_id)).toEqual(view);
-    expect(await store.read_committed(view.run_id)).toMatchObject({revision:view.revision,world:{hq_energy:16,hq_wear:100,record_artifacts:[]}});
+    expect(legacy_view(await game.get_view(view.run_id))).toEqual(view);
+    expect(legacy_state(await store.read_committed(view.run_id))).toMatchObject({revision:view.revision,world:{hq_energy:16,hq_wear:100,record_artifacts:[]}});
   }finally{await store.delete();}
 });
 
@@ -48,7 +49,7 @@ test.each([6000,46000,47000])('record transaction abort at %sms rolls back the w
   const {store,game,view}=await recordIssued(`record-abort-${target}`);
   try{
     const safeTo=target===6000?2000:target===46000?7000:46000;
-    const safe=await game.control_clock({run_id:view.run_id,operation_id:'safe',expected_revision:view.revision,intent:{kind:'advance',to:safeTo}});
+    const safe=legacy_result(await game.control_clock({run_id:view.run_id,operation_id:'safe',expected_revision:view.revision,intent:{kind:'advance',to:safeTo}}));
     const native=IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put=function(...args:Parameters<IDBObjectStore['put']>){
       const value=args[0] as {sim_time?:number};
@@ -59,26 +60,26 @@ test.each([6000,46000,47000])('record transaction abort at %sms rolls back the w
     try{
       await expect(game.control_clock({run_id:view.run_id,operation_id:'failed',expected_revision:safe.view.revision,intent:{kind:'advance',to:target}})).rejects.toThrow('STORAGE_UNCONFIRMED');
     }finally{IDBObjectStore.prototype.put=native;}
-    expect(await game.get_view(view.run_id)).toEqual(safe.view);
+    expect(legacy_view(await game.get_view(view.run_id))).toEqual(safe.view);
     expect(await game.get_receipt(view.run_id,'safe')).toEqual(safe.receipt);
     expect(await game.get_receipt(view.run_id,'failed')).toBeNull();
     await expect(game.control_clock({run_id:view.run_id,operation_id:'after-fault',expected_revision:safe.view.revision,intent:{kind:'advance',to:target}})).rejects.toThrow('STORAGE_UNCONFIRMED');
-    expect(await game.get_view(view.run_id)).toEqual(safe.view);
+    expect(legacy_view(await game.get_view(view.run_id))).toEqual(safe.view);
   }finally{await store.delete();}
 });
 
 test('record explicit takeover pauses the same run and fences the older writer generation',async()=>{
   const store=new Persistence('record-writer-handover'),oldGame=new Game(store);
   try{
-    let view=await oldGame.create_run(recordEngineeringDefinition,'command','create');
-    view=(await oldGame.tick(view.run_id,2500,'tick')).view;
+    let view=legacy_view(await oldGame.create_run(recordEngineeringDefinition,'command','create'));
+    view=(legacy_result(await oldGame.tick(view.run_id,2500,'tick'))).view;
     const next=new Game(store);
-    const takeover=await next.restore(view.run_id,'takeover');
+    const takeover=legacy_result(await next.restore(view.run_id,'takeover'));
     expect(takeover.view.run_id).toBe(view.run_id);
     expect(takeover.view.paused).toBe(true);
     expect(takeover.view.sim_time).toBe(view.sim_time);
     await expect(oldGame.control_clock({run_id:view.run_id,operation_id:'stale-writer',expected_revision:takeover.view.revision,intent:{kind:'continue'}})).rejects.toThrow('STALE_WRITER');
-    expect(await next.get_view(view.run_id)).toEqual(takeover.view);
+    expect(legacy_view(await next.get_view(view.run_id))).toEqual(takeover.view);
   }finally{await store.delete();}
 });
 
@@ -116,12 +117,12 @@ test.each(corruptions)('record restore rejects a self-consistent corrupted $labe
   const {label,advance,apply}=corruption;
   const {store,game,view}=await recordIssued(`record-bad-${label}`,'preIssue' in corruption?corruption.preIssue:0);
   try{
-    const current=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:advance}})).view;
-    const bad=structuredClone((await store.read_committed(current.run_id))!);
+    const current=(legacy_result(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:advance}}))).view;
+    const bad=structuredClone((legacy_state(await store.read_committed(current.run_id)))!);
     apply(bad);
     await writeState(store,bad);
     await expect(new Game(store).restore(current.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
-    expect((await store.read_committed(current.run_id))?.integrity).toBe(bad.integrity);
+    expect((legacy_state(await store.read_committed(current.run_id)))?.integrity).toBe(bad.integrity);
     expect(await game.get_receipt(current.run_id,'restore')).toBeNull();
   }finally{await store.delete();}
 });
@@ -129,8 +130,8 @@ test.each(corruptions)('record restore rejects a self-consistent corrupted $labe
 test('private record world variants with the same legal known evidence do not change the PlayerView',async()=>{
   const {store,game,view}=await recordIssued('record-private-variant');
   try{
-    const atStart=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:7000}})).view;
-    const committed=(await store.read_committed(view.run_id))!;
+    const atStart=(legacy_result(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:7000}}))).view;
+    const committed=(legacy_state(await store.read_committed(view.run_id)))!;
     const variant=structuredClone(committed);
     variant.world.record_work={numerator:7,denominator:2,unit:'record_work'};
     variant.world.record_energy={numerator:1,denominator:1,unit:'record_energy'};
@@ -145,40 +146,40 @@ test('private record world variants with the same legal known evidence do not ch
 test('Record restore rejects a rewritten restoration snapshot reference even with a new checksum',async()=>{
   const {store,game,view}=await recordIssued('record-bad-restore-reference');
   try{
-    await game.restore(view.run_id,'first-restore');
-    const bad=structuredClone((await store.read_committed(view.run_id))!);
+    legacy_result(await game.restore(view.run_id,'first-restore'));
+    const bad=structuredClone((legacy_state(await store.read_committed(view.run_id)))!);
     const input=bad.inputs.find(x=>x.envelope.intent.kind==='restore')!;
     if(input.envelope.intent.kind==='restore')input.envelope.intent.snapshot_revision=1;
     await writeState(store,bad);
     await expect(new Game(store).restore(view.run_id,'second-restore')).rejects.toThrow('INVALID_SAVE');
-    expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
+    expect((legacy_state(await store.read_committed(view.run_id)))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });
 
 test('Record restore rejects time advancement without a committed input',async()=>{
   const store=new Persistence('record-unrecorded-time'),game=new Game(store);
   try{
-    const view=await game.create_run(recordEngineeringDefinition,'research','create');
-    const bad=structuredClone((await store.read_committed(view.run_id))!);
+    const view=legacy_view(await game.create_run(recordEngineeringDefinition,'research','create'));
+    const bad=structuredClone((legacy_state(await store.read_committed(view.run_id)))!);
     bad.sim_time=1;
     await writeState(store,bad);
     await expect(new Game(store).restore(view.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
-    expect((await store.read_committed(view.run_id))?.integrity).toBe(bad.integrity);
+    expect((legacy_state(await store.read_committed(view.run_id)))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });
 
 test('Record restore rejects an out-of-range adopted clock even when completion clips the resulting time',async()=>{
   const store=new Persistence('record-invalid-clock-bound'),game=new Game(store);
   try{
-    const start=await game.create_run(recordEngineeringDefinition,'command','create');
+    const start=legacy_view(await game.create_run(recordEngineeringDefinition,'command','create'));
     const plan=await game.preview_plan(start.run_id,start.revision,1);
-    const issued=await game.issue_order({run_id:start.run_id,operation_id:'issue',expected_revision:start.revision,intent:{kind:'issue',command_id:'record',plan}});
-    const completed=await game.save({run_id:start.run_id,operation_id:'save',expected_revision:issued.view.revision,intent:{kind:'save'}},610000);
+    const issued=legacy_result(await game.issue_order({run_id:start.run_id,operation_id:'issue',expected_revision:start.revision,intent:{kind:'issue',command_id:'record',plan}}));
+    const completed=legacy_result(await game.save({run_id:start.run_id,operation_id:'save',expected_revision:issued.view.revision,intent:{kind:'save'}},610000));
     expect(completed.view.sim_time).toBe(47000);
-    const bad=structuredClone((await store.read_committed(start.run_id))!);
+    const bad=structuredClone((legacy_state(await store.read_committed(start.run_id)))!);
     bad.inputs.at(-1)!.clock_to=610001;
     await writeState(store,bad);
     await expect(new Game(store).restore(start.run_id,'restore')).rejects.toThrow('INVALID_SAVE');
-    expect((await store.read_committed(start.run_id))?.integrity).toBe(bad.integrity);
+    expect((legacy_state(await store.read_committed(start.run_id)))?.integrity).toBe(bad.integrity);
   }finally{await store.delete();}
 });

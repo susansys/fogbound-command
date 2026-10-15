@@ -1,4 +1,5 @@
-import type { Mode, PlayerView, Plan, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
+import type { Mode, Plan, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
+import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 export type RunSummary = {
@@ -7,7 +8,7 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor';
   read_only?:boolean;
 };
 export type Request =

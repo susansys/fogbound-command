@@ -95,3 +95,4 @@ export type State = {
   };
   log: LogEntry[];
 };
+export type StoredState=State|import('./play-state').PlayState;

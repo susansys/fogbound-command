@@ -11,6 +11,8 @@ import {PlanDraft} from './plan-draft';
 import {RegionalDisplayStore,RegionalDisplaySession} from './regional-display';
 import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsClockwise,Stack,ChatCenteredText,ArrowRight } from "@phosphor-icons/react";
 import ms from 'milsymbol';
+import type {GamePlayerView,PlayPlayerView} from './play-contracts';
+import {PlayWorkbench} from './play-workbench';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
 function isRecordPlan(plan: Plan | null | undefined): plan is Extract<Plan,{kind:'record'}> {
   return !!plan && 'kind' in plan && plan.kind==='record';
@@ -31,7 +33,7 @@ export function Workbench() {
   const takeoverOperations=useRef(new Map<string,string>());
   const pendingOrder = useRef<Envelope | null>(null);
   const orderConfirmed=useRef<string|null>(null);
-  const historyActive=useRef(false),restartOperation=useRef(''),liveView=useRef<PlayerView|null>(null);
+  const historyActive=useRef(false),restartOperation=useRef(''),liveView=useRef<GamePlayerView|null>(null);
   if(!restartOperation.current)restartOperation.current=crypto.randomUUID();
   const [reviewNode,setReviewNode]=useState('');
   const [fullReplay,setFullReplay]=useState(false);
@@ -55,15 +57,24 @@ export function Workbench() {
   const editing = useRef(0),
     currentView = useRef<PlayerView | null>(null);
   const [mode, setMode] = useState<Mode>("command"),
-    [view, setView] = useState<PlayerView | null>(null),
+    [view, setLegacyView] = useState<PlayerView | null>(null),
     [error, setError] = useState(""),
     [storageFault,setStorageFault]=useState(false),
     [runs, setRuns] = useState<RunSummary[]>([]),
     [listReady,setListReady]=useState(false),
     [busy, setBusy] = useState(false);
+  const [playView,setPlayView]=useState<PlayPlayerView|null>(null);
+  const shownRun=useRef<string|null>(null);shownRun.current=playView?.run_id??view?.run_id??null;
+  function setView(next:GamePlayerView|null){
+    if(next?.scenario_kind==='play_corridor'){setPlayView(next);setLegacyView(null);}
+    else{setPlayView(null);setLegacyView(next);}
+  }
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
-  function adoptView(next:PlayerView){setView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);}
+  function adoptView(next:GamePlayerView){
+    if(next.scenario_kind==='play_corridor'){setPlayView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setLegacyView(null);}
+    else setLegacyView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);
+  }
   useEffect(()=>transport.subscribe(response=>{
     if(response.ok&&response.view&&response.request_id.startsWith('clock-')){liveView.current=response.view;if(!historyActive.current)adoptView(response.view);}
     else if(!response.ok&&response.request_id==='clock-fault'){setError(response.code);setStorageFault(true);}
@@ -111,7 +122,7 @@ export function Workbench() {
         ...(definitionRef==='ENG-PRESTART-REPLACE'?{case_ref:caseRef}:{}),
         operation_id: createOperation.current,
       });
-      if (result.ok && result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(currentView.current?.run_id===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');adoptView(result.view);}
+      if (result.ok && result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');adoptView(result.view);}
       else if (!result.ok) setError(result.code);
     } catch {
       setError("CHANNEL_UNCERTAIN");
@@ -122,7 +133,7 @@ export function Workbench() {
   async function takeover(run_id:string){
     const operation_id=takeoverOperations.current.get(run_id)??crypto.randomUUID();takeoverOperations.current.set(run_id,operation_id);
     setBusy(true);setError('');
-    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){displaySession.current=new RegionalDisplaySession(run_id,displayStore,false,result.receipt?.snapshot_revision??null,text=>{if(currentView.current?.run_id===run_id&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus(`地图关联正在核验 · 真实恢复快照 ${result.receipt?.snapshot_revision??'未经确认'} · 恢复提交 ${result.receipt?.revision??'未经确认'}`);adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'takeover',run_id,operation_id});if(result.ok&&result.view){displaySession.current=new RegionalDisplaySession(run_id,displayStore,false,result.receipt?.snapshot_revision??null,text=>{if(shownRun.current===run_id&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus(`地图关联正在核验 · 真实恢复快照 ${result.receipt?.snapshot_revision??'未经确认'} · 恢复提交 ${result.receipt?.revision??'未经确认'}`);adoptView(result.view);setStorageFault(false);setReceiptNote(result.view.paused?`已恢复至 ${clock(result.view.sim_time)}，保持暂停，${result.view.mode==='command'?'请明确继续':'可手动推进时间'}。`:'原恢复记录已确认，当前行动仍在进行，请查看时间。');}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function changeScene(){
@@ -168,7 +179,7 @@ export function Workbench() {
   }
   async function restart(){
     if(!view||history)return;setBusy(true);setError('');
-    try{const result=await transport.request({kind:'restart',run_id:view.run_id,operation_id:restartOperation.current});if(result.ok&&result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(currentView.current?.run_id===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');setView(result.view);liveView.current=result.view;restartOperation.current=crypto.randomUUID();setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;pendingControl.current=null;editing.current++;setWorkspace('map');setSelected('R');setAdvanceTo('7');setReceiptNote('已开启同场景的新演练，原行动保留为只读记录。这不是独立的首次体验。');setRestartConfirm(false);}else if(!result.ok)setError(result.code);}
+    try{const result=await transport.request({kind:'restart',run_id:view.run_id,operation_id:restartOperation.current});if(result.ok&&result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');setView(result.view);liveView.current=result.view;restartOperation.current=crypto.randomUUID();setPlan(null);setConfirm(false);setReason('');pendingOrder.current=null;pendingControl.current=null;editing.current++;setWorkspace('map');setSelected('R');setAdvanceTo('7');setReceiptNote('已开启同场景的新演练，原行动保留为只读记录。这不是独立的首次体验。');setRestartConfirm(false);}else if(!result.ok)setError(result.code);}
     catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function preview() {
@@ -202,7 +213,7 @@ export function Workbench() {
       if(view.mode==='command'&&(!isCurrent()||!response.ok&&response.code==='STALE_REVISION')){
         const fresh=await transport.request({kind:'view',run_id:context.run_id});
         if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
-        if(!fresh.ok||!fresh.view){if(!fresh.ok)setError(fresh.code);return;}
+        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'){if(!fresh.ok)setError(fresh.code);return;}
         if(fresh.view.revision>=currentView.current.revision){currentView.current=fresh.view;adoptView(fresh.view);}
         context.revision=currentView.current.revision;continue;
       }
@@ -319,6 +330,7 @@ export function Workbench() {
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
   const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];
   const lastActionReport=[...(view?.log??[])].reverse().find(entry=>entry.kind.endsWith('_receipt'));
+  if(playView)return <PlayWorkbench view={playView} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} displayStatus={displayStatus} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   return (
     <div className="app crisis-app">
       <header className="topbar">
@@ -368,7 +380,7 @@ export function Workbench() {
           <p>
             本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option></select></label>
           {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}
