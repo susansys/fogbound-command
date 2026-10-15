@@ -192,10 +192,10 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
   async function review(){setBusy(true);try{const r=await transport.request({kind:'replay',run_id:view.run_id,to:0,node_revision:Number(historyNode)});if(r.ok&&r.view){onHistory(true);adopt(r.view);}else if(!r.ok)setError(r.code);}finally{setBusy(false);}}
   async function returnCurrent(){const r=await transport.request({kind:'current',run_id:view.run_id});if(r.ok&&r.view){onHistory(false);adopt(r.view);}else if(!r.ok)setError(r.code);}
   const blocked=history||busy||uncertain||storageFault||recoveryUnknown;
-  const openOrder=view.issued_orders.some(order=>['sent','accepted','gate_hold'].includes(order.status));
-  const retryOrder=!openOrder&&!dirty?[...view.issued_orders].reverse().find(order=>['refused','not_started'].includes(order.status)&&draft.phases.some(phase=>phase.id===order.phase_ref.id&&phase.version===order.phase_ref.version)):undefined;
+  const phaseHasOpenOrder=(id:string)=>current.current.issued_orders.some(order=>order.phase_ref.id===id&&['sent','accepted','gate_hold'].includes(order.status));
+  const retryOrder=!dirty?[...view.issued_orders].reverse().find(order=>!phaseHasOpenOrder(order.phase_ref.id)&&['refused','not_started'].includes(order.status)&&draft.phases.some(phase=>phase.id===order.phase_ref.id&&phase.version===order.phase_ref.version)):undefined;
   function prepareRetry(order:MissionOrder){
-    if(blocked||dirty||openOrder)return;
+    if(blocked||dirty||phaseHasOpenOrder(order.phase_ref.id))return;
     const currentOrder=current.current.issued_orders.find(value=>value.id===order.id);
     if(!currentOrder||!['refused','not_started'].includes(currentOrder.status))return;
     try{
