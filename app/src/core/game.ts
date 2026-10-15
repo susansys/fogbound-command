@@ -14,7 +14,7 @@ import type { State,StoredState } from "./state";
 import { project_player_view as project_legacy_view } from "./knowledge";
 import {project_play_view} from './play-knowledge';
 import {initial_play_state} from './play-state';
-import {apply_play_control,replay_play_state} from './play-game';
+import {apply_play_control,replay_play_state,validate_play_task} from './play-game';
 import { valid_id, valid_envelope } from "../protocol";
 import { hash } from "./scenario";
 import { advance_move, register_move, register_record } from "./movement";
@@ -409,8 +409,12 @@ export class Game {
     clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
     this.assert_current();
-    if (!valid_envelope(envelope)) throw new GameError("INVALID_INPUT");
+    if (!valid_envelope(envelope,910000,true)) throw new GameError("INVALID_INPUT");
     await this.assert_writable(envelope.run_id);
+    const state = await this.store.read_committed(envelope.run_id);
+    if(!state)throw new GameError('RUN_NOT_FOUND');
+    const playParameters=state.schema===7?play_definition_for_package(state.definition_hash,this.store.play_definitions).profile.parameters:null;
+    if(!valid_envelope(envelope,playParameters?playParameters.deadline+playParameters.receipt_grace:610000,state.schema===7))throw new GameError('INVALID_INPUT');
     const fingerprint = await hash(canonical(envelope));
     const previous = await this.store.receipt(
       envelope.run_id,
@@ -434,12 +438,11 @@ export class Game {
       };
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
-    const state = await this.store.read_committed(envelope.run_id);
-    if (!state) throw new GameError("RUN_NOT_FOUND");
     if (state.revision !== envelope.expected_revision)
       throw new GameError("STALE_REVISION");
     await this.validate_stored_state(state);
     if(state.schema===7){
+      await validate_play_task(state,envelope,this.store.play_definitions);
       const candidate=apply_play_control(state,envelope,clock_to,this.store.play_definitions);
       await this.commit(candidate,state.revision,envelope.operation_id,fingerprint);
       return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind,...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{})},view:project_play_view(candidate,this.store.play_definitions)};

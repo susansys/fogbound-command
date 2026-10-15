@@ -23,7 +23,10 @@
       "equipment_wear": 100,
       "record_packs": 2,
       "hq_energy": 16,
-      "hq_wear": 100
+      "hq_wear": 100,
+      "report_budget": 2,
+      "report_energy_cost": 1,
+      "report_wear_cost": 1
     },
     "registry": [
       {
@@ -169,6 +172,33 @@
         "source_ref": "ENG-PRESTART-REPLACE/version1/catalogs.hq_terminal",
         "source_type": "design_assumption",
         "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_budget",
+        "entry_version": 1,
+        "value": 2,
+        "unit": "message",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_energy_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "energy",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "report_wear_cost",
+        "entry_version": 1,
+        "value": 1,
+        "unit": "wear",
+        "source_ref": "B21-GEOMETRY-DESIGN-1.0.0/movement-and-knowledge",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
       }
     ]
   },
@@ -193,6 +223,10 @@
     "load_factor_per_unit": 0.02,
     "movement_energy_per_distance": 0.01,
     "report_policy": "accepted_and_one_terminal",
+    "report_budget": 2,
+    "report_energy_cost": 1,
+    "report_wear_cost": 1,
+    "cause_policy": "once_per_cause_rule_consumer",
     "route_point_budget": 64,
     "conflict_candidate_budget": 32,
     "disabled_capabilities": [
@@ -210,7 +244,7 @@
       "map_id": "PLAY-CORRIDOR-MAP",
       "map_version": 1,
       "crs_id": "FIC-LOCAL-XY-01",
-      "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576",
+      "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7",
       "extent": [
         400,
         300
@@ -239,7 +273,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "A",
@@ -263,7 +297,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "B",
@@ -287,7 +321,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "approximate",
@@ -311,7 +345,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "area-with-hole",
@@ -377,7 +411,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "detached-area",
@@ -420,7 +454,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "separate-regions",
@@ -444,7 +478,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "reference-edge",
@@ -478,7 +512,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "HA-area",
@@ -521,7 +555,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "AB-area",
@@ -564,7 +598,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "HA",
@@ -596,7 +630,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "AB",
@@ -628,7 +662,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         },
         {
           "id": "pending-location",
@@ -644,7 +678,7 @@
           "evidence_refs": [
             "B21-INITIAL-GEOMETRY"
           ],
-          "geometry_version": "a34bd483cb082c6592793f9eacc28ee7f5f7b345b44a138cbe849badad768576"
+          "geometry_version": "7174e74be882524802cd8ec16a075a82c5d53a1b73e04385d8fd714761a58ec7"
         }
       ]
     },
@@ -720,15 +754,34 @@
       "to": 910000
     },
     "engine_conditions": {
-      "closed_at_x": null
-    }
+      "closed_at_x": null,
+      "report_delivery_delay_ms": 0
+    },
+    "movement_causes": [
+      {
+        "cause_id": "terrain-plain",
+        "rule_ref": "terrain-factor",
+        "consumer": "R:move",
+        "slot": "terrain",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-TERRAIN"
+      },
+      {
+        "cause_id": "environment-normal",
+        "rule_ref": "environment-factor",
+        "consumer": "R:move",
+        "slot": "environment",
+        "factor": 1,
+        "evidence_ref": "B21-INITIAL-ENVIRONMENT"
+      }
+    ]
   },
   "hashes": {
-    "profile": "971f96bdfd6d9ff6b54c68a3cc98bb803a9fc4f494c5703bffd13540358a33bf",
+    "profile": "3f28ac965b9a041afee2da7bc52c1bd9031f0466bedcf651f9b1993d90a80820",
     "capabilities": "6896de3a9499f5d9cb68d9b789755ad6d8615b17c7904e29a5d62c1fd78763e3",
-    "rules": "73e1d4501f606b08e6b896445714be2996272c069ce7536db093ee74910f5200",
-    "catalogs": "084af29ae0c9224fa0234eec937b6833743687fb5b79f8b48a1510c9681349ca",
+    "rules": "cbe2e1c7d850f4549a443520d3281fcc6f91600af5bdaf74dd586883a671554e",
+    "catalogs": "efa15e724899521ad47d18cb4ce0a2c2ff49fc980e4914123efa17a1b3cfbe44",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "d7607acd20ff8aad4cfd2889ec400f08138fdc8ee58a10d5fb62a0ad257a5e31"
+  "definition_hash": "e6be310c76227db7b9e2ccb9dd647d889cf7b0de966460a8985012f47646a136"
 }

@@ -1,3 +1,4 @@
+import type {RoutePlan} from './route-contracts';
 export type Mode = "command" | "research";
 export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01';
 export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
@@ -116,9 +117,9 @@ export type RecordPlan = {
 };
 export type PrestartPlan={kind:'prestart_move';run_id:string;revision:number;editing_seq:number;version:1;actor:'R';target:'N'|'T';path:'H-N'|'H-T';distance:60|120;estimated_move_ms:15900|31800;setup_ms:5000;link_ms:1000;definition_hash:string;allowed:boolean;gap:string;supersedes?:string};
 export type Plan=MovePlan|RecordPlan|PrestartPlan;
-export function is_record_plan(plan:Plan):plan is RecordPlan{return 'kind' in plan&&plan.kind==='record';}
+export function is_record_plan(plan:Plan|RoutePlan):plan is RecordPlan{return 'kind' in plan&&plan.kind==='record';}
 export type Intent =
-  | { kind: "issue"; command_id: string; plan: Plan; reason?: string }
+  | { kind: "issue"; command_id: string; plan: Plan|RoutePlan; reason?: string }
   | {kind:'replace_task';command_id:string;original_command_id:string;original_version:1;plan:PrestartPlan;reason?:string}
   | { kind: "advance"; to: number }
   | { kind: "tick"; to: number }

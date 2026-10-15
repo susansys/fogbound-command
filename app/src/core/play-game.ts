@@ -1,20 +1,42 @@
 import {GameError,type Envelope} from '../contracts';
 import type {PlayState} from './play-state';
 import {play_definition_for_package,type PlayDefinition} from './scenario';
+import {project_play_view} from './play-knowledge';
+import {preview_corridor} from './play-preview';
+import {canonical} from './snapshot';
+import {advance_play_movement} from './play-movement';
+
+export async function validate_play_task(state:PlayState,envelope:Envelope,registered:readonly PlayDefinition[]=[]):Promise<void>{
+  if(envelope.intent.kind!=='issue')return;
+  const plan=envelope.intent.plan;
+  if(!('kind' in plan)||plan.kind!=='corridor_move')throw new GameError('INVALID_INPUT');
+  const {actor,map_id,map_version,crs_id,geometry_version,path}=plan;
+  const expected=await preview_corridor(project_play_view(state,registered),plan.editing_seq,{actor,map_id,map_version,crs_id,geometry_version,path});
+  if(JSON.stringify(canonical(expected))!==JSON.stringify(canonical(plan)))throw new GameError('STALE_PLAN');
+  if(!expected.allowed)throw new GameError('AUTHORITY_EXPIRED');
+}
 
 export function apply_play_control(state:PlayState,envelope:Envelope,clock_to?:number,registered:readonly PlayDefinition[]=[]):PlayState{
-  const candidate=structuredClone(state),intent=envelope.intent,p=play_definition_for_package(state.definition_hash,registered).profile.parameters;
+  const candidate=structuredClone(state),intent=envelope.intent,definition=play_definition_for_package(state.definition_hash,registered),p=definition.profile.parameters;
   const advance=(to:number)=>{
     if(!Number.isSafeInteger(to)||to<state.sim_time||to>p.deadline+p.receipt_grace)throw new GameError('INVALID_INPUT');
-    candidate.sim_time=to;
-    if(to>=p.deadline)candidate.status='window_ended_unconfirmed';
-    if(to>=p.deadline+p.receipt_grace){candidate.status='window_sealed_unconfirmed';candidate.ended=true;candidate.paused=true;}
+    advance_play_movement(candidate,to,definition);
+    const confirmed=['arrived','blocked','cutoff_confirmed'].includes(candidate.status);
+    if(to>=p.deadline&&!confirmed)candidate.status='window_ended_unconfirmed';
+    if(to>=p.deadline+p.receipt_grace){if(!confirmed)candidate.status='window_sealed_unconfirmed';candidate.ended=true;candidate.paused=true;}
   };
   if(clock_to!==undefined){
     if(state.mode!=='command'||state.paused||!['pause','continue','rate','save'].includes(intent.kind))throw new GameError('INVALID_INPUT');
     advance(clock_to);
   }
-  if(intent.kind==='save'){/* The atomic committed state is the save point. */}
+  if(intent.kind==='issue'){
+    if(!('kind' in intent.plan)||intent.plan.kind!=='corridor_move')throw new GameError('INVALID_INPUT');
+    if(candidate.requests.some(request=>request.command_id===intent.command_id))throw new GameError('INVALID_INPUT');
+    candidate.generation++;
+    candidate.requests.push({command_id:intent.command_id,issued:state.sim_time,plan:structuredClone(intent.plan),generation:candidate.generation,status:'registered',sent_at:null,accepted_at:null,...(intent.reason===undefined?{}:{reason:intent.reason})});
+    candidate.queue.push({id:`${intent.command_id}:send_command`,kind:'send_command',command_id:intent.command_id,at:state.sim_time,phase:5,generation:candidate.generation});
+    candidate.status='queued';candidate.log.push({id:`${intent.command_id}:issued`,at:state.sim_time,kind:'issued',text:'移动任务已签发登记，尚未发送。',evidence:intent.command_id,sender:'总部指挥席'});
+  }else if(intent.kind==='save'){/* The atomic committed state is the save point. */}
   else if(intent.kind==='pause')candidate.paused=true;
   else if(intent.kind==='restore'){
     if(intent.snapshot_revision!==state.revision)throw new GameError('STALE_REVISION');

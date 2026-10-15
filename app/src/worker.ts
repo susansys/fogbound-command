@@ -74,8 +74,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
-      if(history&&['create','takeover','restart','operate'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -139,7 +139,9 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.editing_seq,
           ),
         };
-      else if (input.kind === "operate" && locked) {
+      else if ((input.kind === "operate"||input.kind==='operate_corridor') && locked) {
+        const context=await game.get_view(input.envelope.run_id);
+        if((input.kind==='operate_corridor')!==(context.scenario_kind==='play_corridor'))throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
           is_task_intent(input.envelope.intent)

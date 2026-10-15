@@ -1,7 +1,8 @@
 import type {GeometryIdentity,Coordinate} from './spatial';
 import type {Plan} from './contracts';
 export type RouteDraft=GeometryIdentity&{actor:'R';path:Coordinate[]};
-export type MovementBasis={capability_ref:string;speed:number;unit:'fictional_metre/s';load:number;terrain_factor:number;environment_factor:number;load_factor_per_unit:number;length_scale:1000000;evidence_refs:string[]};
+export type MovementCause={cause_id:string;rule_ref:string;consumer:'R:move';slot:'terrain'|'environment';factor:number;evidence_ref:string};
+export type MovementBasis={capability_ref:string;speed:number;unit:'fictional_metre/s';load:number;terrain_factor:number;environment_factor:number;load_factor_per_unit:number;length_scale:1000000;applied_causes:MovementCause[];evidence_refs:string[]};
 export type RouteEstimate=
   |{estimate_kind:'known';estimated_move_ms:number;estimate_range:{min_ms:number;max_ms:number;basis:'registered_rule_time'}}
   |{estimate_kind:'unknown';estimated_move_ms:null;estimate_range:null};

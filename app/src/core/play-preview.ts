@@ -3,13 +3,14 @@ import type {RouteDraft,RoutePlan,RouteEstimate} from '../route-contracts';
 import {hash} from './scenario';
 import {canonical_route,public_route_gap,valid_route_draft} from '../route-validation';
 import {GameError} from '../contracts';
+import {path_timing,ceil_fraction} from './play-timing';
 
 export async function preview_corridor(view:PlayPlayerView,editing_seq:number,draft:RouteDraft):Promise<RoutePlan>{
   const {map_id,map_version,crs_id,geometry_version}=view.geometry,identity={map_id,map_version,crs_id,geometry_version};
   if(!valid_route_draft(draft)||draft.map_id!==map_id||draft.map_version!==map_version||draft.crs_id!==crs_id||draft.geometry_version!==geometry_version)throw new GameError('INVALID_REQUEST','route_draft');
   const path=canonical_route(draft.path),basis=view.movement_basis;
-  const length_units=path.slice(1).reduce((sum,b,i)=>sum+Math.floor(Math.hypot(b[0]-path[i][0],b[1]-path[i][1])*basis.length_scale+0.5),0);
-  const distance=length_units/basis.length_scale,estimated_move_ms=Math.ceil(distance/basis.speed*basis.terrain_factor*basis.environment_factor*(1+basis.load_factor_per_unit*basis.load)*1000);
+  const timing=path_timing(path,basis),length_units=timing.length_units.reduce((sum,value)=>sum+BigInt(value),0n);
+  const distance=Number(length_units)/basis.length_scale,estimated_move_ms=ceil_fraction(timing.duration_ms);
   const evidence_refs=[...new Set([...basis.evidence_refs,...(view.position_knowledge.status==='conflicting'?[]:view.position_knowledge.evidence_refs)])];
   const location=view.position_knowledge;
   const exact=location.status==='known_scope'&&location.scope.kind==='point'&&location.scope.uncertainty.kind==='known'&&location.scope.uncertainty.value===0;

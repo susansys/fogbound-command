@@ -11,7 +11,7 @@ export const engineeringDefinition = definition;
 export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
 export const playCorridorDefinition=playDefinition;
-export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'>&{map:PublicMap;engine_conditions:{closed_at_x:number|null};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
+export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'>&{map:PublicMap;engine_conditions:{closed_at_x:number|null;report_delivery_delay_ms:number};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
 export function is_play_definition(value:Definition|PlayDefinition):value is PlayDefinition{return value.schema===7;}
 export function play_definition_for_package(definitionHash:unknown,registered:readonly PlayDefinition[]=[]):PlayDefinition{
   const selected=[playDefinition,...registered].find(x=>x.definition_hash===definitionHash);
@@ -83,7 +83,7 @@ export async function load_definition(input: unknown,registered:readonly PlayDef
       if(['base_speed','terrain_factor','environment_factor'].includes(required.id)){
         if(value<=0)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
       }else if(!Number.isSafeInteger(value)||value<0||value>required.value)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
-      if(['deadline','receipt_grace','link_ms','load_capacity','space_capacity'].includes(required.id)&&value!==required.value)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
+      if(['deadline','receipt_grace','link_ms','load_capacity','space_capacity','report_budget','report_energy_cost','report_wear_cost'].includes(required.id)&&value!==required.value)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
     }
     const rules=input.rules;
     if(!record(rules))throw new GameError('CONFIG_PARAMETER_MISSING','rules');
@@ -101,6 +101,18 @@ export async function load_definition(input: unknown,registered:readonly PlayDef
       const total=equipment.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field]),0)+items.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field])*Number((item as Record<string,unknown>).count),0);
       if(!nonnegative(actor[field])||actor[field]!==total||typeof parameters[field+'_capacity']!=='number'||total>Number(parameters[field+'_capacity']))throw new GameError('INVALID_REQUEST','catalogs.actor.'+field);
     }
+    const causes=record(input.catalogs)?input.catalogs.movement_causes:null;
+    if(!dense_array(causes)||causes.length<1||causes.length>32)throw new GameError('INVALID_REQUEST','catalogs.movement_causes');
+    const seen=new Map<string,number>(),slotFactors={terrain:1,environment:1};
+    for(const cause of causes){
+      if(!record(cause)||!fields(cause,['cause_id','rule_ref','consumer','slot','factor','evidence_ref'])||!valid_id(cause.cause_id)||!valid_id(cause.rule_ref)||!valid_id(cause.evidence_ref)||cause.consumer!=='R:move'||!['terrain','environment'].includes(String(cause.slot))||typeof cause.factor!=='number'||!Number.isFinite(cause.factor)||cause.factor<=0)throw new GameError('INVALID_REQUEST','catalogs.movement_causes');
+      const key=JSON.stringify([cause.cause_id,cause.rule_ref,cause.consumer]);
+      if(seen.has(key)&&seen.get(key)!==cause.factor)throw new GameError('INVALID_REQUEST','catalogs.movement_causes');
+      seen.set(key,cause.factor);slotFactors[cause.slot as 'terrain'|'environment']*=cause.factor;
+    }
+    if(slotFactors.terrain!==parameters.terrain_factor||slotFactors.environment!==parameters.environment_factor)throw new GameError('INVALID_REQUEST','catalogs.movement_causes');
+    const conditions=record(input.catalogs)?input.catalogs.engine_conditions:null;
+    if(!record(conditions)||!fields(conditions,['closed_at_x','report_delivery_delay_ms'])||!(conditions.closed_at_x===null||typeof conditions.closed_at_x==='number'&&Number.isFinite(conditions.closed_at_x)&&conditions.closed_at_x>=0&&conditions.closed_at_x<=400)||!nonnegative(conditions.report_delivery_delay_ms)||conditions.report_delivery_delay_ms>910000)throw new GameError('INVALID_DEFINITION');
   }
   const selected = [...definitions,playDefinition,...registered].find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
   if (!selected)

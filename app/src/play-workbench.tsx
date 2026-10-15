@@ -10,6 +10,8 @@ import {clock,error_copy} from './player-copy';
 import {MapTrifold,Binoculars,ChatCenteredText,ClockCounterClockwise,ArrowsClockwise} from '@phosphor-icons/react';
 
 const kind_copy={point:'点位',area:'区域',region_set:'分离区域集合',edge:'边线',corridor:'通行走廊',unresolved:'待定位'};
+const status_copy={ready:'可拟定移动任务',queued:'已签发，等待回执',accepted:'接令已知，等待终止回报',arrived:'抵达已知',blocked:'本地受阻已知',cutoff_confirmed:'截止截停已知',window_ended_unconfirmed:'移动窗口已结束，结果待回报',window_sealed_unconfirmed:'结果未确认，移动窗口记录已封存'};
+const report_copy={accepted:'接令回执',arrived:'抵达定位',blocked:'受阻定位',cutoff:'截止截停定位',refused:'未接受任务回报'};
 const points=(value:readonly (readonly number[])[])=>value.map(p=>p.map(x=>x.toFixed(2)).join(', ')).join(' → ');
 function ScopeRead({scope}:{scope:SpatialScope}){
   return <><h3>{scope.id} · {kind_copy[scope.kind]}</h3>
@@ -31,8 +33,9 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
   const [routePoints,setRoutePoints]=useState<Array<[string,string]>|null>(null),[routePreview,setRoutePreview]=useState<RoutePlan|null>(null),[routeError,setRouteError]=useState(''),[previewBusy,setPreviewBusy]=useState(false);
   const routeSequence=useRef(0),historyRef=useRef(history);historyRef.current=history;
   const routeResult=useRef<HTMLElement|null>(null);
+  const [confirming,setConfirming]=useState(false),[reason,setReason]=useState(''),[advanceTo,setAdvanceTo]=useState('');
   useEffect(()=>{if(routePreview)routeResult.current?.scrollIntoView({block:'nearest'});},[routePreview]);
-  function changeRoute(points:Array<[string,string]>|null){routeSequence.current++;setRoutePoints(points);setRoutePreview(null);setRouteError('');}
+  function changeRoute(points:Array<[string,string]>|null){routeSequence.current++;setRoutePoints(points);setRoutePreview(null);setRouteError('');setConfirming(false);}
   function beginRoute(){
     const location=current.current.position_knowledge;
     if(history||storageFault||location.status!=='known_scope'||location.scope.kind!=='point'||location.scope.uncertainty.kind!=='known'||location.scope.uncertainty.value!==0)return;
@@ -61,17 +64,23 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
   }
   const scope=selected==='R'?(view.position_knowledge.status==='known_scope'?view.position_knowledge.scope:undefined):view.geometry.scopes.find(x=>x.id===selected);
   async function control(intent:Intent){
-    if(history||storageFault||operationInFlight.current)return;
+    if(history||storageFault||operationInFlight.current)return false;
     operationInFlight.current=true;setBusy(true);setError('');
     const original=pending.current??{run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent};pending.current=original;
     try{
-      const result=await transport.request({kind:'operate',envelope:original});
+      const result=await transport.request({kind:'operate_corridor',envelope:original});
       if(result.ok&&result.view){adopt(result.view);pending.current=null;if(original.intent.kind==='save'){
         setNote(`行动已保存：提交 ${result.receipt?.revision??'待核查'}。地图显示正在单独确认。`);
         const mapSaved=await displaySession?.save(result.view.revision);setNote(`行动已保存：提交 ${result.receipt?.revision??'待核查'}；${mapSaved?'地图显示也已独立保存并读回':'地图显示尚未确认保存'}。`);
-      }}else if(!result.ok){setError(result.code);if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED'].includes(result.code))pending.current=null;}
+      }return true;}else if(!result.ok){setError(result.code);if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED'].includes(result.code))pending.current=null;}
     }catch{setError('CHANNEL_UNCERTAIN');}
     finally{operationInFlight.current=false;setBusy(false);}
+    return false;
+  }
+  async function issueRoute(){
+    const plan=routePreview;
+    if(!plan||!plan.allowed||plan.run_id!==current.current.run_id||plan.revision!==current.current.revision||plan.editing_seq!==routeSequence.current||plan.geometry_version!==current.current.geometry.geometry_version){setConfirming(false);setRouteError('情况已更新，请重新预览路线后确认。');return;}
+    if(await control({kind:'issue',command_id:crypto.randomUUID(),plan,...(reason.trim()?{reason:reason.trim()}:{})})){changeRoute(null);setReason('');}
   }
   async function query(){
     const original=pending.current;if(!original||busy)return;setBusy(true);
@@ -105,12 +114,14 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
     <div className="shell"><nav className="rail"><button className={workspace==='map'?'active':''} onClick={()=>setWorkspace('map')}><MapTrifold/><span>态势地图</span></button><button className={workspace==='scopes'?'active':''} onClick={()=>setWorkspace('scopes')}><Binoculars/><span>范围资料</span></button><button className={workspace==='log'?'active':''} onClick={()=>setWorkspace('log')}><ChatCenteredText/><span>指挥记录</span></button><button className={workspace==='review'?'active':''} onClick={()=>setWorkspace('review')}><ClockCounterClockwise/><span>行动复盘</span></button><button disabled={busy||!!pending.current} onClick={()=>void leave()}><ArrowsClockwise/><span>{history?'返回当前行动':'更换演练'}</span></button></nav>
     <main className="main"><div className="workspacebar"><h1>连续走廊</h1><span className="outline-tag">总部已收到的情况</span>{history&&<button onClick={()=>void returnCurrent()}>返回当前行动</button>}</div>
       {(note||displayStatus)&&<p className="operation-status" role="status">{note} {displayStatus}</p>}
-      <div className="workbody">{workspace==='map'?<MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={history?undefined:displaySession} routeDraft={displayedRoute} onRoutePoint={routePoints&&!history?addRoutePoint:undefined} onRouteCancel={()=>changeRoute(null)}/>:<article className="content-view"><h2>{workspace==='scopes'?'公开范围目录':workspace==='review'?'回看当时收到的情况':'指挥记录'}</h2>{workspace==='scopes'?view.geometry.scopes.map(scope=><section key={scope.id}><button onClick={()=>{setSelected(scope.id);setWorkspace('map');}}>在地图中选择 {scope.id}</button><ScopeRead scope={scope}/></section>):workspace==='review'?<><p>历史仅显示当时已有的合法依据，不能安排或保存任务。</p><label>回看时刻（秒）<input aria-label="回看时刻（秒）" type="number" min="0" value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label><button disabled={busy} onClick={()=>void review()}>查看当时情况</button></>:view.log.map(entry=><p key={entry.id}>{clock(entry.at)} · {entry.text}</p>)}</article>}
+      <section className="operation-status" data-testid="movement-status" aria-live="polite"><strong>{status_copy[view.status]}</strong><span> · 移动抵达不代表完整行动成功。</span>{view.issued_orders.length>0&&<p>已下达计划，不表示实际进度</p>}</section>
+      {view.mode==='research'&&!history&&<section className="operation-status"><label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" inputMode="decimal" value={advanceTo} onChange={e=>setAdvanceTo(e.target.value)}/></label><button disabled={busy||storageFault||!!pending.current||advanceTo.trim()===''} onClick={()=>void control({kind:'advance',to:Math.round(Number(advanceTo)*1000)})}>推进到该时刻</button></section>}
+      <div className="workbody">{workspace==='map'?<MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={history?undefined:displaySession} routeDraft={displayedRoute} onRoutePoint={routePoints&&!history?addRoutePoint:undefined} onRouteCancel={()=>changeRoute(null)}/>:<article className="content-view"><h2>{workspace==='scopes'?'公开范围目录':workspace==='review'?'回看当时收到的情况':'指挥记录'}</h2>{workspace==='scopes'?view.geometry.scopes.map(scope=><section key={scope.id}><button onClick={()=>{setSelected(scope.id);setWorkspace('map');}}>在地图中选择 {scope.id}</button><ScopeRead scope={scope}/></section>):workspace==='review'?<><p>历史仅显示当时已有的合法依据，不能安排或保存任务。</p><label>回看时刻（秒）<input aria-label="回看时刻（秒）" type="number" min="0" value={reviewTo} onChange={e=>setReviewTo(e.target.value)}/></label><button disabled={busy} onClick={()=>void review()}>查看当时情况</button></>:<>{view.log.map(entry=><p key={entry.id}>{clock(entry.at)} · {entry.text}</p>)}{view.received_reports.map(({report,delivery})=><section key={delivery.id} data-testid="received-report"><h3>{report_copy[report.kind]}</h3><p>{report.observed.kind==='known'?'观察 '+clock(report.observed.value):'观察时点未知'} · {report.reported.kind==='known'?'发送 '+clock(report.reported.value):'发送时点未知'} · 收到 {clock(delivery.received.value)}</p><p>{report.position_scope?.kind==='point'?'位置 '+points([report.position_scope.typed_geometry.position]):'本份回执未提供新定位'}</p></section>)}</>}</article>}
       <aside className="inspector play-inspector">{routePoints?<section className="route-editor" aria-label="未下达路线草案" onKeyDown={e=>{if(e.key==='Escape'){changeRoute(null);e.stopPropagation();}}}>
         <h2>未下达路线草案</h2><p>单击地图加点，拖动仍为平移。可直接修改折点；坐标精度 0.01 图上米。</p><p>草案尚未下达，不会保存到行动；重新打开后需重新编辑。</p>
         <ol>{routePoints.map((point,index)=><li key={index} data-route-point={index}><span>{index+1}</span>{point.map((value,axis)=><input key={axis} aria-label={`折点 ${index+1} ${axis===0?'x':'y'}`} inputMode="decimal" value={value} readOnly={index===0} onChange={e=>changeRoute(routePoints.map((p,i)=>i===index?(axis===0?[e.target.value,p[1]]:[p[0],e.target.value]):p))}/>)}<button aria-label={`删除折点 ${index+1}`} disabled={index===0} onClick={()=>changeRoute(routePoints.filter((_,i)=>i!==index))}>删</button></li>)}</ol>
         <div className="route-actions"><button disabled={routePoints.length>=64} onClick={()=>changeRoute([...routePoints,[...routePoints[routePoints.length-1]]])}>新增折点</button><button disabled={routePoints.length<=1} onClick={()=>changeRoute(routePoints.slice(0,-1))}>撤销末点</button><button onClick={()=>changeRoute(null)}>取消路线</button><button className="primary" disabled={routePoints.length<2||previewBusy||storageFault} onClick={()=>void previewRoute()}>预览路线</button></div>
-        {routeError&&<p role="alert">{routeError}</p>}{routePreview&&<section ref={routeResult} data-testid="route-preview" aria-live="polite"><h3>{routePreview.allowed?'路线预览可用':'路线存在公开缺口'}</h3><p>{routePreview.distance} 图上米 · {routePreview.estimate_kind==='known'?`规则行进 ${routePreview.estimated_move_ms/1000} 秒`:'规则行进估计未知'}</p><p>单向消息等待 {routePreview.link_ms/1000} 秒另计。</p>{routePreview.gap&&<p>{routePreview.gap}</p>}{routePreview.assumptions.map(text=><p key={text}>{text}</p>)}<p>预览尚未下达；本步不执行移动。</p></section>}
+        {routeError&&<p role="alert">{routeError}</p>}{routePreview&&<section ref={routeResult} data-testid="route-preview" aria-live="polite"><h3>{routePreview.allowed?'路线预览可用':'路线存在公开缺口'}</h3><p>{routePreview.distance} 图上米 · {routePreview.estimate_kind==='known'?`规则行进 ${routePreview.estimated_move_ms/1000} 秒`:'规则行进估计未知'}</p><p>单向消息等待 {routePreview.link_ms/1000} 秒另计。</p>{routePreview.gap&&<p>{routePreview.gap}</p>}{routePreview.assumptions.map(text=><p key={text}>{text}</p>)}<p>预览尚未下达；本步不执行移动。</p><button disabled={!routePreview.allowed||busy||history||storageFault} onClick={()=>setConfirming(true)}>下达移动任务</button>{confirming&&<section role="dialog" aria-label="确认移动任务"><h3>确认移动任务</h3><p>接令和抵达须等待回报；已下达计划不表示实际进度。</p><label>理由（可选）<textarea maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={busy} onClick={()=>void issueRoute()}>确认并下达</button><button disabled={busy} onClick={()=>setConfirming(false)}>返回编辑</button></section>}</section>}
       </section>:<><h2>编组与范围</h2><section data-testid="position"><h3>R · 总部位置依据</h3><p>{knowledge.status==='unresolved'?'待定位':knowledge.status==='conflicting'?'位置依据存在冲突':'已收到位置依据'}</p><p>{observed.kind==='known'?`观察 ${clock(observed.value)} · 距今 ${clock(Math.max(0,view.sim_time-observed.value))}`:'观察时点未知'}</p><p>{knowledge.status!=='conflicting'&&knowledge.provenance.kind==='registered_initial'?'依据为登记的开局凭证，并非运行中的定位递交。':'依据为已收到的定位消息。'}</p></section><button disabled={history||storageFault||!view.can_issue} onClick={beginRoute}>拟定移动路线</button><section className="scope-list" aria-label="公开范围列表">{view.geometry.scopes.map(scope=><button key={scope.id} aria-label={`范围 ${scope.id}`} aria-pressed={selected===scope.id} onClick={()=>setSelected(scope.id)}>{scope.id} · {kind_copy[scope.kind]}</button>)}</section><section className="scope-detail" data-testid="scope-detail">{scope?<ScopeRead scope={scope}/>:<p>待定位；没有可聚焦的图上位置。</p>}</section><section><h3>已确认资源</h3><p>行进储备 {view.resources.movement_energy} / 20</p><p>便携链路能量 {view.resources.equipment_energy} · 耐久 {view.resources.equipment_wear}</p><p>载荷 {view.movement_basis.load} / 20 · 空间 7 / 12；记录能力本次未启用。</p></section></>}</aside></div>
       <footer className="bottom-log"><strong>已收到的记录</strong>{view.log.slice(-3).map(x=><p key={x.id}>{clock(x.at)} · {x.text}</p>)}</footer>
     </main></div>

@@ -414,6 +414,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           />
         </svg>
       )}
+      {play&&play.issued_orders.length>0&&<svg className="plan-route" aria-label="已下达计划，不表示实际进度" data-testid="issued-plan-line"><polyline points={play.issued_orders.at(-1)!.plan.path.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#8dafa6" strokeWidth="3" strokeDasharray="7 5" fill="none"/></svg>}
       {routeDraft&&<svg className="plan-route" aria-label="未下达路线草案" data-testid="route-draft-line">
         <polyline points={routeDraft.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#d2b87e" strokeWidth="3" strokeDasharray="7 5" fill="none"/>
         {routeDraft.map(([x,y],index)=><circle key={index} data-route-anchor={index} data-coordinate={`${x},${y}`} cx={point(x,y).left} cy={point(x,y).top} r="3" fill="#d2b87e"/>)}

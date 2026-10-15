@@ -19,6 +19,7 @@ export type Request =
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
   | {kind:'preview';run_id:string;revision:number;editing_seq:number;route_draft:RouteDraft}
   | { kind: "operate"; envelope: Envelope }
+  | {kind:'operate_corridor';envelope:Envelope}
   | { kind: "receipt"; run_id: string; operation_id: string }
   | { kind:'takeover';run_id:string;operation_id:string }
   | {kind:'restart';run_id:string;operation_id:string}

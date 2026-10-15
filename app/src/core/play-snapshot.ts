@@ -2,7 +2,7 @@ import {GameError} from '../contracts';
 import {valid_envelope,valid_id,record,fields} from '../protocol';
 import type {PlayState} from './play-state';
 import {initial_play_state} from './play-state';
-import {apply_play_control} from './play-game';
+import {apply_play_control,validate_play_task} from './play-game';
 import {play_definition_for_package,load_definition,hash,type PlayDefinition} from './scenario';
 import {canonical} from './snapshot';
 
@@ -15,8 +15,9 @@ export async function validate_play_state(input:Record<string,unknown>,registere
   if(expected.source_run===null&&expected.rng.origin!==expected.run_id)fail();
   const operations=new Set<string>();
   for(const entry of input.inputs){
-    if(!record(entry)||!fields(entry,['envelope','at','revision',...(entry.clock_to===undefined?[]:['clock_to'])])||!valid_envelope(entry.envelope)||entry.envelope.run_id!==expected.run_id||entry.envelope.expected_revision!==expected.revision||entry.revision!==expected.revision+1||operations.has(entry.envelope.operation_id)||entry.clock_to!==undefined&&typeof entry.clock_to!=='number')fail();
+    if(!record(entry)||!fields(entry,['envelope','at','revision',...(entry.clock_to===undefined?[]:['clock_to'])])||!valid_envelope(entry.envelope,definition.profile.parameters.deadline+definition.profile.parameters.receipt_grace,true)||entry.envelope.run_id!==expected.run_id||entry.envelope.expected_revision!==expected.revision||entry.revision!==expected.revision+1||operations.has(entry.envelope.operation_id)||entry.clock_to!==undefined&&typeof entry.clock_to!=='number')fail();
     operations.add(entry.envelope.operation_id);
+    await validate_play_task(expected,entry.envelope,registered);
     expected=apply_play_control(expected,entry.envelope,entry.clock_to as number|undefined,registered);
     if(JSON.stringify(canonical(expected.inputs[expected.inputs.length-1]))!==JSON.stringify(canonical(entry)))fail();
   }

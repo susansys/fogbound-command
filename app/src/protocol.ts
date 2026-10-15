@@ -1,7 +1,7 @@
 import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
 import {prestart_case_refs} from './contracts';
-import {valid_route_draft} from './route-validation';
+import {valid_route_draft,valid_route_plan} from './route-validation';
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -11,6 +11,7 @@ export function valid_id(value: unknown): value is string {
 export function valid_public_field_path(value:unknown):value is string{
   if(typeof value!=='string'||value.length>180)return false;
   if(/^route_draft(?:\.(?:actor|map_id|map_version|crs_id|geometry_version|path)|\[(?:0|[1-9]\d{0,2})\])*$/.test(value))return true;
+  if(value==='catalogs.movement_causes'||/^(?:profile\.parameters|rules)\.(?:report_budget|report_energy_cost|report_wear_cost|cause_policy)$/.test(value))return true;
   if(/^(?:capabilities(?:\[0\])?(?:\.(?:unit|speed|evidence_refs))?|catalogs\.actor(?:\.(?:load|space|qualification_refs))?)$/.test(value))return true;
   return /^(catalogs\.map|catalogs\.initial_evidence|profile\.parameters|profile\.registry|rules)(?:\.(?:map_id|map_version|crs_id|geometry_version|extent|unit|scopes|id|kind|precision|uncertainty|typed_geometry|evidence_refs|position|outer|holes|area_refs|line|centerline|width|area_ref|value|evidence|scope_ref|observed|source_event_time|origin|deadline|receipt_grace|link_ms|base_speed|terrain_factor|environment_factor|load_capacity|space_capacity|movement_energy|record_energy|record_wear|equipment_energy|equipment_wear|record_packs|hq_energy|hq_wear|version|coordinate_grid|length_scale|length_rounding|duration_rounding|load_factor_per_unit|movement_energy_per_distance|report_policy|route_point_budget|conflict_candidate_budget|disabled_capabilities)|\[(?:0|[1-9]\d{0,9})\])*$/.test(value);
 }
@@ -57,6 +58,7 @@ export function valid_request(
       Number.isSafeInteger(value.editing_seq) &&
       value.editing_seq >= 0
     );
+  if(value.kind==='operate_corridor')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&!['tick','restore','replace_task','mode'].includes(value.envelope.intent.kind)&&(value.envelope.intent.kind!=='issue'||'kind' in value.envelope.intent.plan&&value.envelope.intent.plan.kind==='corridor_move');
   if (value.kind === "operate")
     return (
       fields(value, ["kind", "request_id", "envelope"]) &&
@@ -76,7 +78,7 @@ export function correlation(value: unknown): string {
     ? value.request_id
     : "invalid-request";
 }
-export function valid_envelope(value: unknown): value is Envelope {
+export function valid_envelope(value: unknown,time_limit=610000,allow_corridor=false): value is Envelope {
   if (
     !record(value) ||
     !fields(value, ["run_id", "operation_id", "expected_revision", "intent"]) ||
@@ -89,6 +91,7 @@ export function valid_envelope(value: unknown): value is Envelope {
   )
     return false;
   const intent = value.intent;
+  if(intent.kind==='issue'&&record(intent.plan)&&intent.plan.kind==='corridor_move')return allow_corridor&&fields(intent,['kind','command_id','plan',...(intent.reason===undefined?[]:['reason'])])&&valid_id(intent.command_id)&&(intent.reason===undefined||typeof intent.reason==='string'&&intent.reason.length<=2000)&&valid_route_plan(intent.plan);
   if(intent.kind==='restore')return fields(intent,['kind','snapshot_revision'])&&typeof intent.snapshot_revision==='number'&&Number.isSafeInteger(intent.snapshot_revision)&&intent.snapshot_revision>=1;
   if(intent.kind==='save')return fields(intent,['kind']);
   if(intent.kind==='pause')return fields(intent,['kind','reason'])&&typeof intent.reason==='string'&&['manual','focus_lost','application_hidden'].includes(intent.reason);
@@ -101,7 +104,7 @@ export function valid_envelope(value: unknown): value is Envelope {
       typeof intent.to === "number" &&
       Number.isSafeInteger(intent.to) &&
       intent.to >= 0 &&
-      intent.to <= 610000
+      intent.to <= time_limit
     );
   if (intent.kind === "issue"||intent.kind==='replace_task')
     return (
