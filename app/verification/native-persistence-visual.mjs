@@ -23,7 +23,7 @@ try{
    await page.getByRole('button',{name:'任务调度',exact:true}).click();if(source==='current')await expect(page.getByRole('status')).toContainText('已保存至');await capture('tasks');await page.getByRole('button',{name:'情报中心',exact:true}).click();await capture('intel');
    if(source==='current'){
     await page.getByRole('button',{name:'更换演练',exact:true}).click();await expect(page.getByText(/最新进度.*手动保存/)).toBeVisible();await capture('retained-entry');
-    await page.evaluate(()=>{const rows=[...document.querySelectorAll('.start p')].map(e=>[e,parseFloat(getComputedStyle(e).fontSize)]);for(const[e,size]of rows)e.style.fontSize=size*2+'px';});const scope=page.getByText(/当前浏览器的用户配置/);await scope.scrollIntoViewIfNeeded();await expect(scope).toBeInViewport();await page.getByRole('button',{name:'接手这场演练',exact:true}).scrollIntoViewIfNeeded();await expect(page.getByRole('button',{name:'接手这场演练',exact:true})).toBeInViewport();await capture('entry-paragraph-text-200pct');
+    await page.evaluate(()=>{const rows=[...document.querySelectorAll('.start p')].map(e=>[e,parseFloat(getComputedStyle(e).fontSize)]);for(const[e,size]of rows)e.style.fontSize=size*2+'px';});const scope=page.getByText(/当前浏览器的用户配置/);await scope.scrollIntoViewIfNeeded();await expect(scope).toBeInViewport();for(const name of['接手这场演练','查看记录']){const button=page.getByRole('button',{name,exact:true});await button.scrollIntoViewIfNeeded();await expect(button).toBeInViewport();}await capture('entry-paragraph-text-200pct');
    }
   }finally{await context.close();}
  }
