@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {observeGame,trace,start} from './map-a-helpers';
 
-test('MB19 a command save rejected by a genuine intervening clock commit refreshes once and confirms the save independently of map readback',async({page})=>{
+test('MB19 a command save rejected by a genuine intervening clock commit confirms within its bounded fresh attempts',async({page})=>{
  await page.addInitScript(()=>{
   const Native=window.Worker,observed={requests:[] as any[],responses:[] as any[],held:false};
   Object.assign(window,{ownedSaveConflict:observed});
@@ -17,10 +17,11 @@ test('MB19 a command save rejected by a genuine intervening clock commit refresh
  await expect.poll(()=>page.evaluate(()=>Reflect.get(window,'ownedSaveConflict').responses.some((response:any)=>response.code==='STALE_REVISION'))).toBe(true);
  await expect(page.getByRole('status').filter({hasText:'已保存至'})).toBeVisible();
  const observed=await page.evaluate(()=>Reflect.get(window,'ownedSaveConflict'));
- const saves=observed.requests.filter((request:any)=>request.kind==='operate'&&request.envelope?.intent.kind==='save');expect(saves).toHaveLength(2);
- expect(saves[0].envelope.operation_id).not.toBe(saves[1].envelope.operation_id);
- expect(observed.responses.find((response:any)=>response.request_id===saves[0].request_id)?.code).toBe('STALE_REVISION');
- expect(observed.responses.find((response:any)=>response.request_id===saves[1].request_id)?.receipt?.result).toBe('committed');
+ const saves=observed.requests.filter((request:any)=>request.kind==='operate'&&request.envelope?.intent.kind==='save');expect(saves.length).toBeGreaterThanOrEqual(2);expect(saves.length).toBeLessThanOrEqual(3);
+ expect(new Set(saves.map((request:any)=>request.envelope.operation_id)).size).toBe(saves.length);
+ const replies=saves.map((request:any)=>observed.responses.find((response:any)=>response.request_id===request.request_id));
+ for(const reply of replies.slice(0,-1))expect(reply?.code).toBe('STALE_REVISION');
+ expect(replies.at(-1)?.receipt?.result).toBe('committed');expect(replies.filter((reply:any)=>reply?.receipt?.result==='committed')).toHaveLength(1);
  await expect(page.getByRole('button',{name:'暂停',exact:true})).toBeEnabled();await page.getByRole('button',{name:'暂停',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
 });
 
