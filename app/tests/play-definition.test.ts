@@ -89,6 +89,9 @@ test('PG02 owned registrations retain an unresolved or uncertain initial basis w
       }else expect(view.position_knowledge).toMatchObject({scope:{typed_geometry:{position:[75.25,151.5]},uncertainty:{kind:'known',value:5}}});
       expect(valid_response({request_id:'owned-location',ok:true,view})).toBe(true);
       expect(await new Game(store).get_view(view.run_id)).toEqual(view);
+      const history=await game.get_replay(view.run_id,0);
+      expect(await history.get_view(view.run_id)).toEqual({...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'});
+      await expect(history.save({run_id:view.run_id,operation_id:'history-save',expected_revision:view.revision,intent:{kind:'save'}})).rejects.toThrow('HISTORY_READ_ONLY');
     }finally{await store.delete();}
   }
 });

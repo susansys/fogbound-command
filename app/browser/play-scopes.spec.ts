@@ -13,7 +13,9 @@ test('PG01 six public scope kinds are readable through the registered scene and 
   await page.getByRole('button',{name:'范围 approximate',exact:true}).click();
   await expect(page.getByTestId('scope-detail')).toContainText('75.25, 151.50');
   await expect(page.getByTestId('scope-detail')).toContainText('误差 5 图上米');
-  await page.getByRole('button',{name:'范围 area-with-hole',exact:true}).click();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button',{name:'范围 area-with-hole',exact:true})).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('scope-detail')).toContainText('孔 1');
   await page.getByRole('button',{name:'范围 separate-regions',exact:true}).click();
   await expect(page.getByTestId('scope-detail')).toContainText('area-with-hole、detached-area');
@@ -22,6 +24,14 @@ test('PG01 six public scope kinds are readable through the registered scene and 
   await expect(page.getByTestId('scope-detail')).not.toContainText('坐标');
   await expect(page.getByTestId('scope-detail')).toBeInViewport({ratio:0.5});
   await page.screenshot({path:info.outputPath('scopes-readable.png'),fullPage:true});
+  await page.getByRole('button',{name:'行动复盘',exact:true}).click();
+  await page.getByRole('button',{name:'查看当时情况',exact:true}).press('Enter');
+  await expect(page.locator('.clock')).toContainText('历史只读');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'范围 pending-location',exact:true}).press('Enter');
+  await expect(page.getByTestId('scope-detail')).toContainText('待定位');
+  await page.getByRole('button',{name:'返回当前行动',exact:true}).first().press('Enter');
+  await expect(page.locator('.clock')).not.toContainText('历史只读');
 });
 
 test('PG04 a validated clock-fault channel response is visible and locks unconfirmed controls',async({page})=>{
