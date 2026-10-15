@@ -175,3 +175,13 @@ test('PG10 a later move starts only from the received A fix and retains nine-loa
     expect(await run.advance(63000)).toMatchObject({status:'arrived',movement_basis:{load:9},resources:{record_packs:2,record_energy:20,record_wear:100,movement_energy:18,equipment_energy:12,equipment_wear:96},position_knowledge:{scope:{typed_geometry:{position:[250,150]}}}});
   }finally{await run.store.delete();}
 });
+
+test('PG11 self-signed owned HQ negative transmission costs reject before creating a run or crediting resources',async()=>{
+  for(const field of ['energy_per_send','wear_per_send'] as const){
+    const value=await play_variant(v=>{v.catalogs.hq_terminal[field]=-1;}),store=new Persistence('b21-owned-movement-negative-'+field,[value]);
+    try{
+      await expect(new Game(store).create_run(value,'research','negative-cost')).rejects.toMatchObject({code:'INVALID_REQUEST',field_path:'catalogs.hq_terminal'});
+      expect(await store.list_runs()).toEqual([]);expect(await store.creation('negative-cost')).toBeUndefined();
+    }finally{await store.delete();}
+  }
+});

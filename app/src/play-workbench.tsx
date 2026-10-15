@@ -33,6 +33,7 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
   const [routePoints,setRoutePoints]=useState<Array<[string,string]>|null>(null),[routePreview,setRoutePreview]=useState<RoutePlan|null>(null),[routeError,setRouteError]=useState(''),[previewBusy,setPreviewBusy]=useState(false);
   const routeSequence=useRef(0),historyRef=useRef(history);historyRef.current=history;
   const routeResult=useRef<HTMLElement|null>(null);
+  const confirmingInFlight=useRef(false);
   const [confirming,setConfirming]=useState(false),[reason,setReason]=useState(''),[advanceTo,setAdvanceTo]=useState('');
   useEffect(()=>{if(routePreview)routeResult.current?.scrollIntoView({block:'nearest'});},[routePreview]);
   function changeRoute(points:Array<[string,string]>|null){routeSequence.current++;setRoutePoints(points);setRoutePreview(null);setRouteError('');setConfirming(false);}
@@ -42,7 +43,6 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
     changeRoute([[String(location.scope.typed_geometry.position[0]),String(location.scope.typed_geometry.position[1])]]);setWorkspace('map');
   }
   useEffect(()=>{changeRoute(null);},[view.run_id,history]);
-  useEffect(()=>{setRoutePreview(null);},[view.revision]);
   const displayedRoute:Coordinate[]|undefined=routePoints?.flatMap(pair=>{const p=pair.map(value=>value.trim()===''?NaN:Number(value));return coordinate(p)?[p]:[];});
   function addRoutePoint(point:Coordinate){
     if(!coordinate(point)){setRouteError('折点须在公开图面内，输入精度为 0.01 图上米。');return;}
@@ -57,30 +57,52 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
     try{
       const response=await transport.request({kind:'preview',run_id:context.run_id,revision:context.revision,editing_seq:seq,route_draft:{actor:'R',map_id,map_version,crs_id,geometry_version,path}});
       if(routeSequence.current!==seq||current.current.run_id!==context.run_id||historyRef.current||current.current.geometry.geometry_version!==geometry_version)return;
-      if(response.ok&&response.plan&&'kind' in response.plan&&response.plan.kind==='corridor_move'&&response.plan.run_id===context.run_id&&response.plan.revision===current.current.revision&&response.plan.editing_seq===seq&&response.plan.geometry_version===geometry_version)setRoutePreview(response.plan);
+      if(response.ok&&response.plan&&'kind' in response.plan&&response.plan.kind==='corridor_move'&&response.plan.run_id===context.run_id&&response.plan.revision===context.revision&&response.plan.editing_seq===seq&&response.plan.geometry_version===geometry_version)setRoutePreview(response.plan);
       else if(!response.ok)setRouteError(error_copy(response.code)+(response.field_path?` · ${response.field_path}`:''));
     }catch{if(routeSequence.current===seq)setRouteError(error_copy('CHANNEL_UNCERTAIN'));}
     finally{setPreviewBusy(false);}
   }
   const scope=selected==='R'?(view.position_knowledge.status==='known_scope'?view.position_knowledge.scope:undefined):view.geometry.scopes.find(x=>x.id===selected);
-  async function control(intent:Intent){
-    if(history||storageFault||operationInFlight.current)return false;
+  async function control(intent:Intent,expected_revision=current.current.revision):Promise<{committed:boolean;code?:string}>{
+    if(history||storageFault||operationInFlight.current)return {committed:false};
     operationInFlight.current=true;setBusy(true);setError('');
-    const original=pending.current??{run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent};pending.current=original;
+    const original=pending.current??{run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision,intent};pending.current=original;
     try{
       const result=await transport.request({kind:'operate_corridor',envelope:original});
       if(result.ok&&result.view){adopt(result.view);pending.current=null;if(original.intent.kind==='save'){
         setNote(`行动已保存：提交 ${result.receipt?.revision??'待核查'}。地图显示正在单独确认。`);
         const mapSaved=await displaySession?.save(result.view.revision);setNote(`行动已保存：提交 ${result.receipt?.revision??'待核查'}；${mapSaved?'地图显示也已独立保存并读回':'地图显示尚未确认保存'}。`);
-      }return true;}else if(!result.ok){setError(result.code);if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED'].includes(result.code))pending.current=null;}
+      }return {committed:true};}else if(!result.ok){setError(result.code);if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED'].includes(result.code))pending.current=null;return {committed:false,code:result.code};}
     }catch{setError('CHANNEL_UNCERTAIN');}
     finally{operationInFlight.current=false;setBusy(false);}
-    return false;
+    return {committed:false,code:'CHANNEL_UNCERTAIN'};
   }
   async function issueRoute(){
-    const plan=routePreview;
-    if(!plan||!plan.allowed||plan.run_id!==current.current.run_id||plan.revision!==current.current.revision||plan.editing_seq!==routeSequence.current||plan.geometry_version!==current.current.geometry.geometry_version){setConfirming(false);setRouteError('情况已更新，请重新预览路线后确认。');return;}
-    if(await control({kind:'issue',command_id:crypto.randomUUID(),plan,...(reason.trim()?{reason:reason.trim()}:{})})){changeRoute(null);setReason('');}
+    const reviewed=routePreview,run=current.current.run_id,seq=routeSequence.current;
+    if(confirmingInFlight.current||!reviewed||!reviewed.allowed||reviewed.run_id!==run||reviewed.editing_seq!==seq||reviewed.geometry_version!==current.current.geometry.geometry_version||historyRef.current||pending.current)return;
+    confirmingInFlight.current=true;
+    setPreviewBusy(true);setRouteError('');
+    try{
+      const {actor,map_id,map_version,crs_id,geometry_version,path}=reviewed;
+      for(let attempt=0;attempt<3;attempt++){
+        const latest=await transport.request({kind:'view',run_id:run});
+        if(!latest.ok){setRouteError(error_copy(latest.code));return;}
+        const context=latest.view;if(!context||context.scenario_kind!=='play_corridor'||context.run_id!==run)return;
+        const response=await transport.request({kind:'preview',run_id:run,revision:context.revision,editing_seq:seq,route_draft:{actor,map_id,map_version,crs_id,geometry_version,path}});
+        if(current.current.run_id!==run||routeSequence.current!==seq||historyRef.current)return;
+        if(!response.ok){if(response.code==='STALE_REVISION'&&attempt<2)continue;setRouteError(error_copy(response.code));return;}
+        const plan=response.plan;
+        if(!plan||!('kind' in plan)||plan.kind!=='corridor_move'||plan.run_id!==run||plan.revision!==context.revision||plan.editing_seq!==seq||plan.geometry_version!==geometry_version){setRouteError('未取得当前路线依据，请重新预览。');return;}
+        if(JSON.stringify({...reviewed,revision:plan.revision})!==JSON.stringify(plan)){
+          setRoutePreview(plan);setConfirming(false);setRouteError('情况依据有变化，请查看最新预览后重新确认。');return;
+        }
+        const result=await control({kind:'issue',command_id:crypto.randomUUID(),plan,...(reason.trim()?{reason:reason.trim()}:{})},plan.revision);
+        if(result.committed){changeRoute(null);setReason('');return;}
+        // Only a definitive non-commit can retry with a refreshed public Plan.
+        if(result.code!=='STALE_REVISION'||attempt===2)return;
+      }
+    }catch{setRouteError(error_copy('CHANNEL_UNCERTAIN'));}
+    finally{setPreviewBusy(false);confirmingInFlight.current=false;}
   }
   async function query(){
     const original=pending.current;if(!original||busy)return;setBusy(true);
@@ -121,7 +143,7 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
         <h2>未下达路线草案</h2><p>单击地图加点，拖动仍为平移。可直接修改折点；坐标精度 0.01 图上米。</p><p>草案尚未下达，不会保存到行动；重新打开后需重新编辑。</p>
         <ol>{routePoints.map((point,index)=><li key={index} data-route-point={index}><span>{index+1}</span>{point.map((value,axis)=><input key={axis} aria-label={`折点 ${index+1} ${axis===0?'x':'y'}`} inputMode="decimal" value={value} readOnly={index===0} onChange={e=>changeRoute(routePoints.map((p,i)=>i===index?(axis===0?[e.target.value,p[1]]:[p[0],e.target.value]):p))}/>)}<button aria-label={`删除折点 ${index+1}`} disabled={index===0} onClick={()=>changeRoute(routePoints.filter((_,i)=>i!==index))}>删</button></li>)}</ol>
         <div className="route-actions"><button disabled={routePoints.length>=64} onClick={()=>changeRoute([...routePoints,[...routePoints[routePoints.length-1]]])}>新增折点</button><button disabled={routePoints.length<=1} onClick={()=>changeRoute(routePoints.slice(0,-1))}>撤销末点</button><button onClick={()=>changeRoute(null)}>取消路线</button><button className="primary" disabled={routePoints.length<2||previewBusy||storageFault} onClick={()=>void previewRoute()}>预览路线</button></div>
-        {routeError&&<p role="alert">{routeError}</p>}{routePreview&&<section ref={routeResult} data-testid="route-preview" aria-live="polite"><h3>{routePreview.allowed?'路线预览可用':'路线存在公开缺口'}</h3><p>{routePreview.distance} 图上米 · {routePreview.estimate_kind==='known'?`规则行进 ${routePreview.estimated_move_ms/1000} 秒`:'规则行进估计未知'}</p><p>单向消息等待 {routePreview.link_ms/1000} 秒另计。</p>{routePreview.gap&&<p>{routePreview.gap}</p>}{routePreview.assumptions.map(text=><p key={text}>{text}</p>)}<p>预览尚未下达；本步不执行移动。</p><button disabled={!routePreview.allowed||busy||history||storageFault} onClick={()=>setConfirming(true)}>下达移动任务</button>{confirming&&<section role="dialog" aria-label="确认移动任务"><h3>确认移动任务</h3><p>接令和抵达须等待回报；已下达计划不表示实际进度。</p><label>理由（可选）<textarea maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={busy} onClick={()=>void issueRoute()}>确认并下达</button><button disabled={busy} onClick={()=>setConfirming(false)}>返回编辑</button></section>}</section>}
+        {routeError&&<p role="alert">{routeError}</p>}{routePreview&&<section ref={routeResult} data-testid="route-preview" aria-live="polite"><h3>{routePreview.allowed?'路线预览可用':'路线存在公开缺口'}</h3><p>{routePreview.distance} 图上米 · {routePreview.estimate_kind==='known'?`规则行进 ${routePreview.estimated_move_ms/1000} 秒`:'规则行进估计未知'}</p><p>单向消息等待 {routePreview.link_ms/1000} 秒另计。</p>{routePreview.gap&&<p>{routePreview.gap}</p>}{routePreview.assumptions.map(text=><p key={text}>{text}</p>)}<p>预览尚未下达；本步不执行移动。</p><button disabled={!routePreview.allowed||busy||history||storageFault} onClick={()=>setConfirming(true)}>下达移动任务</button>{confirming&&<section role="dialog" aria-label="确认移动任务"><h3>确认移动任务</h3><p>接令和抵达须等待回报；已下达计划不表示实际进度。确认时核对当前依据，有变化时需重新确认。</p><label>理由（可选）<textarea maxLength={2000} value={reason} onChange={e=>setReason(e.target.value)}/></label><button disabled={busy||previewBusy||!!pending.current} onClick={()=>void issueRoute()}>确认并下达</button><button disabled={busy} onClick={()=>setConfirming(false)}>返回编辑</button></section>}</section>}
       </section>:<><h2>编组与范围</h2><section data-testid="position"><h3>R · 总部位置依据</h3><p>{knowledge.status==='unresolved'?'待定位':knowledge.status==='conflicting'?'位置依据存在冲突':'已收到位置依据'}</p><p>{observed.kind==='known'?`观察 ${clock(observed.value)} · 距今 ${clock(Math.max(0,view.sim_time-observed.value))}`:'观察时点未知'}</p><p>{knowledge.status!=='conflicting'&&knowledge.provenance.kind==='registered_initial'?'依据为登记的开局凭证，并非运行中的定位递交。':'依据为已收到的定位消息。'}</p></section><button disabled={history||storageFault||!view.can_issue} onClick={beginRoute}>拟定移动路线</button><section className="scope-list" aria-label="公开范围列表">{view.geometry.scopes.map(scope=><button key={scope.id} aria-label={`范围 ${scope.id}`} aria-pressed={selected===scope.id} onClick={()=>setSelected(scope.id)}>{scope.id} · {kind_copy[scope.kind]}</button>)}</section><section className="scope-detail" data-testid="scope-detail">{scope?<ScopeRead scope={scope}/>:<p>待定位；没有可聚焦的图上位置。</p>}</section><section><h3>已确认资源</h3><p>行进储备 {view.resources.movement_energy} / 20</p><p>便携链路能量 {view.resources.equipment_energy} · 耐久 {view.resources.equipment_wear}</p><p>载荷 {view.movement_basis.load} / 20 · 空间 7 / 12；记录能力本次未启用。</p></section></>}</aside></div>
       <footer className="bottom-log"><strong>已收到的记录</strong>{view.log.slice(-3).map(x=><p key={x.id}>{clock(x.at)} · {x.text}</p>)}</footer>
     </main></div>

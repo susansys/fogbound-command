@@ -18,3 +18,18 @@ test('PG10 real UI confirms a route, advances research time and changes HQ posit
   const observation=await page.evaluate(()=>Reflect.get(window,'__b21Movement'));
   await info.attach('actual-public-worker-messages',{body:JSON.stringify(observation),contentType:'application/json'});await page.screenshot({path:info.outputPath('received-terminal.png'),fullPage:true});
 });
+
+test('PG10 command refresh preserves the edited confirmation and natural movement waits for its received terminal report',async({page},info)=>{
+  test.setTimeout(65000);
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await expect(page.locator('.map-canvas')).toHaveAttribute('data-region-state','ready',{timeout:25000});
+  await page.getByRole('button',{name:'拟定移动路线',exact:true}).click();await page.getByRole('button',{name:'新增折点',exact:true}).click();await page.getByLabel('折点 2 x',{exact:true}).fill('150');await page.getByRole('button',{name:'预览路线',exact:true}).click();await page.getByRole('button',{name:'下达移动任务',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'确认移动任务'});await dialog.getByLabel('理由（可选）').fill('保留填写内容，等待确认');
+  await page.waitForTimeout(1250);await expect(dialog).toBeVisible();await expect(dialog.getByLabel('理由（可选）')).toHaveValue('保留填写内容，等待确认');
+  await dialog.getByRole('button',{name:'确认并下达',exact:true}).click();await expect(page.getByTestId('movement-status')).toContainText('已签发，等待回执');
+  await expect(page.getByTestId('movement-status')).toContainText('接令已知',{timeout:8000});await expect(page.getByTestId('scope-detail')).toContainText('50.00, 150.00');
+  await page.getByRole('button',{name:'放大地图',exact:true}).click();
+  await expect(page.getByTestId('movement-status')).toContainText('抵达已知',{timeout:40000});await expect(page.getByTestId('scope-detail')).toContainText('150.00, 150.00');
+  await page.getByRole('button',{name:'暂停行动',exact:true}).click();await page.getByRole('button',{name:'指挥记录',exact:true}).click();await expect(page.getByTestId('received-report')).toHaveCount(2);
+  await page.screenshot({path:info.outputPath('natural-command-received.png'),fullPage:true});
+});

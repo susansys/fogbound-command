@@ -96,6 +96,8 @@ export async function load_definition(input: unknown,registered:readonly PlayDef
     if(!record(actor)||actor.id!=='R'||!dense_array(actor.qualification_refs)||!actor.qualification_refs.includes(capability.id)||actor.qualification_refs.some(ref=>ref!==capability.id))throw new GameError('INVALID_REQUEST','catalogs.actor.qualification_refs');
     const equipment=record(input.catalogs)?input.catalogs.equipment:null,items=record(input.catalogs)?input.catalogs.items:null;
     const nonnegative=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
+    const terminal=record(input.catalogs)?input.catalogs.hq_terminal:null;
+    if(!record(terminal)||!fields(terminal,['id','energy','wear','energy_per_send','wear_per_send'])||terminal.id!=='HQ-TERM'||terminal.energy!==parameters.hq_energy||terminal.wear!==parameters.hq_wear||terminal.energy_per_send!==1||terminal.wear_per_send!==1)throw new GameError('INVALID_REQUEST','catalogs.hq_terminal');
     if(!dense_array(equipment)||!equipment.every(item=>record(item)&&valid_id(item.id)&&nonnegative(item.load)&&nonnegative(item.space))||!dense_array(items)||!items.every(item=>record(item)&&valid_id(item.id)&&nonnegative(item.load)&&nonnegative(item.space)&&nonnegative(item.count)))throw new GameError('INVALID_REQUEST','catalogs.actor');
     for(const field of ['load','space']){
       const total=equipment.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field]),0)+items.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field])*Number((item as Record<string,unknown>).count),0);

@@ -11,7 +11,7 @@ export function valid_id(value: unknown): value is string {
 export function valid_public_field_path(value:unknown):value is string{
   if(typeof value!=='string'||value.length>180)return false;
   if(/^route_draft(?:\.(?:actor|map_id|map_version|crs_id|geometry_version|path)|\[(?:0|[1-9]\d{0,2})\])*$/.test(value))return true;
-  if(value==='catalogs.movement_causes'||/^(?:profile\.parameters|rules)\.(?:report_budget|report_energy_cost|report_wear_cost|cause_policy)$/.test(value))return true;
+  if(['catalogs.movement_causes','catalogs.hq_terminal'].includes(value)||/^(?:profile\.parameters|rules)\.(?:report_budget|report_energy_cost|report_wear_cost|cause_policy)$/.test(value))return true;
   if(/^(?:capabilities(?:\[0\])?(?:\.(?:unit|speed|evidence_refs))?|catalogs\.actor(?:\.(?:load|space|qualification_refs))?)$/.test(value))return true;
   return /^(catalogs\.map|catalogs\.initial_evidence|profile\.parameters|profile\.registry|rules)(?:\.(?:map_id|map_version|crs_id|geometry_version|extent|unit|scopes|id|kind|precision|uncertainty|typed_geometry|evidence_refs|position|outer|holes|area_refs|line|centerline|width|area_ref|value|evidence|scope_ref|observed|source_event_time|origin|deadline|receipt_grace|link_ms|base_speed|terrain_factor|environment_factor|load_capacity|space_capacity|movement_energy|record_energy|record_wear|equipment_energy|equipment_wear|record_packs|hq_energy|hq_wear|version|coordinate_grid|length_scale|length_rounding|duration_rounding|load_factor_per_unit|movement_energy_per_distance|report_policy|route_point_budget|conflict_candidate_budget|disabled_capabilities)|\[(?:0|[1-9]\d{0,9})\])*$/.test(value);
 }
