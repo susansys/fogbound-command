@@ -33,3 +33,25 @@ test('PG10 command refresh preserves the edited confirmation and natural movemen
   await page.getByRole('button',{name:'暂停行动',exact:true}).click();await page.getByRole('button',{name:'指挥记录',exact:true}).click();await expect(page.getByTestId('received-report')).toHaveCount(2);
   await page.screenshot({path:info.outputPath('natural-command-received.png'),fullPage:true});
 });
+
+test('PG10 pending confirmation cannot silently issue after the route is cancelled during a genuinely delayed public preview',async({page})=>{
+  await page.addInitScript(()=>{
+    const Native=window.Worker,control={held:false,release:()=>{},requests:[] as Array<{kind:string}>};let previews=0;
+    class Observer extends Native{constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(String(url).includes('/assets/worker-')){
+      const post=this.postMessage.bind(this);this.postMessage=(value:unknown)=>{control.requests.push(structuredClone(value) as {kind:string});post(value);};
+      this.addEventListener('message',event=>{if(event.data?.plan?.kind==='corridor_move'&&++previews===2){event.stopImmediatePropagation();control.held=true;const data=structuredClone(event.data);control.release=()=>{control.held=false;this.dispatchEvent(new MessageEvent('message',{data}));};}});
+    }}}
+    window.Worker=Observer;Object.assign(window,{__b21PendingConfirm:control});
+  });
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await expect(page.locator('.map-canvas')).toHaveAttribute('data-region-state','ready',{timeout:25000});
+  await page.getByRole('button',{name:'拟定移动路线',exact:true}).click();await page.getByRole('button',{name:'新增折点',exact:true}).click();await page.getByLabel('折点 2 x',{exact:true}).fill('150');await page.getByRole('button',{name:'预览路线',exact:true}).click();await page.getByRole('button',{name:'下达移动任务',exact:true}).click();
+  await page.getByRole('button',{name:'确认并下达',exact:true}).click();await page.waitForFunction(()=>Reflect.get(window,'__b21PendingConfirm')?.held===true);
+  await expect(page.getByRole('button',{name:'返回编辑',exact:true})).toBeDisabled();await expect(page.getByLabel('理由（可选）')).toBeDisabled();
+  await page.getByRole('button',{name:'取消路线',exact:true}).click();await page.evaluate(()=>Reflect.get(window,'__b21PendingConfirm').release());
+  await expect(page.getByRole('dialog',{name:'确认移动任务'})).toHaveCount(0);await expect(page.getByTestId('movement-status')).toContainText('可拟定移动任务');
+  // Read the real public channel after a roundtrip, rather than relying on a sleep.
+  await page.getByRole('button',{name:'保存行动',exact:true}).click();await expect(page.getByRole('status')).toContainText('行动已保存');
+  const commands=await page.evaluate(()=>Reflect.get(window,'__b21PendingConfirm').requests.filter((r:{kind:string;envelope?:{intent:{kind:string}}})=>r.kind==='operate_corridor'&&r.envelope?.intent.kind==='issue'));
+  expect(commands).toEqual([]);
+});
