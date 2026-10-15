@@ -17,6 +17,9 @@ type Props = {
   planned: boolean;
   plannedTarget?:'N'|'T';
   displaySession?:RegionalDisplaySession;
+  routeDraft?:Coordinate[];
+  onRoutePoint?:(point:Coordinate)=>void;
+  onRouteCancel?:()=>void;
 };
 const symbol = new ms.Symbol("SFGPU-----*****", {
   size: 30,
@@ -26,7 +29,7 @@ const symbol = new ms.Symbol("SFGPU-----*****", {
   outlineColor: "#e4eee2",
   outlineWidth: 2,
 }).asSVG();
-export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession }: Props) {
+export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
   const play=view.scenario_kind==='play_corridor'?view:null;
   const legacy=view.scenario_kind==='play_corridor'?null:view;
   const recording=view.scenario_kind==='record';
@@ -304,7 +307,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
   const insideRegion=regionPoint?.every(value=>value>=0&&value<=10000);
   const height=regionPoint&&regional.current?sampleSimulationHeight({...regional.current.manifest.field,values:regional.current.values,mask:regional.current.mask},regionPoint[0],regionPoint[1]):null;
   return (
-    <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
+    <div className="map-wrapper" onKeyDown={e=>{if(e.key==='Escape'){if(routeDraft)onRouteCancel?.();setLayers(false);setSourceInfo(false);setLegend(false);host.current?.focus();e.preventDefault();e.stopPropagation();}}}>
     <section
       className="map map-canvas"
       ref={host}
@@ -371,6 +374,12 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       onPointerUp={(e) => {
         const d = drag.current;
         if (d && d.id === e.pointerId && !d.moved) {
+          if(onRoutePoint){
+            const box=e.currentTarget.getBoundingClientRect(),pixel:[number,number]=[e.clientX-box.left,e.clientY-box.top];
+            const world=surface.current?.unproject(pixel)??[(pixel[0]-c.x)/c.s,(pixel[1]-c.y)/c.s];
+            onRoutePoint([Math.round(world[0]*100)/100,Math.round(world[1]*100)/100]);
+            drag.current=null;return;
+          }
           const marker = document
             .elementFromPoint(e.clientX, e.clientY)
             ?.closest<HTMLElement>("[data-marker]");
@@ -405,6 +414,10 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           />
         </svg>
       )}
+      {routeDraft&&<svg className="plan-route" aria-label="未下达路线草案" data-testid="route-draft-line">
+        <polyline points={routeDraft.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#d2b87e" strokeWidth="3" strokeDasharray="7 5" fill="none"/>
+        {routeDraft.map(([x,y],index)=><circle key={index} data-route-anchor={index} data-coordinate={`${x},${y}`} cx={point(x,y).left} cy={point(x,y).top} r="3" fill="#d2b87e"/>)}
+      </svg>}
       {!recording&&<svg className="plan-route" aria-hidden="true">
         {sites.map((id) => {
           const [x, y] = site(id);

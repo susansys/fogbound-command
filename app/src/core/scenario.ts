@@ -4,7 +4,7 @@ import prestartDefinition from './prestart-engineering.json';
 import playDefinition from './play-definition.json';
 import {GameError} from '../contracts';
 import {record,fields,valid_id} from '../protocol';
-import {validate_public_map} from '../spatial';
+import {validate_public_map,dense_array} from '../spatial';
 import type {PublicMap} from '../spatial';
 import type {KnownTime} from '../contracts';
 export const engineeringDefinition = definition;
@@ -88,6 +88,19 @@ export async function load_definition(input: unknown,registered:readonly PlayDef
     const rules=input.rules;
     if(!record(rules))throw new GameError('CONFIG_PARAMETER_MISSING','rules');
     for(const [key,value] of Object.entries(playDefinition.rules))if(JSON.stringify(rules[key])!==JSON.stringify(value))throw new GameError('INVALID_REQUEST','rules.'+key);
+    const capabilities=input.capabilities,actor=record(input.catalogs)?input.catalogs.actor:null;
+    if(!dense_array(capabilities)||capabilities.length!==1||!record(capabilities[0]))throw new GameError('CONFIG_PARAMETER_MISSING','capabilities');
+    const capability=capabilities[0];
+    if(capability.unit!=='fictional_metre/s')throw new GameError(capability.unit===undefined?'CONFIG_PARAMETER_MISSING':'CONFIG_UNIT_MISMATCH','capabilities[0].unit');
+    if(!valid_id(capability.id)||capability.actor!=='R'||capability.action!=='move'||typeof capability.speed!=='number'||!Number.isFinite(capability.speed)||capability.speed<=0||capability.speed!==parameters.base_speed||!dense_array(capability.evidence_refs)||!capability.evidence_refs.length||capability.evidence_refs.length>32||!capability.evidence_refs.every(valid_id))throw new GameError('INVALID_REQUEST','capabilities[0]');
+    if(!record(actor)||actor.id!=='R'||!dense_array(actor.qualification_refs)||!actor.qualification_refs.includes(capability.id)||actor.qualification_refs.some(ref=>ref!==capability.id))throw new GameError('INVALID_REQUEST','catalogs.actor.qualification_refs');
+    const equipment=record(input.catalogs)?input.catalogs.equipment:null,items=record(input.catalogs)?input.catalogs.items:null;
+    const nonnegative=(value:unknown):value is number=>typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;
+    if(!dense_array(equipment)||!equipment.every(item=>record(item)&&valid_id(item.id)&&nonnegative(item.load)&&nonnegative(item.space))||!dense_array(items)||!items.every(item=>record(item)&&valid_id(item.id)&&nonnegative(item.load)&&nonnegative(item.space)&&nonnegative(item.count)))throw new GameError('INVALID_REQUEST','catalogs.actor');
+    for(const field of ['load','space']){
+      const total=equipment.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field]),0)+items.reduce<number>((sum,item)=>sum+Number((item as Record<string,unknown>)[field])*Number((item as Record<string,unknown>).count),0);
+      if(!nonnegative(actor[field])||actor[field]!==total||typeof parameters[field+'_capacity']!=='number'||total>Number(parameters[field+'_capacity']))throw new GameError('INVALID_REQUEST','catalogs.actor.'+field);
+    }
   }
   const selected = [...definitions,playDefinition,...registered].find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
   if (!selected)

@@ -133,7 +133,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response = {
           request_id: input.request_id,
           ok: true,
-          plan: await (history??game).preview_plan(
+          plan: 'route_draft' in input?await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,input.route_draft):await (history??game).preview_plan(
             input.run_id,
             input.revision,
             input.editing_seq,

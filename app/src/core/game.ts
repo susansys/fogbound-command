@@ -21,6 +21,8 @@ import { advance_move, register_move, register_record } from "./movement";
 import {initial_record_accounts} from './record-accounting';
 import {canonical,validate_state} from './snapshot';
 import {replay_state} from './replay';
+import {preview_corridor} from './play-preview';
+import type {RouteDraft,RoutePlan,PreviewPlan} from '../route-contracts';
 import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
 import {prestart_parameters,prestart_case} from './scenario';
 function project_player_view(state:StoredState,registered:readonly import("./scenario").PlayDefinition[]=[]):PlayerView{return state.schema===7?project_play_view(state,registered):project_legacy_view(state);}
@@ -299,11 +301,14 @@ export class Game {
     if(envelope?.intent?.kind!=='save')throw new GameError('INVALID_INPUT');
     return this.operate(envelope,clock_to);
   }
+  async preview_plan(run:string,revision:number,editing_seq:number):Promise<Plan>;
+  async preview_plan(run:string,revision:number,editing_seq:number,route_draft:RouteDraft):Promise<RoutePlan>;
   async preview_plan(
     run: string,
     revision: number,
     editing_seq: number,
-  ): Promise<Plan> {
+    route_draft?:RouteDraft,
+  ): Promise<PreviewPlan> {
     if (
       !valid_id(run) ||
       !Number.isSafeInteger(revision) ||
@@ -314,7 +319,14 @@ export class Game {
     const state = this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await this.validate_stored_state(state);
-    if(state.schema===7)throw new GameError('INVALID_INPUT');
+    if(state.schema===7){
+      if(!route_draft)throw new GameError('INVALID_INPUT');
+      const view=await this.get_view(run);
+      if(view.scenario_kind!=='play_corridor')throw new GameError('INVALID_INPUT');
+      if(view.revision!==revision)throw new GameError('STALE_REVISION');
+      return preview_corridor(view,editing_seq,route_draft);
+    }
+    if(route_draft)throw new GameError('INVALID_INPUT');
     const view = project_legacy_view(state);
     if (view.revision !== revision) throw new GameError("STALE_REVISION");
     if(state.schema===6)return preview_prestart(state,editing_seq,view.can_issue,view.gap);

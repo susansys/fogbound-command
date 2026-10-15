@@ -13,6 +13,7 @@ import { MapTrifold, Binoculars, PaperPlaneTilt,ClockCounterClockwise,ArrowsCloc
 import ms from 'milsymbol';
 import type {GamePlayerView,PlayPlayerView} from './play-contracts';
 import {PlayWorkbench} from './play-workbench';
+import {is_legacy_plan} from './route-contracts';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
 function isRecordPlan(plan: Plan | null | undefined): plan is Extract<Plan,{kind:'record'}> {
   return !!plan && 'kind' in plan && plan.kind==='record';
@@ -205,6 +206,7 @@ export function Workbench() {
       if (
         response.ok &&
         response.plan &&
+        is_legacy_plan(response.plan)&&
         response.plan.run_id === currentView.current?.run_id &&
         response.plan.revision === currentView.current?.revision &&
         response.plan.editing_seq === editing.current
@@ -274,6 +276,7 @@ export function Workbench() {
         const current=currentView.current;if(!current)return;
         const checked=await transport.request({kind:'preview',run_id:current.run_id,revision:current.revision,editing_seq:shown.editing_seq});
         if(!checked.ok){if(checked.code==='STALE_REVISION')continue;setError(checked.code);return;}
+        if(checked.plan&&!is_legacy_plan(checked.plan)){setError('CHANNEL_UNCERTAIN');return;}
         const latest=checked.plan;
         const keys=isRecordPlan(shown)?['actor','target','station','setup_ms','work','estimated_record_ms','estimated_total_ms','link_ms','record_energy','record_wear','record_packs'] as const:['actor','target','path','distance','estimated_move_ms','link_ms'] as const;
         if(!latest||isRecordPlan(shown)!==isRecordPlan(latest)||!latest.allowed||keys.some(key=>shown[key as keyof typeof shown]!==latest[key as keyof typeof latest])){

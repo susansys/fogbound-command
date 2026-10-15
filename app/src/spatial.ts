@@ -20,6 +20,7 @@ function array(x:unknown):x is unknown[]{
   const own=Reflect.ownKeys(x);
   return own.length===x.length+1&&own.every(key=>key==='length'||typeof key==='string'&&/^(0|[1-9][0-9]*)$/.test(key)&&Number(key)<x.length&&Object.getOwnPropertyDescriptor(x,key)?.enumerable===true&&Object.hasOwn(Object.getOwnPropertyDescriptor(x,key)!,'value'));
 }
+export {array as dense_array};
 function invalid(field_path='catalogs.map'):never{throw new GameError('INVALID_REQUEST',field_path);}
 const finite=(x:unknown):x is number=>typeof x==='number'&&Number.isFinite(x);
 const text=(x:unknown):x is string=>typeof x==='string'&&x.length>0&&x.length<=128;
