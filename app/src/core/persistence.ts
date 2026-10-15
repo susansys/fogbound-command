@@ -3,6 +3,7 @@ import type { StoredState as State } from "./state";
 import { GameError } from "../contracts";
 import {state_hash,validate_state} from './snapshot';
 import type {PlayDefinition} from './scenario';
+import type {MissionDefinition} from './mission-definition';
 class Database extends Dexie {
   runs!: Table<State, string>;
   snapshots!: Table<{ key: string; run_id: string; state: State }, string>;
@@ -31,10 +32,12 @@ class Database extends Dexie {
 export class Persistence {
   private db: Database;
   readonly play_definitions:readonly PlayDefinition[];
-  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[]) {
+  readonly mission_definitions:readonly MissionDefinition[];
+  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[],registeredMissionDefinitions:readonly MissionDefinition[]=[]) {
     // Constructor injection is the owned registration seam. Worker uses defaults;
     // no request or production import endpoint can supply these definitions.
     this.play_definitions=structuredClone(registeredPlayDefinitions);
+    this.mission_definitions=structuredClone(registeredMissionDefinitions);
     this.db = new Database(name);
   }
   async claim_writer(): Promise<number> {
@@ -117,7 +120,7 @@ export class Persistence {
   }
   async list_runs() {
     const entries=await this.db.runs.toArray();
-    for(const state of entries)await validate_state(state,this.play_definitions);
+    for(const state of entries)await validate_state(state,this.play_definitions,this.mission_definitions);
     const ranked=await Promise.all(entries.map(async state=>({state,created:(await this.db.metadata.get(`created:${state.run_id}`))?.value??0,read_only:await this.is_read_only(state.run_id)})));
     ranked.sort((a,b)=>b.created-a.created||Number(a.read_only)-Number(b.read_only)||b.state.revision-a.state.revision);
     const latest=new Map<string,(typeof ranked)[number]>();

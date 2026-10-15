@@ -7,13 +7,15 @@ import {canonical} from './snapshot';
 import {valid_envelope} from '../protocol';
 import type {Envelope} from '../contracts';
 import {mission_definition_for_package} from './mission-definition';
-export async function apply_save_plan(state:MissionState,envelope:SavePlanEnvelope):Promise<MissionState>{
+import type {MissionDefinition} from './mission-definition';
+import {deliver_mission_position_records} from './mission-evidence';
+export async function apply_save_plan(state:MissionState,envelope:SavePlanEnvelope,owned:readonly MissionDefinition[]=[]):Promise<MissionState>{
   envelope=parse_save_plan(envelope);
   if(envelope.run_id!==state.run_id||envelope.expected_revision!==state.revision)throw new GameError('STALE_REVISION');
   if(envelope.intent.expected_object_revision!==(state.mission?.object_revision??0))throw new GameError('OBJECT_VERSION_CONFLICT');
   if(JSON.stringify(canonical(envelope.intent.base_plan_ref))!==JSON.stringify(canonical(state.mission?.current_plan_ref??null)))throw new GameError('OBJECT_VERSION_CONFLICT');
-  if(state.plans.length>=mission_definition_for_package(state.definition_hash).profile.parameters.plan_version_budget)throw new GameError('INVALID_REQUEST','mission_draft.plan_versions');
-  const preview=await preview_mission(state,0,envelope.intent.draft),candidate=structuredClone(state);
+  if(state.plans.length>=mission_definition_for_package(state.definition_hash,owned).profile.parameters.plan_version_budget)throw new GameError('INVALID_REQUEST','mission_draft.plan_versions');
+  const preview=await preview_mission(state,0,envelope.intent.draft,owned),candidate=structuredClone(state);
   const version=candidate.plans.length+1,plan_id=envelope.intent.draft.plan_id;
   candidate.plans.push({plan_id,version,draft:structuredClone(envelope.intent.draft),preview});
   candidate.mission={id:'M1',object_revision:(candidate.mission?.object_revision??0)+1,status:'draft',current_plan_ref:{run_id:state.run_id,kind:'plan',id:plan_id,version},support_refs:[]};
@@ -21,13 +23,14 @@ export async function apply_save_plan(state:MissionState,envelope:SavePlanEnvelo
   candidate.inputs.push({envelope:structuredClone(envelope),at:state.sim_time,revision:candidate.revision});
   return candidate;
 }
-export function apply_mission_control(state:MissionState,envelope:Envelope,clock_to?:number):MissionState{
+export function apply_mission_control(state:MissionState,envelope:Envelope,clock_to?:number,owned:readonly MissionDefinition[]=[]):MissionState{
   if(!valid_envelope(envelope,910000,true)||envelope.run_id!==state.run_id)throw new GameError('INVALID_REQUEST');
   if(envelope.expected_revision!==state.revision)throw new GameError('STALE_REVISION');
   const candidate=structuredClone(state),intent=envelope.intent;
   const move_clock=(to:number)=>{
     if(!Number.isSafeInteger(to)||to<state.sim_time||to>910000)throw new GameError('INVALID_INPUT');
     candidate.sim_time=to;candidate.ended=to===910000;
+    deliver_mission_position_records(candidate,mission_definition_for_package(state.definition_hash,owned));
   };
   if(clock_to!==undefined){if(state.mode!=='command'||state.paused)throw new GameError('CLOCK_PAUSED');move_clock(clock_to);}
   if(intent.kind==='tick'||intent.kind==='advance'){

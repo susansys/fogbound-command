@@ -414,7 +414,12 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
           />
         </svg>
       )}
-      {play&&play.issued_orders.length>0&&<svg className="plan-route" aria-label="已下达计划，不表示实际进度" data-testid="issued-plan-line"><polyline points={play.issued_orders.at(-1)!.plan.path.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#8dafa6" strokeWidth="3" strokeDasharray="7 5" fill="none"/></svg>}
+      {play?.scenario_kind==='play_corridor'&&play.issued_orders.length>0&&<svg className="plan-route" aria-label="已下达计划，不表示实际进度" data-testid="issued-plan-line"><polyline points={play.issued_orders.at(-1)!.plan.path.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#8dafa6" strokeWidth="3" strokeDasharray="7 5" fill="none"/></svg>}
+      {play?.scenario_kind==='play_mission'&&play.issued_orders.map(order=>{
+        const draft=play.plans.find(p=>p.plan_id===order.plan_ref.id&&p.version===order.plan_ref.version)?.draft;
+        const phase=draft?.phases.find(p=>p.id===order.phase_ref.id&&p.version===order.phase_ref.version),route=draft?.routes.find(r=>r.id===phase?.activity.route_ref.id&&r.version===phase.activity.route_ref.version);
+        return route&&<svg key={order.id} className="plan-route" aria-label="已下达冻结计划，不表示实际进度" data-testid="issued-plan-line"><polyline points={route.path.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#8dafa6" strokeWidth="3" strokeDasharray="7 5" fill="none"/></svg>;
+      })}
       {routeDraft&&<svg className="plan-route" aria-label="未下达路线草案" data-testid="route-draft-line">
         <polyline points={routeDraft.map(([x,y])=>`${point(x,y).left},${point(x,y).top}`).join(' ')} stroke="#d2b87e" strokeWidth="3" strokeDasharray="7 5" fill="none"/>
         {routeDraft.map(([x,y],index)=><circle key={index} data-route-anchor={index} data-coordinate={`${x},${y}`} cx={point(x,y).left} cy={point(x,y).top} r="3" fill="#d2b87e"/>)}

@@ -16,6 +16,7 @@ export type RunSummary = {
 export type Request =
   |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
   |{kind:'save_plan';envelope:unknown}
+  |{kind:'issue_mission';envelope:unknown}
   |{kind:'operate_mission';envelope:Envelope}
   | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }

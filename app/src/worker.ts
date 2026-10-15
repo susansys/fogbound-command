@@ -8,7 +8,7 @@ import type { Request, Response } from "./transport";
 import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
 import missionDefinition from './core/mission-definition.json';
-import {parse_mission_draft} from './mission-protocol';
+import {parse_mission_draft,parse_issue_mission} from './mission-protocol';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-map-b-game-1");
 const game = new Game(store);
@@ -76,8 +76,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -135,6 +135,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response={request_id,ok:true,mission_preview:await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,parse_mission_draft(input.draft,input.run_id))};rememberResult=false;
       }else if(input.kind==='save_plan'&&locked){
         response={request_id,ok:true,...await game.save_plan(input.envelope)};
+      }else if(input.kind==='issue_mission'&&locked){
+        response={request_id,ok:true,...await game.issue_order(parse_issue_mission(input.envelope))};
       }
       else if (input.kind === "preview" && locked)
         response = {

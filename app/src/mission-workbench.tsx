@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {Envelope,Intent} from './contracts';
-import type {MissionDraft,MissionPlayerView,MissionPreview,SavePlanEnvelope,ConditionExpr} from './mission-contracts';
+import type {MissionDraft,MissionPlayerView,MissionPreview,SavePlanEnvelope,IssueMissionEnvelope,ConditionExpr} from './mission-contracts';
 import type {GamePlayerView} from './play-contracts';
 import type {Transport,Response} from './transport';
 import type {RegionalDisplaySession} from './regional-display';
@@ -17,8 +17,16 @@ function initial_draft(view:MissionPlayerView):MissionDraft{
 }
 function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>[k,canonical(v)])):value;}
 async function digest(value:unknown){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(canonical(value))));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
-type Pending={kind:'save_plan';envelope:SavePlanEnvelope;seq:number;digest:string}|{kind:'operate_mission';envelope:Envelope};
+type Pending={kind:'save_plan';envelope:SavePlanEnvelope;seq:number;digest:string}|{kind:'operate_mission';envelope:Envelope}|{kind:'issue_mission';envelope:IssueMissionEnvelope};
+type IssueReview={preview:MissionPreview;phase_id:string;seq:number};
 type Recovery={run_id:string;operation_id:string;original:Pending|null};
+function GateSummary({phase,at}:{phase:MissionPreview['phases'][number];at:number}){
+  const gate=phase.gate,expiry=gate.expires_at_time_ms,expired=expiry.kind==='known'&&at>=expiry.value;
+  const result=expired?'U':gate.result,labels={T:'满足',F:'不满足',U:'未知，需核对依据'};
+  const proofs:Record<string,string>={'B22-INITIAL-CAPABILITY':'能力登记凭证','B22-INITIAL-POSITION':'初始位置凭证','B22-STATIC-GRANT':'既有参谋预授权'};
+  const timing=expired?'上次核对依据已过期':expiry.kind==='known'?`依据有效至 ${clock(expiry.value)}`:expiry.kind==='unknown'?'到期时刻未知':'不设自动到期';
+  return <><p>{phase.phase_id} · 总部进入门槛：{labels[result]} · 核对 {clock(gate.evaluated_at_time_ms)}</p><p>依据：{gate.evidence_refs.length?gate.evidence_refs.map(id=>proofs[id]??`凭证 ${id}`).join('、'):'尚缺可用凭证'}。{timing}；下达时仍会重核。</p></>;
+}
 type Props={view:MissionPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;onHistory:(value:boolean)=>void;onLeave:()=>Promise<void>;displaySession?:RegionalDisplaySession;channelError:string;storageFault:boolean;onStorageRecovered:()=>void};
 export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave,displaySession,channelError,storageFault,onStorageRecovered}:Props){
   const [editingDraft,setDraft]=useState(()=>initial_draft(view));
@@ -29,6 +37,8 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
   function setError(code:string,field_path?:string){setFailure({code,field_path});}
   const [dirty,setDirty]=useState(false),[uncertain,setUncertain]=useState(false),[advance,setAdvance]=useState('1'),[historyNode,setHistoryNode]=useState('1');
   const [noReceipt,setNoReceipt]=useState(false),[recoveryUnknown,setRecoveryUnknown]=useState(false);
+  const [issueReview,setIssueReview]=useState<IssueReview|null>(null),[reason,setReason]=useState('');
+  const issueInFlight=useRef(false);
   const sequence=useRef(0),current=useRef(view),historyRef=useRef(history),pending=useRef<Pending|null>(null);
   const recoveryPending=useRef<Recovery|null>(null);
   const saveInFlight=useRef(false),controlInFlight=useRef(false);
@@ -37,7 +47,7 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
   const routeTexts=history?Object.fromEntries(draft.routes.map(r=>[r.id,r.path.map(p=>p.map(String))])):editingRoutes;
   const preview=history?view.plans.at(-1)?.preview??null:editingPreview;
   const activeRoute=draft.routes[routeIndex]??draft.routes[0];
-  function changed(){sequence.current++;setDirty(true);setPreview(null);setError('');}
+  function changed(){sequence.current++;setDirty(true);setPreview(null);setIssueReview(null);setError('');}
   function update(change:(value:MissionDraft)=>void){const next=structuredClone(draft);change(next);setDraft(next);changed();}
   function form():MissionDraft{
     const value=structuredClone(draft);
@@ -59,9 +69,31 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
       const matched=sequence.current===original.seq?await digest(form()):null;
       if(sequence.current===original.seq&&matched===original.digest){setDirty(false);setNotice('任务草案已保存；尚未下达，不会执行或占用资源。');}
       else setNotice('原编辑已保存；当前输入仍有未保存改动。');
-    }else setNotice(original.envelope.intent.kind==='save'?'当前行动已保存；任务编辑仍须单独保存草案。':result.view.paused?'暂停已确认，请明确继续。':'控制操作已确认。');
+    }else if(original.kind==='issue_mission'){setIssueReview(null);setNotice('当前阶段已下达并发送；等待接令回报，结果尚未确认。');}
+    else setNotice(original.envelope.intent.kind==='save'?'当前行动已保存；任务编辑仍须单独保存草案。':result.view.paused?'暂停已确认，请明确继续。':'控制操作已确认。');
   }
-  async function send(original:Pending){if(historyRef.current)return;setBusy(true);setError('');try{const result=await transport.request(original.kind==='save_plan'?{kind:'save_plan',envelope:original.envelope}:{kind:'operate_mission',envelope:original.envelope});await handle(result,original);return result;}catch{setUncertain(true);setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function send(original:Pending){if(historyRef.current)return;setBusy(true);setError('');try{const result=await transport.request(original.kind==='save_plan'?{kind:'save_plan',envelope:original.envelope}:original.kind==='issue_mission'?{kind:'issue_mission',envelope:original.envelope}:{kind:'operate_mission',envelope:original.envelope});await handle(result,original);return result;}catch{setUncertain(true);setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function checkIssue(confirm=false){
+    if(historyRef.current||busy||dirty||storageFault||pending.current||recoveryPending.current||issueInFlight.current)return;
+    const reviewed=issueReview,seq=sequence.current;issueInFlight.current=true;setBusy(true);setError('');
+    try{
+      const latest=await readCurrent();if(latest.scenario_kind!=='play_mission'||!latest.mission)return;
+      const plan=latest.plans.find(p=>p.plan_id===latest.mission!.current_plan_ref.id&&p.version===latest.mission!.current_plan_ref.version);
+      if(!plan||await digest(form())!==await digest(plan.draft)){setIssueReview(null);setNotice('请先保存当前编辑，再核对下达。');return;}
+      const phase=plan.draft.phases.find(p=>!latest.issued_orders.some(o=>o.phase_ref.id===p.id));
+      if(!phase){setIssueReview(null);setNotice('已保存阶段均已有指令，请查看回报。');return;}
+      const response=await transport.request({kind:'preview_mission',run_id:latest.run_id,revision:latest.revision,editing_seq:seq,draft:plan.draft});
+      if(!response.ok){setError(response.code,response.field_path);setIssueReview(null);return;}
+      const checked=response.mission_preview;
+      if(!checked||checked.run_id!==latest.run_id||checked.revision!==latest.revision||checked.editing_seq!==seq||checked.draft_digest!==await digest(plan.draft)){setError('CHANNEL_UNCERTAIN');return;}
+      if(historyRef.current||seq!==sequence.current)return;
+      setIssueReview({preview:checked,phase_id:phase.id,seq});
+      if(!confirm)return;
+      if(!reviewed||reviewed.phase_id!==phase.id||reviewed.seq!==seq||reviewed.preview.draft_digest!==checked.draft_digest){setNotice('下达内容已更新，请再次核对后明确确认。');return;}
+      const input:IssueMissionEnvelope={run_id:latest.run_id,operation_id:crypto.randomUUID(),expected_revision:latest.revision,intent:{kind:'issue_mission',expected_object_revision:latest.mission.object_revision,plan_ref:structuredClone(latest.mission.current_plan_ref),phase_ref:{run_id:latest.run_id,kind:'phase',id:phase.id,version:phase.version},grant_ref:structuredClone(plan.draft.intent.delegation_ref),preview:checked,evidence_refs:[...plan.draft.evidence_refs],...(reason.trim()?{reason}: {})}};
+      const original:Pending={kind:'issue_mission',envelope:input};pending.current=original;await send(original);
+    }catch{setError('CHANNEL_UNCERTAIN');}finally{issueInFlight.current=false;setBusy(false);}
+  }
   async function previewDraft(){
     if(history||busy||storageFault||recoveryPending.current)return;setBusy(true);setError('');const seq=sequence.current,revision=current.current.revision,run=current.current.run_id;
     try{const value=form(),expected=await digest(value),result=await transport.request({kind:'preview_mission',run_id:run,revision,editing_seq:seq,draft:value});
@@ -152,18 +184,19 @@ export function MissionWorkbench({view,transport,adopt,history,onHistory,onLeave
     {(error||channelError)&&<div role="alert" className="fault">{error_copy(error||channelError,error?failure.field_path:undefined)}</div>}
     {storageFault&&!pending.current&&!recoveryUnknown&&<div className="fault"><span>推进尚未得到可靠提交确认。当前输入保留，恢复后保持暂停。</span><button disabled={busy||history} onClick={()=>void recover()}>恢复最近记录并重新核对</button></div>}
     {recoveryUnknown&&<div className="fault"><span>恢复结果待查核，恢复编号、原操作与输入已保留。</span><button disabled={busy||history} onClick={()=>void queryRecovery()}>查询恢复结果</button><button disabled={busy||history} onClick={()=>void recover()}>重试原恢复操作</button></div>}
-    {uncertain&&!recoveryUnknown&&<div className="fault"><span>保存状态待查核，输入与原操作已保留。</span><button disabled={busy} onClick={()=>void query()}>查询保存结果</button><button disabled={busy} onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button>{noReceipt&&<button disabled={busy} onClick={()=>void recover()}>恢复最近记录并重新核对</button>}</div>}
+    {uncertain&&!recoveryUnknown&&<div className="fault"><span>{pending.current?.kind==='issue_mission'?'下达结果待查核，输入与原操作已保留。':'保存状态待查核，输入与原操作已保留。'}</span><button disabled={busy} onClick={()=>void query()}>{pending.current?.kind==='issue_mission'?'查询下达结果':'查询保存结果'}</button><button disabled={busy} onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button>{noReceipt&&<button disabled={busy} onClick={()=>void recover()}>恢复最近记录并重新核对</button>}</div>}
     <div className="contextbar"><strong>R · H—A—B 公开走廊</strong><span>仅移动；支援未安排。总部以合法收到的回报确认结果。</span></div>
     <div className="shell"><nav className="rail">{[['map','态势地图'],['report','情报报告'],['tasks','任务规划'],['log','指挥记录'],['review','行动复盘']].map(([id,label])=><button key={id} className={workspace===id?'active':''} onClick={()=>setWorkspace(id)}>{label}</button>)}<button disabled={busy||uncertain} onClick={()=>void (async()=>{if(!current.current.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></nav>
-    <main className="main"><div className="workspacebar"><h1>结构化任务</h1><span className="outline-tag">总部视图 · 未安排支援</span></div><p className="operation-status" data-testid="mission-save-state">{view.mission?`已保存版本 ${view.mission.current_plan_ref.version} · 未下达${dirty?' · 有未保存编辑':''}`:'尚未保存 · 未下达'}</p>{notice&&<p role="status" className="operation-status">{notice}</p>}
+    <main className="main"><div className="workspacebar"><h1>结构化任务</h1><span className="outline-tag">总部视图 · 未安排支援</span></div><p className="operation-status" data-testid="mission-save-state">{view.mission?`已保存版本 ${view.mission.current_plan_ref.version} · ${view.issued_orders.length?'已下达冻结版本 '+view.issued_orders.at(-1)!.plan_ref.version:'未下达'}${dirty?' · 有未保存编辑':''}`:'尚未保存 · 未下达'}</p><p data-testid="mission-readiness">{view.can_issue?'可直接下达':view.status==='preparing'?'需核实条件':view.status==='denied'?'当前条件不允许':'当前阶段'} · {view.gap}</p>{notice&&<p role="status" className="operation-status">{notice}</p>}
       <div className="workbody mission-body">
         {(workspace==='tasks'||workspace==='map')&&<MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={history?undefined:displaySession} routeDraft={(routeTexts[activeRoute.id]??[]).filter(p=>p.length===2&&p.every(v=>v.trim()&&Number.isFinite(Number(v)))).map(p=>[Number(p[0]),Number(p[1])])} onRoutePoint={history?undefined:p=>{setRouteTexts(old=>({...old,[activeRoute.id]:[...(old[activeRoute.id]??[]),p.map(String)]}));changed();}}/>}
         {workspace==='tasks'?<section className="mission-editor" aria-label="任务草案"><div className="mission-fields"><label>任务目的<input aria-label="任务目的" value={draft.intent.purpose} readOnly={history} onChange={e=>update(x=>{x.intent.purpose=e.target.value;})}/></label><label>期望结果<input aria-label="期望结果" value={draft.intent.desired_end_state} readOnly={history} onChange={e=>update(x=>{x.intent.desired_end_state=e.target.value;})}/></label><label>窄目标<select aria-label="窄目标" disabled={history} value={draft.objective.success_expr.kind==='compare'?String(draft.objective.success_expr.typed_value):'B'} onChange={e=>chooseGoal(e.target.value as 'A'|'B')}><option value="A">抵达 A 并等待确认</option><option value="B">经 A 抵达 B 并等待确认</option></select></label>
           {draft.phases.map((phase,index)=><fieldset key={phase.id} disabled={history}><legend>阶段 {index+1} · R 移动</legend><label>前置阶段<select aria-label={`阶段 ${index+1} 前置阶段`} value={phase.dependencies[0]?.id??''} onChange={e=>update(x=>{x.phases[index].dependencies=e.target.value?[{run_id:view.run_id,kind:'phase',id:e.target.value,version:1}]:[];})}><option value="">无前置</option>{draft.phases.map(p=><option key={p.id} value={p.id}>{p.id}</option>)}</select></label><div className="mission-window">{(['earliest_start_time_ms','latest_finish_time_ms'] as const).map((field,i)=><label key={field}>{i?'最晚结束（毫秒）':'最早开始（毫秒）'}<input aria-label={`阶段 ${index+1} ${i?'最晚结束':'最早开始'}`} type="number" value={phase[field]} onChange={e=>update(x=>{x.phases[index][field]=Number(e.target.value);})}/></label>)}</div></fieldset>)}
           <label>编辑阶段路线<select aria-label="编辑阶段路线" value={routeIndex} onChange={e=>setRouteIndex(Number(e.target.value))}>{draft.routes.map((r,i)=><option key={r.id} value={i}>阶段 {i+1}</option>)}</select></label><ol className="mission-points">{(routeTexts[activeRoute.id]??[]).map((p,i)=><li key={i}><span>{i+1}</span>{p.map((v,axis)=><input key={axis} aria-label={`路线点 ${i+1} ${axis?'y':'x'}`} value={v} inputMode="decimal" readOnly={history} onChange={e=>{setRouteTexts(old=>({...old,[activeRoute.id]:old[activeRoute.id].map((point,j)=>j===i?point.map((n,a)=>a===axis?e.target.value:n):point)}));changed();}}/>)}<button aria-label={`删除路线点 ${i+1}`} disabled={history} onClick={()=>{setRouteTexts(old=>({...old,[activeRoute.id]:old[activeRoute.id].filter((_,j)=>j!==i)}));changed();}}>删</button></li>)}</ol><button disabled={history} onClick={()=>{setRouteTexts(old=>({...old,[activeRoute.id]:[...(old[activeRoute.id]??[]),['','']]}));changed();}}>新增路线点</button><label>任务备注（仅供记录）<textarea aria-label="任务备注（仅供记录）" value={draft.note} readOnly={history} onChange={e=>update(x=>{x.note=e.target.value;})}/></label><p>执行字段仅为 R 移动。备注不会触发维修或其他行动；阅读和编辑不会暂停时间。</p>
-          {preview&&<section data-testid="mission-preview"><h2>公开估计与假设</h2>{preview.phases.map(p=><p key={p.phase_id}>{p.phase_id} · {p.distance} 图上米 · {p.estimated_move_ms===null?'耗时待核实':`${p.estimated_move_ms/1000} 秒`} {p.assumptions.join('；')} {p.gap}</p>)}<p>估计不含消息等待，不能代替下达或现场接令。</p></section>}
-        </div><div className="mission-actions"><button disabled={blocked} onClick={()=>void previewDraft()}>预览任务</button><button className="primary" disabled={blocked||!preview} onClick={()=>void saveDraft()}>保存草案</button></div></section>:workspace==='map'?<aside className="inspector"><h2>公开位置依据</h2><p>{selected}</p><p>仅显示总部已有的位置范围；绘制路线不会下达命令。</p><button onClick={()=>setWorkspace('tasks')}>返回任务规划</button></aside>:<article className="content-view">{workspace==='report'?<><h2>位置依据</h2><p>当前依据：{view.position_knowledge.status==='known_scope'?view.position_knowledge.scope.id:'位置尚未核实'}</p></>:workspace==='review'?<><h2>保存版本与历史记录</h2><p>历史只能查看；返回当前行动后才能编辑与保存。</p><label>历史节点<select aria-label="历史节点" value={historyNode} onChange={e=>setHistoryNode(e.target.value)}><option value="1">开局</option>{view.replay_nodes.map(n=><option key={n.revision} value={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy} onClick={()=>void review()}>查看历史节点</button>{history&&<button onClick={()=>void returnCurrent()}>返回当前行动</button>}</>:<><h2>指挥记录</h2>{view.log.map(x=><p key={x.id}>{clock(x.at)} · {x.text}</p>)}</>}</article>}
-      </div><footer className="mission-footer"><span data-testid="mission-resources">移动能量 {view.resources.movement_energy} · 联络能量 {view.resources.equipment_energy} · 总部能量 {view.resources.hq_energy}</span><span data-testid="mission-orders">尚未下达；无执行或预约</span>{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={e=>setAdvance(e.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
+          {issueReview&&<section aria-label="当前阶段下达核对"><h2>{issueReview.phase_id} · 下达前核对</h2><p>总部依据齐备仍需现场接令复核。使用既有参谋预授权，不产生新的批准。</p>{issueReview.preview.phases.filter(p=>p.phase_id===issueReview.phase_id).map(p=><div key={p.phase_id}><p>{p.authorization.status==='met'?'预授权已覆盖':p.authorization.gap}</p><GateSummary phase={p} at={view.sim_time}/></div>)}<label>下达理由（可留空）<textarea aria-label="下达理由（可留空）" value={reason} readOnly={history} onChange={e=>setReason(e.target.value)}/></label><button className="primary" disabled={blocked||dirty} onClick={()=>void checkIssue(true)}>确认下达 {issueReview.phase_id}</button><button disabled={busy} onClick={()=>setIssueReview(null)}>返回核对</button></section>}
+          {preview&&<section data-testid="mission-preview"><h2>公开估计与假设</h2>{preview.phases.map(p=><div key={p.phase_id}><p>{p.phase_id} · {p.distance} 图上米 · {p.estimated_move_ms===null?'耗时待核实':`${p.estimated_move_ms/1000} 秒`} {p.assumptions.join('；')} {p.gap}</p><p>{p.phase_id} · {p.authorization.status==='met'?'既有参谋预授权已覆盖':p.authorization.gap}</p><GateSummary phase={p} at={view.sim_time}/></div>)}<p>核对不会产生新的批准记录。估计不含消息等待，不能代替下达或现场接令。</p></section>}
+        </div><div className="mission-actions"><button disabled={blocked||dirty||!view.mission} onClick={()=>void checkIssue()}>核对当前阶段</button><button disabled={blocked} onClick={()=>void previewDraft()}>预览任务</button><button className="primary" disabled={blocked||!preview} onClick={()=>void saveDraft()}>保存草案</button></div></section>:workspace==='map'?<aside className="inspector"><h2>公开位置依据</h2><p>{selected}</p><p>仅显示总部已有的位置范围；绘制路线不会下达命令。</p><button onClick={()=>setWorkspace('tasks')}>返回任务规划</button></aside>:<article className="content-view">{workspace==='report'?<><h2>位置依据</h2><p>当前依据：{view.position_knowledge.status==='known_scope'?view.position_knowledge.scope.id:'位置尚未核实'}</p></>:workspace==='review'?<><h2>保存版本与历史记录</h2><p>历史只能查看；返回当前行动后才能编辑与保存。</p><label>历史节点<select aria-label="历史节点" value={historyNode} onChange={e=>setHistoryNode(e.target.value)}><option value="1">开局</option>{view.replay_nodes.map(n=><option key={n.revision} value={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy} onClick={()=>void review()}>查看历史节点</button>{history&&<button onClick={()=>void returnCurrent()}>返回当前行动</button>}</>:<><h2>指挥记录</h2>{view.log.map(x=><p key={x.id}>{clock(x.at)} · {x.text}</p>)}</>}</article>}
+      </div><footer className="mission-footer"><span data-testid="mission-resources">移动能量 {view.resources.movement_energy} · 联络能量 {view.resources.equipment_energy} · 总部能量 {view.resources.hq_energy}</span><span data-testid="mission-orders">{view.issued_orders.length?`已发送 ${view.issued_orders.length} 条指令；等待接令回报，结果尚未确认` : '尚未下达；无执行或预约'}</span>{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={e=>setAdvance(e.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
     </main></div>
   </div>;
 }

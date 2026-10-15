@@ -29,6 +29,7 @@ export function valid_request(
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['focus_lost','application_hidden'].includes(value.reason);
   if(value.kind==='preview_mission')return fields(value,['kind','request_id','run_id','revision','editing_seq','draft'])&&valid_id(value.run_id)&&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>=1&&typeof value.editing_seq==='number'&&Number.isSafeInteger(value.editing_seq)&&value.editing_seq>=0;
   if(value.kind==='save_plan')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='issue_mission')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='operate_mission')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")

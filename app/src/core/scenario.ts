@@ -54,11 +54,11 @@ function known_time(value:unknown):boolean{
   if(value.kind==='unknown')return fields(value,['kind']);
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
-export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition> {
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition> {
   if(record(input)&&input.schema===8){
     if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');
     if(!Array.isArray(input.profile.registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
-    return load_mission_definition(input);
+    return load_mission_definition(input,missions);
   }
   if(record(input)&&input.schema===7){
     if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');

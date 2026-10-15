@@ -1,4 +1,13 @@
 import type {MissionDraft,ConditionExpr} from '../src/mission-contracts';
+import definition from '../src/core/mission-definition.json';
+import {load_mission_definition,type MissionDefinition} from '../src/core/mission-definition';
+import {hash} from '../src/core/scenario';
+export async function mission_variant(change:(value:MissionDefinition)=>void):Promise<MissionDefinition>{
+  const value=await load_mission_definition(definition);change(value);
+  for(const entry of value.profile.registry)entry.value=value.profile.parameters[entry.id as keyof typeof value.profile.parameters];
+  for(const key of ['profile','capabilities','rules','catalogs'] as const)value.hashes[key]=await hash(value[key]);
+  const {definition_hash,...payload}=value;value.definition_hash=await hash(payload);return value;
+}
 export function mission_draft(run_id:string):MissionDraft{
   const ref=<K extends string>(kind:K,id:string,version=1)=>({run_id,kind,id,version});
   const yes:ConditionExpr={kind:'compare',field_ref:'capability.ready',operator:'eq',typed_value:true};
