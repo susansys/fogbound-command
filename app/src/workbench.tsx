@@ -330,7 +330,7 @@ export function Workbench() {
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
   const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];
   const lastActionReport=[...(view?.log??[])].reverse().find(entry=>entry.kind.endsWith('_receipt'));
-  if(playView)return <PlayWorkbench view={playView} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} displayStatus={displayStatus} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
+  if(playView)return <PlayWorkbench view={playView} channelError={error} storageFault={storageFault} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} displayStatus={displayStatus} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   return (
     <div className="app crisis-app">
       <header className="topbar">

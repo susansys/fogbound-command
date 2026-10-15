@@ -33,7 +33,7 @@ export type Response =
       plan?: Plan;
       receipt?: Receipt | null;
     }
-  | { request_id: string; ok: false; code: string };
+  | { request_id: string; ok: false; code: string;field_path?:string };
 export class Transport {
   private listeners=new Set<(response:Response)=>void>();
   subscribe(listener:(response:Response)=>void){this.listeners.add(listener);return ()=>{this.listeners.delete(listener);};}

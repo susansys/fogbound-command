@@ -1,6 +1,6 @@
 import type {Response} from './transport';
 import {prestart_case_refs} from './contracts';
-import {record,valid_id,valid_envelope} from './protocol';
+import {record,valid_id,valid_envelope,valid_public_field_path} from './protocol';
 import {validate_public_map} from './spatial';
 type Check=(value:unknown)=>boolean;
 const text:Check=v=>typeof v==='string'&&v.length<=2000;
@@ -71,7 +71,7 @@ const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:one
 const codes=['WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
-  if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)});
+  if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)},{field_path:path=>['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(String(value.code))&&valid_public_field_path(path)});
   if(!shape(value,{request_id:valid_id,ok:oneOf([true])},{view:player_view,plan,receipt,runs:list(run)}))return false;
   const keys=Object.keys(value).filter(key=>key!=='request_id'&&key!=='ok').sort().join(',');
   return ['view','plan','receipt','runs','receipt,view'].includes(keys);

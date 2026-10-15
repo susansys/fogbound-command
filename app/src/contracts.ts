@@ -153,7 +153,7 @@ export type Receipt = {
   snapshot_revision?:number;
 };
 export class GameError extends Error {
-  constructor(public code: string) {
+  constructor(public code: string,public field_path?:string) {
     super(code);
   }
 }

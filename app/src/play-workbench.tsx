@@ -21,15 +21,15 @@ function ScopeRead({scope}:{scope:SpatialScope}){
     <p>{scope.uncertainty.kind==='known'?`误差 ${scope.uncertainty.value} 图上米`:'误差未知'} · 输入精度 {scope.precision} 图上米</p>
   </>;
 }
-type Props={view:PlayPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;onHistory:(value:boolean)=>void;onLeave:()=>Promise<void>;displaySession?:RegionalDisplaySession;displayStatus:string};
-export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,displaySession,displayStatus}:Props){
+type Props={view:PlayPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;onHistory:(value:boolean)=>void;onLeave:()=>Promise<void>;displaySession?:RegionalDisplaySession;displayStatus:string;channelError:string;storageFault:boolean};
+export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,displaySession,displayStatus,channelError,storageFault}:Props){
   const [selected,setSelected]=useState('R'),[workspace,setWorkspace]=useState<'map'|'scopes'|'log'|'review'>('map');
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[note,setNote]=useState(''),[reviewTo,setReviewTo]=useState('0');
   const current=useRef(view);current.current=view;
   const pending=useRef<Envelope|null>(null),operationInFlight=useRef(false);
   const scope=selected==='R'?(view.position_knowledge.status==='known_scope'?view.position_knowledge.scope:undefined):view.geometry.scopes.find(x=>x.id===selected);
   async function control(intent:Intent){
-    if(history||operationInFlight.current)return;
+    if(history||storageFault||operationInFlight.current)return;
     operationInFlight.current=true;setBusy(true);setError('');
     const original=pending.current??{run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent};pending.current=original;
     try{
@@ -65,9 +65,10 @@ export function PlayWorkbench({view,transport,adopt,history,onHistory,onLeave,di
     await onLeave();
   }
   const knowledge=view.position_knowledge,observed=knowledge.status==='conflicting'?knowledge.observed:knowledge.observed;
+  const visibleError=channelError||error;
   return <div className="app crisis-app">
-    <header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong><span className="brand-sub">联合任务指挥部</span></span><span className="demo-badge">走廊行动</span><div className="clock"><strong>{clock(view.sim_time)}</strong><span>{view.paused?'已暂停':'指挥进行中'}{history?' · 历史只读':''}</span></div><button disabled={busy||history||!!pending.current} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{view.paused?'继续行动':'暂停行动'}</button><button disabled={busy||history} onClick={()=>void control({kind:'save'})}>保存行动</button></header>
-    {error&&<div className="fault" role="alert">{error_copy(error)}{pending.current&&<><button onClick={()=>void query()}>查询原操作</button><button onClick={()=>void control(pending.current!.intent)}>重试原操作</button></>}</div>}
+    <header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong><span className="brand-sub">联合任务指挥部</span></span><span className="demo-badge">走廊行动</span><div className="clock"><strong>{clock(view.sim_time)}</strong><span>{storageFault?'进度未确认':view.paused?'已暂停':'指挥进行中'}{history?' · 历史只读':''}</span></div><button disabled={busy||history||storageFault||view.mode!=='command'||!!pending.current} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{view.paused?'继续行动':'暂停行动'}</button><button disabled={busy||history||storageFault} onClick={()=>void control({kind:'save'})}>保存行动</button></header>
+    {visibleError&&<div className="fault" role="alert">{error_copy(visibleError)}{storageFault&&<button onClick={()=>window.location.reload()}>返回最近记录</button>}{pending.current&&<><button onClick={()=>void query()}>查询原操作</button><button disabled={storageFault} onClick={()=>void control(pending.current!.intent)}>重试原操作</button></>}</div>}
     <div className="contextbar"><strong>R · H—A—B 公开走廊</strong><span>总部只依据收到的定位；范围资料不等于通行状态已确认。</span></div>
     <div className="shell"><nav className="rail"><button className={workspace==='map'?'active':''} onClick={()=>setWorkspace('map')}><MapTrifold/><span>态势地图</span></button><button className={workspace==='scopes'?'active':''} onClick={()=>setWorkspace('scopes')}><Binoculars/><span>范围资料</span></button><button className={workspace==='log'?'active':''} onClick={()=>setWorkspace('log')}><ChatCenteredText/><span>指挥记录</span></button><button className={workspace==='review'?'active':''} onClick={()=>setWorkspace('review')}><ClockCounterClockwise/><span>行动复盘</span></button><button disabled={busy||!!pending.current} onClick={()=>void leave()}><ArrowsClockwise/><span>{history?'返回当前行动':'更换演练'}</span></button></nav>
     <main className="main"><div className="workspacebar"><h1>连续走廊</h1><span className="outline-tag">总部已收到的情况</span>{history&&<button onClick={()=>void returnCurrent()}>返回当前行动</button>}</div>

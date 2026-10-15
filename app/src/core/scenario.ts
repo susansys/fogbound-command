@@ -53,31 +53,41 @@ function known_time(value:unknown):boolean{
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
 export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[]): Promise<Definition|PlayDefinition> {
-  if(record(input)&&input.schema===7&&(!record(input.profile)||!record(input.profile.parameters)||!record(input.catalogs)||!record(input.catalogs.map)))
-    throw new GameError('CONFIG_PARAMETER_MISSING');
+  if(record(input)&&input.schema===7){
+    if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');
+    if(!record(input.catalogs)||!record(input.catalogs.map))throw new GameError('CONFIG_PARAMETER_MISSING','catalogs.map');
+  }
   if(record(input)&&input.schema===7&&record(input.catalogs)){
     const map=input.catalogs.map;validate_public_map(map);
-    if(!record(input.rules))throw new GameError('CONFIG_PARAMETER_MISSING');
+    if(!record(input.rules))throw new GameError('CONFIG_PARAMETER_MISSING','rules');
     const publicRules:Record<string,unknown>={};
     for(const key of Object.keys(playDefinition.rules).filter(key=>key!=='disabled_capabilities')){
-      if(!Object.hasOwn(input.rules,key))throw new GameError('CONFIG_PARAMETER_MISSING');
+      if(!Object.hasOwn(input.rules,key))throw new GameError('CONFIG_PARAMETER_MISSING','rules.'+key);
       publicRules[key]=input.rules[key];
     }
     const identity={map_id:map.map_id,map_version:map.map_version,crs_id:map.crs_id};
     const scopes=map.scopes.map(({geometry_version,...scope})=>scope);
-    if(await hash({identity,extent:map.extent,unit:map.unit,scopes,rules:publicRules})!==map.geometry_version)throw new GameError('INVALID_REQUEST');
+    if(await hash({identity,extent:map.extent,unit:map.unit,scopes,rules:publicRules})!==map.geometry_version)throw new GameError('INVALID_REQUEST','catalogs.map.geometry_version');
     const initial=input.catalogs.initial_evidence;
-    if(!record(initial)||!fields(initial,['id','scope_ref','observed','source_event_time','origin'])||!valid_id(initial.id)||!valid_id(initial.scope_ref)||initial.origin!=='registered_initial_evidence'||!known_time(initial.observed)||!known_time(initial.source_event_time)||!map.scopes.some(scope=>scope.id===initial.scope_ref))throw new GameError('INVALID_REQUEST');
+    if(!record(initial)||!fields(initial,['id','scope_ref','observed','source_event_time','origin'])||!valid_id(initial.id)||!valid_id(initial.scope_ref)||initial.origin!=='registered_initial_evidence'||!known_time(initial.observed)||!known_time(initial.source_event_time)||!map.scopes.some(scope=>scope.id===initial.scope_ref))throw new GameError('INVALID_REQUEST','catalogs.initial_evidence');
   }
   if(record(input)&&input.schema===7&&record(input.profile)&&record(input.profile.parameters)){
     const parameters=input.profile.parameters,registry=input.profile.registry;
-    if(!Array.isArray(registry))throw new GameError('CONFIG_PARAMETER_MISSING');
+    if(!Array.isArray(registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
     for(const required of playDefinition.profile.registry){
       const entries=registry.filter(entry=>record(entry)&&entry.id===required.id);
-      if(!Object.hasOwn(parameters,required.id)||entries.length===0||!record(entries[0])||entries[0].unit===undefined)throw new GameError('CONFIG_PARAMETER_MISSING');
-      if(entries[0].unit!==required.unit)throw new GameError('CONFIG_UNIT_MISMATCH');
-      if(entries.length!==1||typeof parameters[required.id]!=='number'||!Number.isFinite(parameters[required.id])||parameters[required.id]!==entries[0].value)throw new GameError('INVALID_DEFINITION');
+      if(!Object.hasOwn(parameters,required.id)||entries.length===0||!record(entries[0])||entries[0].unit===undefined)throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters.'+required.id);
+      if(entries[0].unit!==required.unit)throw new GameError('CONFIG_UNIT_MISMATCH',`profile.registry[${registry.indexOf(entries[0])}].unit`);
+      const value=parameters[required.id];
+      if(entries.length!==1||typeof value!=='number'||!Number.isFinite(value)||value!==entries[0].value)throw new GameError('INVALID_DEFINITION');
+      if(['base_speed','terrain_factor','environment_factor'].includes(required.id)){
+        if(value<=0)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
+      }else if(!Number.isSafeInteger(value)||value<0||value>required.value)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
+      if(['deadline','receipt_grace','link_ms','load_capacity','space_capacity'].includes(required.id)&&value!==required.value)throw new GameError('INVALID_REQUEST','profile.parameters.'+required.id);
     }
+    const rules=input.rules;
+    if(!record(rules))throw new GameError('CONFIG_PARAMETER_MISSING','rules');
+    for(const [key,value] of Object.entries(playDefinition.rules))if(JSON.stringify(rules[key])!==JSON.stringify(value))throw new GameError('INVALID_REQUEST','rules.'+key);
   }
   const selected = [...definitions,playDefinition,...registered].find(candidate => JSON.stringify(input) === JSON.stringify(candidate));
   if (!selected)

@@ -117,6 +117,41 @@ test('PG02 unknown observation rejects a fabricated zero even in an owned regist
   await expect(load_definition(variant,[variant])).rejects.toThrow('INVALID_REQUEST');
 });
 
+test('PG03 an owned registration cannot self-authorize a negative deadline with matching registry and hashes',async()=>{
+  const variant=await ownedVariant(value=>{value.profile.parameters.deadline=-1;value.profile.registry.find(x=>x.id==='deadline')!.value=-1;});
+  const store=new Persistence('b21-owned-invalid-parameter',[variant]);
+  try{
+    await expect(new Game(store).create_run(variant,'research','invalid-deadline')).rejects.toThrow('INVALID_REQUEST');
+    expect(await store.list_runs()).toEqual([]);expect(await store.creation('invalid-deadline')).toBeUndefined();
+  }finally{await store.delete();}
+});
+
+test('PG04 strict schema7 DTO rejects private extra properties on public arrays',async()=>{
+  const store=new Persistence('b21-owned-array-canary');
+  try{
+    const good=await new Game(store).create_run(playDefinition,'research','array-canary');
+    if(good.scenario_kind!=='play_corridor')throw Error('Expected schema7 view');
+    for(const choose of [
+      (v:typeof good)=>v.geometry.extent,
+      (v:typeof good)=>v.geometry.scopes,
+      (v:typeof good)=>v.geometry.scopes[0].evidence_refs,
+      (v:typeof good)=>{const scope=v.geometry.scopes[0];if(scope.kind!=='point')throw Error('Expected point');return scope.typed_geometry.position;},
+      (v:typeof good)=>{const scope=v.geometry.scopes.find(x=>x.id==='area-with-hole');if(scope?.kind!=='area')throw Error('Expected area');return scope.typed_geometry.outer;},
+    ]){
+      const value=structuredClone(good);Object.assign(choose(value),{private_canary:'ENGINE_ONLY'});
+      expect(valid_response({request_id:'array-canary',ok:true,view:value})).toBe(false);
+    }
+  }finally{await store.delete();}
+});
+
+test('PG03 geometry errors locate a bounded public field without reflecting private identities',async()=>{
+  const value=structuredClone(playDefinition);value.catalogs.map.scopes[0].typed_geometry!.position=[401,150];
+  await expect(load_definition(value)).rejects.toMatchObject({code:'INVALID_REQUEST',field_path:'catalogs.map.scopes[0].typed_geometry.position'});
+  expect(valid_response({request_id:'public-error',ok:false,code:'INVALID_REQUEST',field_path:'catalogs.map.scopes[0].typed_geometry.position'})).toBe(true);
+  expect(valid_response({request_id:'private-error',ok:false,code:'INVALID_REQUEST',field_path:'catalogs.engine_conditions.closed_at_x'})).toBe(false);
+  expect(valid_response({request_id:'private-error',ok:false,code:'INVALID_REQUEST',field_path:'ENGINE_ONLY'})).toBe(false);
+});
+
 const invalidGeometryCases:Array<[string,(value:typeof playDefinition)=>void,string]>=[
   ['hole outside outer',v=>{v.catalogs.map.scopes.find(x=>x.id==='area-with-hole')!.typed_geometry!.holes=[[[280,20],[290,20],[290,30],[280,30],[280,20]]];},'INVALID_REQUEST'],
   ['point outside extent',v=>{v.catalogs.map.scopes[0].typed_geometry!.position=[401,150];},'INVALID_REQUEST'],

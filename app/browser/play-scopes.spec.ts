@@ -23,3 +23,21 @@ test('PG01 six public scope kinds are readable through the registered scene and 
   await expect(page.getByTestId('scope-detail')).toBeInViewport({ratio:0.5});
   await page.screenshot({path:info.outputPath('scopes-readable.png'),fullPage:true});
 });
+
+test('PG04 a validated clock-fault channel response is visible and locks unconfirmed controls',async({page})=>{
+  // Owned external-channel fault injection; this does not claim a Dexie abort.
+  await page.addInitScript(()=>{
+    const NativeWorker=window.Worker;
+    const workers:Worker[]=[];
+    class OwnedWorker extends NativeWorker{constructor(url:string|URL,options?:WorkerOptions){super(url,options);if(String(url).includes('/assets/worker-'))workers.push(this);}}
+    window.Worker=OwnedWorker;
+    Object.assign(window,{__b21OwnedClockFault:()=>{if(workers.length!==1)throw Error('Expected sole Game Worker');workers[0].dispatchEvent(new MessageEvent('message',{data:{request_id:'clock-fault',ok:false,code:'STORAGE_UNCONFIRMED'}}));}});
+  });
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B21-CORRIDOR-01');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'连续走廊'})).toBeVisible();
+  await page.evaluate(()=>{const value=Reflect.get(window,'__b21OwnedClockFault');if(typeof value!=='function')throw Error('Owned channel seam unavailable');value();});
+  await expect(page.getByRole('alert')).toContainText('尚未确认保存');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
+  await expect(page.locator('.clock')).toContainText('进度未确认');
+});

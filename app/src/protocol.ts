@@ -7,6 +7,10 @@ export function record(value: unknown): value is Record<string, unknown> {
 export function valid_id(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(value);
 }
+export function valid_public_field_path(value:unknown):value is string{
+  if(typeof value!=='string'||value.length>180)return false;
+  return /^(catalogs\.map|catalogs\.initial_evidence|profile\.parameters|profile\.registry|rules)(?:\.(?:map_id|map_version|crs_id|geometry_version|extent|unit|scopes|id|kind|precision|uncertainty|typed_geometry|evidence_refs|position|outer|holes|area_refs|line|centerline|width|area_ref|value|evidence|scope_ref|observed|source_event_time|origin|deadline|receipt_grace|link_ms|base_speed|terrain_factor|environment_factor|load_capacity|space_capacity|movement_energy|record_energy|record_wear|equipment_energy|equipment_wear|record_packs|hq_energy|hq_wear|version|coordinate_grid|length_scale|length_rounding|duration_rounding|load_factor_per_unit|movement_energy_per_distance|report_policy|route_point_budget|conflict_candidate_budget|disabled_capabilities)|\[(?:0|[1-9]\d{0,9})\])*$/.test(value);
+}
 export function fields(
   value: Record<string, unknown>,
   expected: string[],

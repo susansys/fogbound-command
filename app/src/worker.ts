@@ -5,7 +5,7 @@ import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDe
 import { GameError,is_task_intent } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import type { Request, Response } from "./transport";
-import { valid_request, correlation } from "./protocol";
+import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-map-b-game-1");
@@ -160,7 +160,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       const code =
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
       if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
-      scope.postMessage({ request_id, ok: false, code } satisfies Response);
+      scope.postMessage({ request_id, ok: false, code,...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
     }
   });
 };
