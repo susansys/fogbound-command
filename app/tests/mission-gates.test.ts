@@ -6,6 +6,30 @@ import {mission_draft,mission_variant} from './mission-fixtures';
 import type {ConditionExpr,MissionTruth} from '../src/mission-contracts';
 import type {SpatialScope} from '../src/spatial';
 
+test('B22 equal observed point geometry with a different uncertainty proof keeps one position and both lawful proofs',async()=>{
+  const variant=await mission_variant(value=>{
+    value.catalogs.map.scopes.push({...value.catalogs.map.scopes.find(s=>s.id==='H')!,id:'same-point-other-proof',uncertainty:{kind:'known',value:0,unit:'fictional_metre',evidence:'same-point-report'}});
+    value.catalogs.position_reports=[{id:'same-point-report',origin:'R',target:'HQ',scope_ref:'same-point-other-proof',observed:{kind:'known',value:0,evidence:'same-point-report'},source_event_time:{kind:'unknown'},reported_at:0,delivery_at:1000}];
+  }),store=new Persistence('b22-owned-t02-same-shape-proof',[],[variant]);
+  try{
+    const game=new Game(store),initial=await game.create_run(variant,'research','create'),current=await game.control_clock({run_id:initial.run_id,operation_id:'deliver',expected_revision:1,intent:{kind:'advance',to:1000}});
+    if(current.view.scenario_kind!=='play_mission')throw Error('Expected mission view');
+    expect(current.view.position_knowledge).toMatchObject({status:'known_scope',scope:{kind:'point'},evidence_refs:['B22-INITIAL-POSITION','same-point-report']});
+  }finally{await store.delete();}
+});
+
+test.each(['closed_tangent','internal_union_edge'] as const)('B22 a possible-position disk at %s is completely contained',async kind=>{
+  const variant=await mission_variant(value=>{
+    const base=value.catalogs.map.scopes.find(s=>s.id==='H')!;
+    value.catalogs.map.scopes.push({...base,id:'boundary-disk',kind:'point',typed_geometry:{position:kind==='closed_tangent'?[100,150]:[150,150]},uncertainty:{kind:'known',value:kind==='closed_tangent'?10:1,unit:'fictional_metre',evidence:'B22-INITIAL-POSITION'}});
+    value.catalogs.map.scopes.push({...base,id:'joined-corridors',kind:'region_set',typed_geometry:{area_refs:['HA-area','AB-area']}});value.catalogs.initial_evidence.scope_ref='boundary-disk';
+  }),store=new Persistence('b22-owned-t02-closed-'+kind,[],[variant]);
+  try{
+    const game=new Game(store),view=await game.create_run(variant,'research','create'),draft=mission_draft(view.run_id);draft.phases[0].entry_gate={kind:'compare',field_ref:'position.scope',operator:'in',typed_value:kind==='closed_tangent'?'HA-area':'joined-corridors'};
+    expect((await game.preview_plan(view.run_id,view.revision,0,draft)).phases[0].gate.result).toBe('T');
+  }finally{await store.delete();}
+});
+
 test.each(['all','any'] as const)('B22 PG16 empty %s expression is rejected rather than defaulted true',async kind=>{
   const store=new Persistence('b22-owned-t02-empty-'+kind);
   try{
@@ -66,7 +90,7 @@ test.each(['future-report','unreceived-report','another-run-report','Q-private-r
 
 test.each([
   ['inside_point','T'],['closed_boundary','T'],['disjoint_point','F'],['straddling_uncertainty','U'],['unknown_uncertainty','U'],
-  ['inside_area','T'],['disjoint_area','F'],['straddling_area','U'],['hole_excluded','F'],['hole_spanned','U'],['union_area','T'],['corridor_area','T'],['edge_area','T']
+  ['inside_area','T'],['disjoint_area','F'],['straddling_area','U'],['hole_excluded','F'],['hole_spanned','U'],['hole_tangent','U'],['union_area','T'],['corridor_area','T'],['edge_area','T']
 ] as const)('B22 PG16 %s uses its entire possible position set: %s',async(kind,expected)=>{
   const variant=await mission_variant(value=>{
     const base=value.catalogs.map.scopes.find(s=>s.id==='H')!;
@@ -80,9 +104,9 @@ test.each([
     if(kind==='inside_area')scope=area([[60,145],[140,145],[140,155],[60,155],[60,145]]);
     if(kind==='disjoint_area')scope=area([[60,170],[140,170],[140,180],[60,180],[60,170]]);
     if(kind==='straddling_area')scope=area([[60,150],[140,150],[140,170],[60,170],[60,150]]);
-    if(kind==='hole_excluded'||kind==='hole_spanned'){
+    if(kind.startsWith('hole_')){
       value.catalogs.map.scopes.push({...base,id:'target-hole',kind:'area',typed_geometry:{outer:[[60,140],[140,140],[140,160],[60,160],[60,140]],holes:[[[90,145],[110,145],[110,155],[90,155],[90,145]]]}});
-      scope=kind==='hole_excluded'?point([100,150]):area([[70,142],[130,142],[130,158],[70,158],[70,142]]);
+      scope=kind==='hole_spanned'?area([[70,142],[130,142],[130,158],[70,158],[70,142]]):kind==='hole_tangent'?point([85,150],5):point([100,150]);
     }
     if(kind==='union_area'){
       value.catalogs.map.scopes.push({...base,id:'joined-regions',kind:'region_set',typed_geometry:{area_refs:['HA-area','AB-area']}});

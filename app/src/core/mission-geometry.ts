@@ -94,6 +94,33 @@ function boundary_distance(a:Shape,b:Shape):number{
   const ae=segments(a),be=segments(b),ap=[...a.points,...ae.flat()],bp=[...b.points,...be.flat()];
   return Math.min(...ap.flatMap(p=>[...bp.map(q=>Math.hypot(p[0]-q[0],p[1]-q[1])),...be.map(e=>point_segment_distance(p,e))]),...bp.flatMap(p=>ae.map(e=>point_segment_distance(p,e))));
 }
+function union_boundary(target:Shape):Array<{edge:Segment;closed:boolean}>|null{
+  const edges=segments(target),result:Array<{edge:Segment;closed:boolean}>=[];
+  for(const [a,b] of edges){
+    const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy),cuts=[0,1];
+    for(const [c,d] of edges){
+      const sx=d[0]-c[0],sy=d[1]-c[1],den=dx*sy-dy*sx;
+      if(den!==0){
+        const t=((c[0]-a[0])*sy-(c[1]-a[1])*sx)/den,u=((c[0]-a[0])*dy-(c[1]-a[1])*dx)/den;
+        if(t>0&&t<1&&u>=0&&u<=1)cuts.push(t);
+      }else if(cross(a,b,c)===0){
+        for(const p of [c,d]){const t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/(length*length);if(t>0&&t<1)cuts.push(t);}
+      }
+    }
+    const sorted=[...new Set(cuts)].sort((x,y)=>x-y);
+    for(let i=1;i<sorted.length;i++){
+      const from=sorted[i-1],to=sorted[i],middle=(from+to)/2,p:Coordinate=[a[0]+middle*dx,a[1]+middle*dy];
+      const gaps=edges.map(edge=>point_segment_distance(p,edge)).filter(d=>d>0),margin=Math.min(...gaps,(to-from)*length/4,0.001);
+      if(margin<=1e-8)return null;
+      const offset=margin/4,left=contains(target,[p[0]-dy/length*offset,p[1]+dx/length*offset]),right=contains(target,[p[0]+dy/length*offset,p[1]-dx/length*offset]),on=contains(target,p);
+      if(left==='uncertain'||right==='uncertain'||on==='uncertain')return null;
+      // Shared edges with legal area on both sides are internal. An excluded
+      // hole/crack stays a boundary even when both neighbouring cells are legal.
+      if(left!==right||on==='outside'&&(left==='inside'||right==='inside'))result.push({edge:[[a[0]+from*dx,a[1]+from*dy],[a[0]+to*dx,a[1]+to*dy]],closed:on==='inside'});
+    }
+  }
+  return result;
+}
 export function compare_mission_position(scope:SpatialScope,target:SpatialScope,operator:'eq'|'in',map:PublicMap):MissionTruth{
   if(scope.uncertainty.kind==='unknown')return 'U';
   const source=shape(scope,map),destination=shape(target,map);if(!source||!destination)return 'U';
@@ -105,6 +132,10 @@ export function compare_mission_position(scope:SpatialScope,target:SpatialScope,
   }
   const base=relation(source,destination);if(radius===0)return base;
   if(base==='F')return boundary_distance(source,destination)>radius?'F':'U';
-  // For a positive buffer only claim containment with a strictly proved margin.
-  return base==='T'&&boundary_distance(source,destination)>radius?'T':'U';
+  if(base!=='T')return 'U';
+  const boundary=union_boundary(destination);if(!boundary||!boundary.length)return 'U';
+  return boundary.every(({edge,closed})=>{
+    const distance=boundary_distance(source,{points:[],lines:[edge],areas:[]});
+    return closed?distance>=radius:distance>radius;
+  })?'T':'U';
 }

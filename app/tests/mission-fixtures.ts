@@ -1,9 +1,13 @@
 import type {MissionDraft,ConditionExpr} from '../src/mission-contracts';
 import definition from '../src/core/mission-definition.json';
+import geometryDefinition from '../src/core/play-definition.json';
 import {load_mission_definition,type MissionDefinition} from '../src/core/mission-definition';
 import {hash} from '../src/core/scenario';
 export async function mission_variant(change:(value:MissionDefinition)=>void):Promise<MissionDefinition>{
   const value=await load_mission_definition(definition);change(value);
+  const map=value.catalogs.map,identity={map_id:map.map_id,map_version:map.map_version,crs_id:map.crs_id};
+  const scopes=map.scopes.map(({geometry_version,...scope})=>scope),rules=Object.fromEntries(Object.entries(geometryDefinition.rules).filter(([key])=>key!=='disabled_capabilities'));
+  map.geometry_version=await hash({identity,extent:map.extent,unit:map.unit,scopes,rules});for(const scope of map.scopes)scope.geometry_version=map.geometry_version;
   for(const entry of value.profile.registry)entry.value=value.profile.parameters[entry.id as keyof typeof value.profile.parameters];
   for(const key of ['profile','capabilities','rules','catalogs'] as const)value.hashes[key]=await hash(value[key]);
   const {definition_hash,...payload}=value;value.definition_hash=await hash(payload);return value;

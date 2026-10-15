@@ -5,6 +5,29 @@ import {hash} from '../src/core/scenario';
 import {load_mission_definition,type MissionDefinition} from '../src/core/mission-definition';
 import definition from '../src/core/mission-definition.json';
 import {mission_draft} from './mission-fixtures';
+import {mission_variant} from './mission-fixtures';
+
+test.each(['link_ms','send_window_ms','hold_ms','deadline','receipt_grace'] as const)('B22 owned %s cannot silently replace its frozen timing contract',async field=>{
+  const variant=await mission_variant(value=>{value.profile.parameters[field]=1;}),store=new Persistence('b22-owned-t02-fixed-'+field,[],[variant]);
+  try{await expect(new Game(store).create_run(variant,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}finally{await store.delete();}
+});
+
+test.each(['too_fast','future_source'] as const)('B22 owned %s position report is rejected before persistence',async kind=>{
+  const variant=await mission_variant(value=>{value.catalogs.position_reports=[{id:'invalid-timing',origin:'R',target:'HQ',scope_ref:'H',observed:{kind:'known',value:0,evidence:'invalid-timing'},source_event_time:kind==='future_source'?{kind:'known',value:2000,evidence:'invalid-timing'}:{kind:'unknown'},reported_at:0,delivery_at:kind==='too_fast'?1:1000}];}),store=new Persistence('b22-owned-t02-causal-'+kind,[],[variant]);
+  try{await expect(new Game(store).create_run(variant,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}finally{await store.delete();}
+});
+
+test('B22 owned changed public geometry with the old geometry digest is rejected even with new private hashes',async()=>{
+  const variant=await load_mission_definition(definition),scope=variant.catalogs.map.scopes.find(s=>s.id==='approximate');
+  if(scope?.kind!=='point')throw Error('Expected the registered point');scope.typed_geometry.position=[80,150];
+  await seal(variant);const store=new Persistence('b22-owned-t02-stale-public-geometry',[],[variant]);
+  try{await expect(new Game(store).create_run(variant,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}finally{await store.delete();}
+});
+
+test.each([['send_energy_cost',0],['send_energy_cost',2],['send_wear_cost',0],['send_wear_cost',2]] as const)('B22 owned %s=%i cannot redefine the frozen one-per-send charge',async(field,cost)=>{
+  const variant=await mission_variant(value=>{value.profile.parameters[field]=cost;}),store=new Persistence('b22-owned-t02-cost-'+field+cost,[],[variant]);
+  try{await expect(new Game(store).create_run(variant,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}finally{await store.delete();}
+});
 
 async function seal(value:MissionDefinition):Promise<MissionDefinition>{
   for(const key of ['profile','capabilities','rules','catalogs'] as const)value.hashes[key]=await hash(value[key]);

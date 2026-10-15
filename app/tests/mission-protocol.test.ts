@@ -6,6 +6,11 @@ import {Persistence} from '../src/core/persistence';
 import definition from '../src/core/mission-definition.json';
 import {mission_draft,mission_variant} from './mission-fixtures';
 
+test.each(['AUTHORITY_DENIED','EVIDENCE_REQUIRED','CONSTRAINT_HOLD','CONSTRAINT_DENIED','CAPACITY_CONFLICT','STATE_CONFIRMATION_REQUIRED'])('B22 the public %s refusal crosses Transport without becoming CHANNEL_UNCERTAIN',code=>{
+  expect(valid_response({request_id:'actual-refusal',ok:false,code})).toBe(true);
+  expect(valid_response({request_id:'private-detail',ok:false,code,world_position:[50,150]})).toBe(false);
+});
+
 test('B22 issue requests and the actual frozen order view cross the Worker seam without client identity',async()=>{
   const store=new Persistence('b22-owned-t02-issue-protocol');
   try{

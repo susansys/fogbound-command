@@ -4,6 +4,15 @@ async function begin(page:Page){
   await page.getByLabel('任务目的',{exact:true}).fill('按既有预授权核对当前阶段');await page.getByLabel('期望结果',{exact:true}).fill('核对完成后再明确下达');
 }
 
+test('B22 an actual hard refusal remains a clear refusal rather than an unknown submission',async({page})=>{
+  await observeIssue(page);await begin(page);await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');await expect(page.getByTestId('mission-preview')).toBeVisible();await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 1');
+  await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.getByTestId('mission-readiness')).toContainText('时间窗不满足');
+  await page.getByRole('button',{name:'核对当前阶段',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'确认下达 P1',exact:true})).toBeEnabled();await page.getByRole('button',{name:'确认下达 P1',exact:true}).press('Enter');
+  await expect(page.getByRole('alert')).toContainText('已知硬条件、资源或时间窗不满足');await expect(page.getByRole('button',{name:'查询下达结果',exact:true})).toHaveCount(0);
+  await expect(page.getByTestId('mission-orders')).toContainText('尚未下达');await expect(page.getByTestId('mission-resources')).toContainText('总部能量 16');
+  const trace=await page.evaluate(()=>Reflect.get(window,'__b22IssueTrace') as {responses:Array<{ok:boolean;code?:string}>});expect(trace.responses.some(r=>!r.ok&&r.code==='CONSTRAINT_DENIED')).toBe(true);
+});
+
 test('B22 current issue readiness updates independently of an older readable preview',async({page})=>{
   await begin(page);await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');await expect(page.getByTestId('mission-preview')).toBeVisible();await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 1');
   await expect(page.getByTestId('mission-readiness')).toContainText('可直接下达');

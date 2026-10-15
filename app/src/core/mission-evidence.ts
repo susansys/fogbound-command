@@ -6,8 +6,9 @@ import {canonical} from './snapshot';
 
 type Candidate=Extract<PositionKnowledge,{status:'conflicting'}>['candidates'][number];
 const scope_identity=(scope:Candidate['scope'])=>{
-  const {id,evidence_refs,...geometry}=scope;
-  return JSON.stringify(canonical(geometry));
+  const {id,evidence_refs,uncertainty,...geometry}=scope;
+  const error=uncertainty.kind==='known'?{kind:uncertainty.kind,value:uncertainty.value,unit:uncertainty.unit}:uncertainty;
+  return JSON.stringify(canonical({...geometry,uncertainty:error}));
 };
 function merge_position(current:PositionKnowledge,incoming:Candidate):PositionKnowledge{
   if(incoming.observed.kind==='unknown')return current;

@@ -1,4 +1,5 @@
 import registered from './mission-definition.json';
+import geometryDefinition from './play-definition.json';
 import {GameError} from '../contracts';
 import {hash} from './scenario';
 import {validate_public_map,type PublicMap} from '../spatial';
@@ -39,6 +40,8 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
   }
   if(await hash([])!==value.hashes.media)throw new GameError('INVALID_DEFINITION');
   const p=value.profile.parameters;
+  if(p.send_energy_cost!==1||p.send_wear_cost!==1)throw new GameError('INVALID_DEFINITION');
+  for(const key of ['link_ms','send_window_ms','hold_ms','deadline','receipt_grace'] as const)if(p[key]!==registered.profile.parameters[key])throw new GameError('INVALID_DEFINITION');
   for(const spec of [{id:'R:move',action:'move',unit:'fictional_metre/s',capacity:p.move_capacity,group:'R:execution'},{id:'R:link',action:'send',unit:'message',capacity:p.link_capacity,group:'R:communication'}]){
     const matches=value.capabilities.filter(cap=>cap.id===spec.id);
     if(!matches.length)throw new GameError('CONFIG_PARAMETER_MISSING','capabilities');
@@ -51,6 +54,10 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
   }
   if(value.capabilities.length!==2)throw new GameError('INVALID_DEFINITION');
   validate_public_map(value.catalogs.map);
+  const map=value.catalogs.map,identity={map_id:map.map_id,map_version:map.map_version,crs_id:map.crs_id};
+  const scopes=map.scopes.map(({geometry_version,...scope})=>scope);
+  const publicRules=Object.fromEntries(Object.entries(geometryDefinition.rules).filter(([key])=>key!=='disabled_capabilities'));
+  if(await hash({identity,extent:map.extent,unit:map.unit,scopes,rules:publicRules})!==map.geometry_version)throw new GameError('INVALID_DEFINITION');
   const initial=value.catalogs.initial_evidence;
   if(!registered_time(initial.observed)||!registered_time(initial.source_event_time)||!valid_id(initial.id)||!value.catalogs.map.scopes.some(scope=>scope.id===initial.scope_ref)||initial.max_age_ms!==p.position_max_age_ms||initial.valid_until_time_ms!==p.evidence_valid_until)throw new GameError('INVALID_DEFINITION');
   if(initial.observed.kind==='known'&&initial.observed.value>0||initial.source_event_time.kind==='known'&&initial.source_event_time.value>0)throw new GameError('INVALID_DEFINITION');
@@ -58,7 +65,7 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
   if(reports!==undefined){
     if(!dense_array(reports)||reports.length>32||new Set(reports.map(r=>r.id)).size!==reports.length)throw new GameError('INVALID_DEFINITION');
     for(const r of reports){
-      if(!record(r)||!fields(r,['id','origin','target','scope_ref','observed','source_event_time','reported_at','delivery_at'])||!valid_id(r.id)||r.id===initial.id||!['R','Q'].includes(r.origin)||!['HQ','R'].includes(r.target)||!value.catalogs.map.scopes.some(s=>s.id===r.scope_ref)||!registered_time(r.observed)||!registered_time(r.source_event_time)||!Number.isSafeInteger(r.reported_at)||r.reported_at<0||!Number.isSafeInteger(r.delivery_at)||r.delivery_at<r.reported_at||r.delivery_at>p.deadline+p.receipt_grace||r.observed.kind==='known'&&r.observed.value>r.reported_at)throw new GameError('INVALID_DEFINITION');
+      if(!record(r)||!fields(r,['id','origin','target','scope_ref','observed','source_event_time','reported_at','delivery_at'])||!valid_id(r.id)||r.id===initial.id||!['R','Q'].includes(r.origin)||!['HQ','R'].includes(r.target)||!value.catalogs.map.scopes.some(s=>s.id===r.scope_ref)||!registered_time(r.observed)||!registered_time(r.source_event_time)||!Number.isSafeInteger(r.reported_at)||r.reported_at<0||!Number.isSafeInteger(r.delivery_at)||r.delivery_at<r.reported_at+p.link_ms||r.delivery_at>p.deadline+p.receipt_grace||r.observed.kind==='known'&&r.observed.value>r.reported_at||r.source_event_time.kind==='known'&&r.source_event_time.value>r.reported_at)throw new GameError('INVALID_DEFINITION');
     }
   }
   for(const [key,limit] of Object.entries(mission_input_limits))if(value.profile.parameters[key as keyof typeof value.profile.parameters]!==limit)throw new GameError('INVALID_DEFINITION');
