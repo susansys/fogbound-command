@@ -20,6 +20,19 @@ test('B23 E24 an unreported missing record qualification is checked locally and 
   expect(observations[0]).toEqual(observations[1]);
 });
 
+test('B23 review local actor view cannot see an HQ order or its evidence until actual1000ms delivery',async()=>{
+  const store=new Persistence('b23-owned-t03-local-visibility');
+  try{
+    const game=new Game(store),initial=await game.create_run(await intelligence_variant(()=>{}),'research','create'),before=await game.get_actor_view(initial.run_id,'R'),ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+    const issued=await game.issue_activity({run_id:initial.run_id,operation_id:'move',expected_revision:1,intent:{kind:'issue_activity',actor_ref:ref('actor','R'),activity_ref:ref('activity','R-to-A'),authority_ref:ref('authority','HQ-field-authority'),basis_delivery_refs:[]}});
+    expect(await game.get_actor_view(initial.run_id,'R')).toEqual(before);
+    const pending=await game.control_clock({run_id:initial.run_id,operation_id:'before-delivery',expected_revision:issued.view.revision,intent:{kind:'advance',to:999}});
+    expect(await game.get_actor_view(initial.run_id,'R')).toMatchObject({activities:[],message_facts:[]});
+    await game.control_clock({run_id:initial.run_id,operation_id:'delivered',expected_revision:pending.view.revision,intent:{kind:'advance',to:1000}});
+    expect(await game.get_actor_view(initial.run_id,'R')).toMatchObject({activities:[{status:'running',arrives_at:1000,payload:{activity_ref:{id:'R-to-A'}}}]});
+  }finally{await store.delete();}
+});
+
 test('B23 E24 WORK-only R retains movement but has no portable report capability; HQ cannot infer its private arrival',async()=>{
   const definition=await intelligence_variant(d=>Reflect.set(d.catalogs,'local_conditions',[{actor:'R',qualifications:null,equipment:['WORK'],record_energy:null,record_packs:null,position_scope:null,facility_authorized:null,source_ref:'B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E24'}])),store=new Persistence('b23-owned-t03-work-only-R',[],[],[definition]);
   try{

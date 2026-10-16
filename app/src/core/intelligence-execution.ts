@@ -83,4 +83,11 @@ export function advance_field_work(state:IntelligenceState,to:number,definition:
     }else{r.movement_energy-=movement_consumed;r.movement_energy_reserved-=order.reserved_energy;if(complete)actor.position.site=activity.to;}
     report(state,order,actor,complete?'completed':'cutoff',end,definition);
   }
+  // Independent actors may be advanced in one batch or several. Persist the
+  // same chronological facts in both cases, with immutable refs breaking ties.
+  const compare_ref=(a:string,b:string)=>a<b?-1:a>b?1:0;
+  state.field.reports.sort((a,b)=>a.observed.value-b.observed.value||compare_ref(a.ref.id,b.ref.id));
+  state.field.deliveries.sort((a,b)=>a.received-b.received||compare_ref(a.ref.id,b.ref.id));
+  const report_times=new Map(state.field.reports.map(r=>[r.ref.id,r.observed.value]));
+  state.field.messages.sort((a,b)=>report_times.get(a.report_ref.id)!-report_times.get(b.report_ref.id)!||compare_ref(a.report_ref.id,b.report_ref.id));
 }

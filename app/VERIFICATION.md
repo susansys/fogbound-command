@@ -527,3 +527,15 @@ those earlier receipts are not relabeled as a final-SHA native run. This section
 is a review-candidate scope record. Fresh fixed-source gates and independent
 Spec/Standards must precede T03 exit. T04, final batch CI/PR/main and formal
 experience remain open; original244AT are all not_run.
+
+T03 fixed-candidate review293d34f found two Spec P2s and one overlapping
+Standards P2: a LocalActorView included an issued order before its actual
+delivery, and concurrent R/W reports depended on advancement chunking. New
+public Game regressions retain real failing and passing runs. Local activities
+now require actual arrival; persisted field reports, deliveries and message
+facts use chronological ordering with immutable reference tie breaks. The
+nonblocking duplicate schema9 write protocol was consolidated in one private
+Game method during review, retaining typed public parsers and receipt/fault
+semantics. Focused recovery/gates/work/source tests and types passed after this
+refactor. Fresh full core, browser/native evidence and independent fixed-SHA
+rereviews remain required before ticket exit; previous runs are not relabeled.

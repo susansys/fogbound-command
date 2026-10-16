@@ -3,6 +3,29 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {intelligence_definition} from './intelligence-fixtures';
 
+test('B23 E29 concurrent R movement and W repair retain chronological HQ reports and equal local facts across advance boundaries',async()=>{
+  const outcomes=[];
+  for(const chunked of [false,true]){
+    const store=new Persistence('b23-owned-t03-concurrent-chunks-'+chunked);
+    try{
+      const game=new Game(store),initial=await game.create_run(await intelligence_definition(),'research','create');let view=await game.get_view(initial.run_id);
+      const ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+      const advance=async(to:number)=>{view=(await game.control_clock({run_id:initial.run_id,operation_id:'at-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+      const saved=await game.save_plan({run_id:initial.run_id,operation_id:'draft',expected_revision:view.revision,intent:{kind:'save_plan',base_plan_ref:null,draft:{purpose:'维修',repair_packs:2}}});
+      view=(await game.request_preparation({run_id:initial.run_id,operation_id:'prepare',expected_revision:saved.view.revision,intent:{kind:'request_preparation',plan_ref:saved.view.plan!.ref}})).view;
+      await advance(146000);
+      const approval=Reflect.get(view,'preparation_results')[0].delivery.ref;
+      for(const [actor,activity] of [['R','R-to-A'],['W','W-repair']])view=(await game.issue_activity({run_id:initial.run_id,operation_id:activity,expected_revision:view.revision,intent:{kind:'issue_activity',actor_ref:ref('actor',actor),activity_ref:ref('activity',activity),authority_ref:ref('authority','HQ-field-authority'),basis_delivery_refs:actor==='W'?[approval]:[]}})).view;
+      if(chunked)for(const to of [148000,177500])await advance(to);await advance(213000);
+      const reports=Reflect.get(view,'field_reports');
+      expect(reports.map(({report,delivery}:any)=>[report.actor,report.phase,delivery.received])).toEqual([['R','accepted',148000],['W','accepted',148000],['R','completed',177500],['W','completed',213000]]);
+      const {revision:_,replay_nodes:__,...publicFacts}=view;
+      outcomes.push(JSON.stringify({publicFacts,R:await game.get_actor_view(initial.run_id,'R'),W:await game.get_actor_view(initial.run_id,'W')}).replaceAll(initial.run_id,'<run>'));
+    }finally{await store.delete();}
+  }
+  expect(outcomes[0]).toEqual(outcomes[1]);
+});
+
 test('B23 E29 one large advance and small boundary steps generate identical artifact, resources and reports',async()=>{
   const outcomes=[];
   for(const chunked of [false,true]){
