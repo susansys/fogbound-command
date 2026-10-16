@@ -3,6 +3,14 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {intelligence_definition,intelligence_variant} from './intelligence-fixtures';
 
+test('B23 initial public B repair requirement is explicit and does not imply private access verification',async()=>{
+  const store=new Persistence('b23-owned-initial-B-repair');
+  try{
+    const game=new Game(store),view=await game.create_run(await intelligence_definition(),'research','create');
+    expect(view).toMatchObject({repair_condition:{site:'B',status:'required',confirmed_at:0,evidence_ref:'B23-INITIAL-B-REPAIR'},access:{blue:'unverified',green:'unverified'},received_reports:[]});
+  }finally{await store.delete();}
+});
+
 test('B23 E07 source performs its complete two-work recipe before publication and HQ receives it later',async()=>{
   const store=new Persistence('b23-owned-t01-e07');
   try{

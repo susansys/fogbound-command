@@ -73,7 +73,7 @@ export function Workbench() {
   const [intelligenceView,setIntelligenceView]=useState<IntelligencePlayerView|null>(null);
   const shownRun=useRef<string|null>(null);shownRun.current=intelligenceView?.run_id??missionView?.run_id??playView?.run_id??view?.run_id??null;
   function setView(next:GamePlayerView|null){
-    if(next?.scenario_kind==='play_intelligence'){setIntelligenceView(next);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
+    if(next?.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(next);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
     setIntelligenceView(null);
     if(next?.scenario_kind==='play_mission'){setMissionView(next);setPlayView(null);setLegacyView(null);return;}
     setMissionView(null);
@@ -88,7 +88,7 @@ export function Workbench() {
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:GamePlayerView){
-    if(next.scenario_kind==='play_intelligence'){setIntelligenceView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
+    if(next.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
     setIntelligenceView(null);
     if(next.scenario_kind==='play_mission'){setMissionView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setPlayView(null);setLegacyView(null);return;}
     if(next.scenario_kind==='play_corridor'){setPlayView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setLegacyView(null);}
@@ -357,7 +357,7 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
-  if(intelligenceView)return <IntelligenceWorkbench key={intelligenceView.run_id} view={intelligenceView} transport={transport} adopt={setView} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
+  if(intelligenceView)return <IntelligenceWorkbench key={intelligenceView.run_id} view={intelligenceView} transport={transport} adopt={setView} history={history} hasLiveRun={liveView.current?.run_id===intelligenceView.run_id} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);liveView.current=null;createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   if(missionView)return <MissionWorkbench key={history?liveView.current?.run_id??missionView.run_id:missionView.run_id} view={missionView} transport={transport} adopt={setView} onNewRun={adoptNewPlayRun} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   const prestart=view?.scenario_kind==='prestart_move';
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';

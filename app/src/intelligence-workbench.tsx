@@ -6,8 +6,8 @@ import type {Transport,Request} from './transport';
 import type {RegionalDisplaySession} from './regional-display';
 import {MapView} from './map';
 import {clock,error_copy} from './player-copy';
-type Props={view:IntelligencePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>};
-export function IntelligenceWorkbench({view,transport,adopt,history,onHistory,displaySession,onLeave}:Props){
+type Props={view:IntelligencePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;history:boolean;hasLiveRun:boolean;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>};
+export function IntelligenceWorkbench({view,transport,adopt,history,hasLiveRun,onHistory,displaySession,onLeave}:Props){
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[advance,setAdvance]=useState('21'),[selected,setSelected]=useState('R'),[pauseUnknown,setPauseUnknown]=useState(false);
   const [expanded,setExpanded]=useState<string[]>([]),[node,setNode]=useState('1');
   const current=useRef(view),pending=useRef<Envelope|null>(null),inFlight=useRef(false),nodes=useRef(view.replay_nodes);current.current=view;
@@ -45,7 +45,7 @@ export function IntelligenceWorkbench({view,transport,adopt,history,onHistory,di
     if(busy||pending.current)return;setBusy(true);
     try{const response=await transport.request({kind:'replay',run_id:view.run_id,to:0,node_revision:Number(node)});if(response.ok&&response.view){onHistory(true);adopt(response.view);}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
-  async function currentView(){setBusy(true);try{const response=await transport.request({kind:'current',run_id:view.run_id});if(response.ok&&response.view){onHistory(false);adopt(response.view);}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function currentView(){setBusy(true);try{const response=await transport.request({kind:'current',run_id:view.run_id});if(response.ok&&response.view){if(hasLiveRun){onHistory(false);adopt(response.view);}else await onLeave();}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
   async function query(){const envelope=pending.current;if(!envelope||busy)return;setBusy(true);try{const response=await transport.request({kind:'receipt',run_id:envelope.run_id,operation_id:envelope.operation_id});if(response.ok&&response.receipt){pending.current=null;await request({kind:'view',run_id:envelope.run_id});setNotice('原操作已提交，未再次执行。');}else if(!response.ok)setError(response.code);else setNotice('尚未查到原操作收据；请保留原操作核查或重试。');}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
   const blocked=busy||history||!!pending.current||pauseUnknown;
   return <div className="app crisis-app mission-app intelligence-app">
@@ -60,6 +60,7 @@ export function IntelligenceWorkbench({view,transport,adopt,history,onHistory,di
       <div className="workbody mission-body"><MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={displaySession}/>
       <aside id="intelligence-sources" tabIndex={-1} className="intelligence-sources" aria-label="总部已收原始资料">
         <section role="region" aria-label="总部最后确认的编组"><h2>最后确认的编组</h2>{view.actors.map(a=><div key={a.actor}><h3>{a.actor} · {a.role==='record_keeper'?'记录组':'作业组'} · {a.people}人</h3><p>确认于 {clock(a.confirmed_at)} · {a.position_scope} · 负重 {a.load}／{a.load_capacity} · 空间 {a.space}／{a.space_capacity}</p><p>{a.actor==='R'?'记录':'维修'}能量 {a.equipment_energy} · 耐久 {a.durability} · {a.actor==='R'?'记录':'维修'}包 {a.packs}</p>{a.link&&<p>便携联络能量 {a.link.energy} · 耐久 {a.link.durability}</p>}</div>)}</section>
+        <section role="region" aria-label="总部已知的任务前提"><h3>已知任务前提</h3><p>{view.repair_condition.site}需维修 · 开局公开条件 · 确认于 {clock(view.repair_condition.confirmed_at)}。</p><p>蓝／绿访问凭证仍待核实；维修完成须等待合法回报。</p></section>
         <section data-testid="intelligence-processing"><h3>一个处理席位</h3><p>开局已接受工作占用至 {clock(view.processing.initial_occupied_until)}。处理能量最后确认 {view.processing.energy_confirmed}；产品须等待合法递交。</p></section>
         <h2>已收原始资料</h2><p>蓝／绿访问凭证均待核实；转发次数不等于独立来源数。</p>
         {view.source_groups.length===0&&<p>尚未收到原文。总部没有当前源时点或现场采集进展。</p>}
@@ -69,7 +70,7 @@ export function IntelligenceWorkbench({view,transport,adopt,history,onHistory,di
           {open&&<div id={'source-details-'+report.id}><p className="original-report">{report.text}</p><p>{report.source_descriptor}</p><p>{report.source_event_time.kind==='unknown'?'来源时点不详':'来源时点 '+clock(report.source_event_time.value)} · 观察 {report.observed.kind==='known'?clock(report.observed.value):'时点不详'} · 发布 {clock(report.source_published)}</p><ul data-testid={'intelligence-deliveries-'+report.id}>{view.received_reports.filter(x=>group.delivery_refs.includes(x.delivery.id)).map(({delivery})=><li key={delivery.id}>收到 {clock(delivery.received)} · {delivery.forward_of?'附已收到的转交凭证':'来源关系尚未明确'}</li>)}</ul></div>}
         </article>;})}
       </aside></div>
-      <footer className="mission-footer"><label>历史节点<select id="intelligence-history" aria-label="历史节点" value={node} onChange={event=>setNode(event.target.value)}><option value="1">开局 · 记录 1</option>{nodes.current.map(n=><option value={n.revision} key={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy||!!pending.current} onClick={()=>void review()}>查看历史节点</button>{history&&<button disabled={busy} onClick={()=>void currentView()}>返回当前行动</button>}{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={event=>setAdvance(event.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
+      <footer className="mission-footer"><label>历史节点<select id="intelligence-history" aria-label="历史节点" value={node} onChange={event=>setNode(event.target.value)}><option value="1">开局 · 记录 1</option>{nodes.current.map(n=><option value={n.revision} key={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy||!!pending.current} onClick={()=>void review()}>查看历史节点</button>{history&&<button disabled={busy} onClick={()=>void currentView()}>{hasLiveRun?'返回当前行动':'返回演练入口'}</button>}{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={event=>setAdvance(event.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
     </main></div>
   </div>;
 }

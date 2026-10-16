@@ -12,5 +12,6 @@ export type IntelligencePlayerView={
   geometry:PublicMap;can_issue:false;next_action:string;gap:string;replay_nodes:PlayerView['replay_nodes'];log:PlayerView['log'];
   position_knowledge:PositionKnowledge;
   actors:IntelligenceActorConfirmation[];
+  repair_condition:{site:'B';status:'required';confirmed_at:number;evidence_ref:string};
   processing:{capacity:number;initial_occupied_until:number;energy_confirmed:number;confirmed_at:number};
 };

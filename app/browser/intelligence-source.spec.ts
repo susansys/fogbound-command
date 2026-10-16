@@ -1,5 +1,26 @@
 import {test,expect} from '@playwright/test';
 
+test('B23 retained history after reload stays read-only until explicit takeover, while active history returns to its live run',async({page})=>{
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B23-INTELLIGENCE-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+  await page.getByLabel('推进到时刻（秒）').fill('31');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');
+  await expect(page.getByTestId('intelligence-source-R1')).toContainText('2次递交');
+  await page.getByLabel('历史节点').selectOption('1');await page.getByRole('button',{name:'查看历史节点',exact:true}).press('Enter');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
+  await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');
+  await expect(page.getByTestId('intelligence-source-R1')).toContainText('2次递交');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeEnabled();
+  await page.reload();await page.getByRole('button',{name:'查看记录',exact:true}).press('Enter');
+  await expect(page.getByTestId('intelligence-source-R1')).toContainText('2次递交');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
+  await expect(page.getByTestId('intelligence-source-R3')).toHaveCount(0);
+  await page.getByRole('button',{name:'返回演练入口',exact:true}).press('Enter');
+  await page.getByRole('button',{name:'接手这场演练',exact:true}).press('Enter');
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeEnabled();
+  await page.getByLabel('推进到时刻（秒）').fill('41');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');
+  await expect(page.getByTestId('intelligence-source-R1')).toContainText('3次递交');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('B23 E08 keyboard source expansion and historical node expose only deliveries received then',async({page})=>{
   await page.goto('/');await page.getByLabel('演练任务').selectOption('B23-INTELLIGENCE-01');
   await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
@@ -65,5 +86,7 @@ test('B23 E01 initial actor and shared seat confirmations are visible without in
   await expect(initial).toContainText('R · 记录组 · 3人');await expect(initial).toContainText('记录能量 20 · 耐久 100 · 记录包 2');
   await expect(initial).toContainText('W · 作业组 · 3人');await expect(initial).toContainText('维修能量 24 · 耐久 100 · 维修包 2');
   await expect(page.getByTestId('intelligence-processing')).toContainText('一个处理席位');await expect(page.getByTestId('intelligence-processing')).toContainText('01:25');
+  await expect(page.getByRole('region',{name:'总部已知的任务前提'})).toContainText('B需维修');
+  await expect(page.getByRole('region',{name:'总部已知的任务前提'})).toContainText('开局公开条件');
   await expect(page.getByRole('button',{name:'R · 记录组',exact:true})).toBeVisible();await expect(page.locator('body')).not.toContainText('总部能量');
 });

@@ -4,6 +4,18 @@ import {Persistence} from '../src/core/persistence';
 import {intelligence_definition} from './intelligence-fixtures';
 import {state_hash} from '../src/core/snapshot';
 
+test.each([0,31000])('B23 retained-history entry reads the latest committed schema9 view at %i without an explicit node',async at=>{
+  const store=new Persistence('b23-owned-t01-retained-'+at);
+  try{
+    const game=new Game(store);let view=await game.create_run(await intelligence_definition(),'research','create');
+    if(at)({view}=await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:at}}));
+    const reopened=new Game(store),history=await reopened.get_replay(view.run_id,at);
+    expect(await history.get_view(view.run_id)).toEqual({...view,next_action:'历史记录只能查看，请返回当前行动后安排任务'});
+    await expect(history.save({run_id:view.run_id,operation_id:'history-write',expected_revision:view.revision,intent:{kind:'save'}})).rejects.toThrow('HISTORY_READ_ONLY');
+    expect(await reopened.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});
+
 test('B23 E09 an acknowledged-unknown commit retries the same receipt without another publication or delivery',async()=>{
   const store=new Persistence('b23-owned-t01-e09');
   try{

@@ -424,3 +424,14 @@ default-pool pass. No timeout or old oracle was relaxed; final remote CI remains
 mandatory. Old schemas/definitions and original244AT stay separate; original244AT
 are all `not_run`. T01 fixed-SHA independent Spec/Standards and final current-build
 native recovery are still required before integrating/closing the ticket.
+
+T01 initial independent review on14a0b34 found zero Standards blockers and two
+Spec P2 findings: schema9 latest-commit history was unreachable through retained
+records after reload, and the public initial B-repair requirement was absent.
+The original findings are retained. Game-seam REDs reproduced both omissions;
+the history correction also has a real-browser RED/GREEN covering live-history
+return, reloaded read-only entry and explicit takeover. Initial repair-condition
+UI RED failed with the actual DTO available; the interface now displays its
+registered initial confirmation separately from still-unverified access.
+Current repair verification and independent fixed-commit rereview remain pending;
+earlier14a0b34 native four-launch recovery passed but cannot sign this new source.
