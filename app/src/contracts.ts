@@ -150,7 +150,7 @@ export type Receipt = {
   sim_time: number;
   fingerprint: string;
   result: "committed";
-  kind: Intent["kind"]|'save_plan'|'issue_mission';
+  kind: Intent["kind"]|'save_plan'|'issue_mission'|'append_explanation';
   snapshot_revision?:number;
 };
 export class GameError extends Error {

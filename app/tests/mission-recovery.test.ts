@@ -4,6 +4,7 @@ import {Persistence} from '../src/core/persistence';
 import definition from '../src/core/mission-definition.json';
 import {mission_draft} from './mission-fixtures';
 import {state_hash} from '../src/core/snapshot';
+import {engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition} from '../src/core/scenario';
 
 test('B22 T01 restoring the committed mission keeps the same version and run while requiring explicit continue',async()=>{
   const name='b22-owned-t01-recovery',first=new Persistence(name);
@@ -68,5 +69,32 @@ test('B22 T01 a self-consistent owned archive cannot invent a missing parent run
     await expect(new Game(store).restore(view.run_id,'restore-bad')).rejects.toThrow('INVALID_SAVE');
     expect(await store.read_committed(view.run_id)).toEqual(state);
     expect(await store.receipt(view.run_id,'restore-bad')).toBeUndefined();
+  }finally{await store.delete();}
+});
+
+test.each([engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,definition])('B22 PG34 schema $schema keeps its original package and recovery branch beside the new mission run',async registered=>{
+  const store=new Persistence('b22-owned-t04-compat-'+registered.schema);
+  try{
+    const game=new Game(store),legacy=await game.create_run(registered,'research','original-create'),before=await store.read_committed(legacy.run_id);
+    const mission=await game.create_run(definition,'research','new-mission');expect(mission.run_id).not.toBe(legacy.run_id);expect(await store.read_committed(legacy.run_id)).toEqual(before);
+    const recovered=await new Game(store).restore(legacy.run_id,'original-restore'),after=await store.read_committed(legacy.run_id);
+    expect(recovered.view).toMatchObject({run_id:legacy.run_id,sim_time:legacy.sim_time,paused:true});expect(after!.schema).toBe(registered.schema);expect(after!.definition_hash).toBe(registered.definition_hash);expect(after!.hashes).toEqual(before!.hashes);expect(after!.world).toEqual(before!.world);expect(after!.rng).toEqual(before!.rng);
+    const listed=await store.list_runs();
+    if(registered.schema===8){expect(listed).toHaveLength(1);expect([legacy.run_id,mission.run_id]).toContain(listed[0].run_id);expect(listed[0].scenario_kind).toBe('play_mission');}
+    else expect(listed.map(r=>r.run_id).sort()).toEqual([legacy.run_id,mission.run_id].sort());
+    expect(await store.read_committed(mission.run_id)).toMatchObject({schema:8,definition_hash:definition.definition_hash});
+  }finally{await store.delete();}
+});
+
+test.each(['integrity','definition_hash','capability_hash','unknown_schema','invented_decision','invented_explanation'] as const)('B22 PG34 corrupted owned mission %s is refused without deleting or migrating its original bytes',async kind=>{
+  const store=new Persistence('b22-owned-t04-corrupt-'+kind);
+  try{
+    const game=new Game(store),created=await game.create_run(definition,'research','create'),damaged=await store.read_committed(created.run_id);if(!damaged||damaged.schema!==8)throw Error('Expected owned mission');
+    if(kind==='definition_hash')damaged.definition_hash='0'.repeat(64);if(kind==='capability_hash')damaged.hashes.capabilities='0'.repeat(64);if(kind==='unknown_schema')Reflect.set(damaged,'schema',99);
+    if(kind==='invented_decision')Reflect.set(damaged,'decision_records',[{id:'invented-no-issue',reason_status:'recorded',declared_reason:'不可补造'}]);
+    if(kind==='invented_explanation')Reflect.set(damaged,'retrospective_explanations',[{id:'invented-no-decision',text:'不可补造'}]);
+    damaged.integrity=kind==='integrity'?'0'.repeat(64):await state_hash(damaged);
+    await new Promise<void>((resolve,reject)=>{const open=indexedDB.open(store.name);open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction(['runs','snapshots'],'readwrite');tx.objectStore('runs').put(damaged);tx.objectStore('snapshots').put({key:`${damaged.run_id}:${damaged.revision}`,run_id:damaged.run_id,state:damaged});tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};};});
+    await expect(new Game(store).restore(created.run_id,'refused-restore')).rejects.toThrow('INVALID_SAVE');expect(await store.read_committed(created.run_id)).toEqual(damaged);expect(await store.receipt(created.run_id,'refused-restore')).toBeUndefined();
   }finally{await store.delete();}
 });

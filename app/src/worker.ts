@@ -87,8 +87,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -148,6 +148,10 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         response={request_id,ok:true,...await game.save_plan(input.envelope)};
       }else if(input.kind==='issue_mission'&&locked){
         response={request_id,ok:true,...await game.issue_order(parse_issue_mission(input.envelope))};
+      }else if(input.kind==='evaluate_decision'&&locked){
+        response={request_id,ok:true,mission_evaluation:await (history??game).evaluate_decision({run_id:input.run_id,view_revision:input.view_revision,decision_ref:input.decision_ref})};rememberResult=false;
+      }else if(input.kind==='append_explanation'&&locked){
+        response={request_id,ok:true,...await game.append_explanation(input.envelope)};
       }
       else if (input.kind === "preview" && locked)
         response = {

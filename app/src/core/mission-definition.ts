@@ -7,10 +7,11 @@ import {mission_input_limits} from '../mission-protocol';
 import {record,fields,valid_id} from '../protocol';
 import type {KnownTime} from '../contracts';
 import {dense_array} from '../spatial';
+import {valid_mission_decision_history} from '../mission-record-dto';
 export type MissionPositionRecord={id:string;origin:'R'|'Q';target:'HQ'|'R';scope_ref:string;observed:KnownTime;source_event_time:KnownTime;reported_at:number;delivery_at:number};
 export type MissionLocalInitialEvidence={id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;max_age_ms:number;valid_until_time_ms:number};
 export type MissionDefinition=Omit<typeof registered,'schema'|'scenario_kind'|'catalogs'>&{
-  schema:8;scenario_kind:'play_mission';catalogs:Omit<typeof registered.catalogs,'map'|'initial_evidence'>&{map:PublicMap;position_reports?:MissionPositionRecord[];local_initial_evidence?:MissionLocalInitialEvidence;local_reservations?:Array<{id:string;capability_ref:'R:move'|'R:link';from:number;to:number}>;local_resources?:{movement_energy:number;equipment_energy:number;equipment_wear:number};local_conditions?:{command_delivery_delay_ms:number};movement_changes?:Array<{id:string;at:number;time_factor:number}>;movement_obstacles?:Array<{id:string;closed_at_x:number}>;initial_evidence:Omit<typeof registered.catalogs.initial_evidence,'observed'|'source_event_time'>&{observed:KnownTime;source_event_time:KnownTime}};
+  schema:8;scenario_kind:'play_mission';catalogs:Omit<typeof registered.catalogs,'map'|'initial_evidence'>&{map:PublicMap;decision_history?:import('../mission-contracts').MissionDecisionHistory;position_reports?:MissionPositionRecord[];local_initial_evidence?:MissionLocalInitialEvidence;local_reservations?:Array<{id:string;capability_ref:'R:move'|'R:link';from:number;to:number}>;local_resources?:{movement_energy:number;equipment_energy:number;equipment_wear:number};local_conditions?:{command_delivery_delay_ms:number};movement_changes?:Array<{id:string;at:number;time_factor:number}>;movement_obstacles?:Array<{id:string;closed_at_x:number}>;initial_evidence:Omit<typeof registered.catalogs.initial_evidence,'observed'|'source_event_time'>&{observed:KnownTime;source_event_time:KnownTime}};
 };
 function registered_time(value:unknown):value is KnownTime{
   return record(value)&&(value.kind==='unknown'&&fields(value,['kind'])||value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence));
@@ -54,7 +55,10 @@ export async function load_mission_definition(input:unknown,owned:readonly Missi
     if(spec.id==='R:move'&&(typeof cap.speed!=='number'||!Number.isFinite(cap.speed)||cap.speed<=0||cap.speed!==p.base_speed))throw new GameError('INVALID_DEFINITION');
   }
   if(value.capabilities.length!==2)throw new GameError('INVALID_DEFINITION');
+  const checks=value.rules.decision_checks;
+  if(!dense_array(checks)||checks.length!==3||['context_completeness','public_rule_compliance','declared_reason_evaluability'].some(id=>checks.filter(rule=>record(rule)&&rule.id===id&&rule.version===1&&rule.source_ref==='B22-MISSION-DESIGN-1.0.0/mission-contract/AT236/'+id).length!==1))throw new GameError('INVALID_DEFINITION');
   validate_public_map(value.catalogs.map);
+  if(value.catalogs.decision_history!==undefined&&!valid_mission_decision_history(value.catalogs.decision_history,value.catalogs.map,value.catalogs.authority))throw new GameError('INVALID_DEFINITION');
   const map=value.catalogs.map,identity={map_id:map.map_id,map_version:map.map_version,crs_id:map.crs_id};
   const scopes=map.scopes.map(({geometry_version,...scope})=>scope);
   const publicRules=Object.fromEntries(Object.entries(geometryDefinition.rules).filter(([key])=>key!=='disabled_capabilities'));

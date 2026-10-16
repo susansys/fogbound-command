@@ -34,10 +34,25 @@ export type MissionReport={id:string;run_id:string;actor:'R';target:'HQ';kind:'a
 export type MissionDelivery={id:string;report_ref:string;received:number};
 export type MissionUnsentReport=Omit<MissionReport,'reported'>&{reported:{kind:'unknown'}};
 export type MissionPhaseResult={order_ref:string;phase_ref:MissionRef<'phase'>;plan_ref:MissionRef<'plan'>;known_report_delivery_refs:[string,string];verification_state:'confirmed'};
+export type MissionDecisionRecord={
+  id:string;run_id:string;version:1;actor:'staff';operation:'issue_mission';knowledge_revision:number;view_digest:string;at:number;
+  actual_intent:MissionDraft['intent'];selected_action:MissionDraft['phases'][number]['activity'];plan_ref:MissionRef<'plan'>;phase_ref:MissionRef<'phase'>;authority_ref:MissionRef<'authority'>;order_ref:string;evidence_refs:string[];
+  reason_status:'recorded'|'not_recorded';declared_reason?:string;
+  known_then:{mission:KnownMission;plan:SavedMissionPlan;position_knowledge:PositionKnowledge;resources:MissionResources;phase_results:MissionPhaseResult[];prior_orders:Array<Pick<MissionOrder,'id'|'phase_ref'|'plan_ref'|'status'>>;held_windows:MissionHeldWindow[];outbound_sent_times:number[]};
+};
+export type MissionDecisionRuleId='context_completeness'|'public_rule_compliance'|'declared_reason_evaluability';
+export type MissionEvaluationRecord=Omit<MissionDecisionRecord,'known_then'>&{known_then:Partial<MissionDecisionRecord['known_then']>};
+export type MissionDecisionHistory={id:string;version:1;source_ref:string;records:[{case_id:'complete_public_violation';record:MissionEvaluationRecord},{case_id:'missing_necessary_evidence';record:MissionEvaluationRecord}]};
+export type EvaluateMissionDecision={run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>};
+export type MissionAssessmentRef=MissionRef<'decision'|'plan'|'authority'>|{run_id:string;kind:'evidence';id:string};
+export type MissionDecisionCheck={rule_ref:{id:MissionDecisionRuleId;version:number};known_then_refs:MissionAssessmentRef[];result:'met'|'violated'|'not_evaluable';missing:string[];violations:string[]};
+export type MissionDecisionEvaluation={run_id:string;decision_ref:MissionRef<'decision'>;view_revision:number;known_at_time_ms:number;checks:MissionDecisionCheck[];record_source:{kind:'current_run'}|{kind:'registered_history';catalog_ref:string;source_ref:string}};
+export type MissionRetrospectiveExplanation={id:string;run_id:string;version:number;decision_ref:MissionRef<'decision'>;text:string;created_time_ms:number;author:'staff';layer:'retrospective_inference'};
+export type AppendMissionExplanation={run_id:string;operation_id:string;expected_revision:number;intent:{kind:'append_explanation';decision_ref:MissionRef<'decision'>;expected_object_revision:number;text:string}};
 export type MissionPlayerView={
   scenario_kind:'play_mission';run_id:string;revision:number;sim_time:number;mode:Mode;rate:1|2|4;paused:boolean;finished:false;source_run:string|null;
   status:'draft'|'ready'|'preparing'|'denied'|'active'|'completed';geometry:PublicMap;position_knowledge:PositionKnowledge;authority:{from:number;to:number};resources:MissionResources;
   mission:KnownMission|null;plans:SavedMissionPlan[];issued_orders:MissionOrder[];held_windows:MissionHeldWindow[];can_issue:boolean;next_action:string;gap:string;
-  reports:MissionReport[];deliveries:MissionDelivery[];phase_results:MissionPhaseResult[];
+  reports:MissionReport[];deliveries:MissionDelivery[];phase_results:MissionPhaseResult[];decision_records:MissionDecisionRecord[];retrospective_explanations:MissionRetrospectiveExplanation[];
   replay_nodes:PlayerView['replay_nodes'];log:LogEntry[];
 };

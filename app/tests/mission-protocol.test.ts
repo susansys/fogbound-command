@@ -71,3 +71,29 @@ test('B22 a definite stale pause can carry only a strict legal current mission v
     expect(valid_response({request_id:'not-current-proof',ok:false,code:'STALE_REVISION',mission_view:{...view,mission:{id:'M1',status:'completed'}}})).toBe(false);
   }finally{await store.delete();}
 });
+
+test('B22 actual readonly evaluation and separate explanation cross Transport without user-supplied identity or record upload',async()=>{
+  const store=new Persistence('b22-owned-t04-record-transport');
+  try{
+    const game=new Game(store),created=await game.create_run(definition,'research','create'),draft=mission_draft(created.run_id),saved=await game.save_plan({run_id:created.run_id,operation_id:'save',expected_revision:created.revision,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:created.run_id,kind,id,version:1});
+    const issued=await game.issue_order({run_id:created.run_id,operation_id:'issue',expected_revision:saved.view.revision,intent:{kind:'issue_mission',expected_object_revision:saved.view.mission!.object_revision,plan_ref:saved.view.mission!.current_plan_ref,phase_ref:ref('phase','P1'),grant_ref:draft.intent.delegation_ref,preview:await game.preview_plan(created.run_id,saved.view.revision,0,draft),evidence_refs:draft.evidence_refs}}),decision_ref=ref('decision',issued.view.decision_records[0].id);
+    const request={kind:'evaluate_decision',request_id:'evaluate',run_id:created.run_id,view_revision:issued.view.revision,decision_ref};
+    expect(valid_request(request)).toBe(true);expect(valid_request({...request,record:issued.view.decision_records[0]})).toBe(false);expect(valid_request({...request,actor_context:'commander'})).toBe(false);
+    const evaluation=await game.evaluate_decision({run_id:created.run_id,view_revision:issued.view.revision,decision_ref});expect(valid_response({request_id:'evaluate',ok:true,mission_evaluation:evaluation})).toBe(true);
+    for(const corrupt of ['private_field','score','wrong_rule','wrong_version','reordered_rules','foreign_reference','missing_decision_ref','met_with_missing','violation_without_proof','unknown_missing','unknown_violation','unregistered_source'] as const){
+      const bad=structuredClone(evaluation);
+      if(corrupt==='private_field')Reflect.set(bad,'world_position',[250,150]);if(corrupt==='score')Reflect.set(bad,'score',100);
+      if(corrupt==='wrong_rule')Reflect.set(bad.checks[0].rule_ref,'id','final_result');if(corrupt==='wrong_version')bad.checks[0].rule_ref.version=2;
+      if(corrupt==='reordered_rules')bad.checks.reverse();if(corrupt==='foreign_reference')bad.checks[0].known_then_refs[1].run_id='unregistered-other-run';
+      if(corrupt==='missing_decision_ref')bad.checks[0].known_then_refs.shift();if(corrupt==='met_with_missing')bad.checks[0].missing=['resources'];
+      if(corrupt==='violation_without_proof')bad.checks[1].result='violated';if(corrupt==='unknown_missing')bad.checks[2].missing=['private_world'];
+      if(corrupt==='unknown_violation'){bad.checks[1].result='violated';bad.checks[1].violations=['PRIVATE_CONDITION_FALSE'];}
+      if(corrupt==='unregistered_source')Reflect.set(bad,'record_source',{kind:'registered_history',catalog_ref:'uploaded-records',source_ref:'arbitrary'});
+      expect(valid_response({request_id:'bad-'+corrupt,ok:true,mission_evaluation:bad}),corrupt).toBe(false);
+    }
+    const envelope={run_id:created.run_id,operation_id:'append',expected_revision:issued.view.revision,intent:{kind:'append_explanation' as const,decision_ref,expected_object_revision:0,text:'事后补充，原理由保留'}};
+    expect(valid_request({kind:'append_explanation',request_id:'append',envelope})).toBe(true);expect(valid_request({kind:'append_explanation',request_id:'append',envelope,actor_context:'commander'})).toBe(false);
+    expect(valid_response({request_id:'append',ok:true,...await game.append_explanation(envelope)})).toBe(true);
+  }finally{await store.delete();}
+});

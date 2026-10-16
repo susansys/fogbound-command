@@ -1,7 +1,7 @@
 import {GameError} from './contracts';
 import {record,fields,valid_id} from './protocol';
 import {dense_array,coordinate} from './spatial';
-import type {ConditionExpr,MissionDraft,SavePlanEnvelope,IssueMissionEnvelope} from './mission-contracts';
+import type {ConditionExpr,MissionDraft,SavePlanEnvelope,IssueMissionEnvelope,EvaluateMissionDecision,AppendMissionExplanation} from './mission-contracts';
 import {mission_preview} from './mission-dto';
 export const mission_input_limits={phase_budget:2,route_point_budget:64,total_route_point_budget:128,evidence_budget:32,expression_depth_budget:4,expression_node_budget:32,text_budget:2000};
 const text=(x:unknown):x is string=>typeof x==='string'&&[...x].length<=mission_input_limits.text_budget;
@@ -18,11 +18,15 @@ function expression(x:unknown,depth=1,budget={nodes:0}):x is ConditionExpr{
   return x.field_ref==='position.scope'?['eq','in'].includes(String(x.operator))&&valid_id(x.typed_value):['phase.confirmed','route.permitted','capability.ready'].includes(String(x.field_ref))&&['eq','ne'].includes(String(x.operator))&&typeof x.typed_value==='boolean';
 }
 export function valid_mission_expression(value:unknown):value is ConditionExpr{return expression(value);}
+export function parse_mission_intent(value:unknown,run:string):MissionDraft['intent']{
+  object(value,['id','version','purpose','desired_end_state','key_tasks','priorities','constraint_refs','acceptable_risk','delegation_ref']);
+  if(!valid_id(value.id)||!integer(value.version)||value.version<1||!text(value.purpose)||!value.purpose.trim()||!text(value.desired_end_state)||!value.desired_end_state.trim()||!list(value.key_tasks,text)||!list(value.priorities,text)||!list(value.constraint_refs,valid_id)||!text(value.acceptable_risk)||!mission_ref(value.delegation_ref,run,'authority'))throw new GameError('INVALID_REQUEST');
+  return structuredClone(value) as MissionDraft['intent'];
+}
 export function parse_mission_draft(value:unknown,run:string):MissionDraft{
   object(value,['run_id','plan_id','mission_ref','intent','objective','phases','routes','actor_assignments','support_windows','assumptions','evidence_refs','decision_points','note']);
   if(value.run_id!==run||!valid_id(value.plan_id)||!mission_ref(value.mission_ref,run,'mission')||!text(value.note))throw new GameError('INVALID_REQUEST');
-  const intent=value.intent;object(intent,['id','version','purpose','desired_end_state','key_tasks','priorities','constraint_refs','acceptable_risk','delegation_ref']);
-  if(!valid_id(intent.id)||!integer(intent.version)||intent.version<1||!text(intent.purpose)||!intent.purpose.trim()||!text(intent.desired_end_state)||!intent.desired_end_state.trim()||!list(intent.key_tasks,text)||!list(intent.priorities,text)||!list(intent.constraint_refs,valid_id)||!text(intent.acceptable_risk)||!mission_ref(intent.delegation_ref,run,'authority'))throw new GameError('INVALID_REQUEST');
+  parse_mission_intent(value.intent,run);
   const objective=value.objective;object(objective,['id','purpose','success_expr','failure_expr','deadline_time_ms','verification_requirements','priority','dependencies']);
   if(!valid_id(objective.id)||!text(objective.purpose)||!expression(objective.success_expr)||!expression(objective.failure_expr)||!integer(objective.deadline_time_ms)||!integer(objective.priority)||!list(objective.verification_requirements,valid_id)||!list(objective.dependencies,x=>mission_ref(x,run,'objective')))throw new GameError('INVALID_REQUEST');
   if(!dense_array(value.phases)||value.phases.length<1||value.phases.length>mission_input_limits.phase_budget||!dense_array(value.routes)||!value.routes.length||value.routes.length>mission_input_limits.total_route_point_budget/2)throw new GameError('INVALID_REQUEST');
@@ -64,4 +68,16 @@ export function parse_issue_mission(value:unknown):IssueMissionEnvelope{
   object(intent,['kind','expected_object_revision','plan_ref','phase_ref','grant_ref','preview','evidence_refs',...(Object.hasOwn(intent,'reason')?['reason']:[])]);
   if(intent.kind!=='issue_mission'||!integer(intent.expected_object_revision)||!mission_ref(intent.plan_ref,value.run_id,'plan')||!mission_ref(intent.phase_ref,value.run_id,'phase')||!mission_ref(intent.grant_ref,value.run_id,'authority')||!mission_preview(intent.preview)||!list(intent.evidence_refs,valid_id)||Object.hasOwn(intent,'reason')&&!text(intent.reason))throw new GameError('INVALID_REQUEST');
   return structuredClone(value) as IssueMissionEnvelope;
+}
+export function parse_evaluate_mission(value:unknown):EvaluateMissionDecision{
+  object(value,['run_id','view_revision','decision_ref']);
+  if(!valid_id(value.run_id)||!integer(value.view_revision)||value.view_revision<1||!record(value.decision_ref)||!valid_id(value.decision_ref.run_id)||!mission_ref(value.decision_ref,value.decision_ref.run_id,'decision'))throw new GameError('INVALID_REQUEST');
+  return structuredClone(value) as EvaluateMissionDecision;
+}
+export function parse_append_mission(value:unknown):AppendMissionExplanation{
+  object(value,['run_id','operation_id','expected_revision','intent']);
+  if(!valid_id(value.run_id)||!valid_id(value.operation_id)||!integer(value.expected_revision)||value.expected_revision<1)throw new GameError('INVALID_REQUEST');
+  const intent=value.intent;object(intent,['kind','decision_ref','expected_object_revision','text']);
+  if(intent.kind!=='append_explanation'||!mission_ref(intent.decision_ref,value.run_id,'decision')||!integer(intent.expected_object_revision)||!text(intent.text)||!intent.text.trim())throw new GameError('INVALID_REQUEST');
+  return structuredClone(value) as AppendMissionExplanation;
 }

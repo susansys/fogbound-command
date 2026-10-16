@@ -3,7 +3,7 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
-import type {MissionPreview,MissionPlayerView} from './mission-contracts';
+import type {MissionPreview,MissionPlayerView,MissionDecisionEvaluation,MissionRef} from './mission-contracts';
 export type RunSummary = {
   run_id: string;
   revision: number;
@@ -17,6 +17,8 @@ export type Request =
   |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
   |{kind:'save_plan';envelope:unknown}
   |{kind:'issue_mission';envelope:unknown}
+  |{kind:'append_explanation';envelope:unknown}
+  |{kind:'evaluate_decision';run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>}
   |{kind:'operate_mission';envelope:Envelope}
   | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }
@@ -40,6 +42,7 @@ export type Response =
       runs?: RunSummary[];
       plan?: PreviewPlan;
       mission_preview?:MissionPreview;
+      mission_evaluation?:MissionDecisionEvaluation;
       receipt?: Receipt | null;
     }
   | { request_id: string; ok: false; code: string;field_path?:string;mission_view?:MissionPlayerView };

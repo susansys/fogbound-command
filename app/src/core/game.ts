@@ -18,10 +18,10 @@ import {initial_mission_state} from './mission-state';
 import {is_mission_definition,mission_definition_for_package,type MissionDefinition} from './mission-definition';
 import type {MissionDraft,MissionPreview,IssueMissionEnvelope,MissionPlayerView} from '../mission-contracts';
 import {record} from '../protocol';
-import {apply_issue_mission} from './mission-issue';
+import {apply_recorded_issue,evaluate_mission_decision,apply_mission_explanation} from './mission-records';
 import {preview_mission} from './mission-preview';
 import {apply_save_plan,apply_mission_control} from './mission-game';
-import {parse_save_plan,parse_issue_mission} from '../mission-protocol';
+import {parse_save_plan,parse_issue_mission,parse_evaluate_mission,parse_append_mission} from '../mission-protocol';
 import {initial_play_state} from './play-state';
 import {apply_play_control,replay_play_state,validate_play_task} from './play-game';
 import { valid_id, valid_envelope } from "../protocol";
@@ -355,6 +355,29 @@ export class Game {
     await this.commit(candidate,state.revision,envelope.operation_id,fingerprint);
     return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'save_plan'},view:project_mission_view(candidate,this.store.mission_definitions)};
   }
+  async evaluate_decision(input:unknown):Promise<import('../mission-contracts').MissionDecisionEvaluation>{
+    const request=parse_evaluate_mission(input),state=this.history??await this.store.read_committed(request.run_id);
+    if(!state||state.run_id!==request.run_id)throw new GameError('RUN_NOT_FOUND');
+    if(state.schema!==8)throw new GameError('INVALID_REQUEST');
+    await this.validate_stored_state(state);
+    if(state.revision!==request.view_revision)throw new GameError('STALE_REVISION');
+    const definition=mission_definition_for_package(state.definition_hash,this.store.mission_definitions),catalog=definition.catalogs.decision_history;
+    const decision=request.decision_ref.run_id===state.run_id?state.decision_records.find(r=>r.id===request.decision_ref.id&&r.version===request.decision_ref.version):undefined;
+    const historical=catalog?.records.find(({record:r})=>r.run_id===request.decision_ref.run_id&&r.id===request.decision_ref.id&&r.version===request.decision_ref.version);
+    const selected=decision??historical?.record;if(!selected)throw new GameError('INVALID_REQUEST');
+    const result=evaluate_mission_decision(selected,definition,state.revision);
+    return {...result,run_id:state.run_id,record_source:decision?{kind:'current_run'}:{kind:'registered_history',catalog_ref:catalog!.id,source_ref:catalog!.source_ref}};
+  }
+  async append_explanation(input:unknown):Promise<{receipt:Receipt;view:MissionPlayerView}>{
+    this.assert_current();const envelope=parse_append_mission(input);await this.assert_writable(envelope.run_id);
+    const state=await this.store.read_committed(envelope.run_id);if(!state)throw new GameError('RUN_NOT_FOUND');if(state.schema!==8)throw new GameError('INVALID_REQUEST');
+    await this.validate_stored_state(state);
+    const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(state.run_id,envelope.operation_id);
+    if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'append_explanation'},view:project_mission_view(state,this.store.mission_definitions)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    const candidate=apply_mission_explanation(state,envelope);await this.commit(candidate,state.revision,envelope.operation_id,fingerprint);
+    return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'append_explanation'},view:project_mission_view(candidate,this.store.mission_definitions)};
+  }
   async preview_plan(run:string,revision:number,editing_seq:number):Promise<Plan>;
   async preview_plan(run:string,revision:number,editing_seq:number,route_draft:RouteDraft):Promise<RoutePlan>;
   async preview_plan(run:string,revision:number,editing_seq:number,draft:MissionDraft):Promise<MissionPreview>;
@@ -421,7 +444,7 @@ export class Game {
       const fingerprint=await hash(canonical(input)),prior=await this.store.receipt(state.run_id,input.operation_id);
       if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return {receipt:{run_id:state.run_id,operation_id:input.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'issue_mission'},view:project_mission_view(state,this.store.mission_definitions)};}
       if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
-      const candidate=await apply_issue_mission(state,input,this.store.mission_definitions);
+      const candidate=await apply_recorded_issue(state,input,this.store.mission_definitions);
       await this.commit(candidate,state.revision,input.operation_id,fingerprint);
       return {receipt:{run_id:state.run_id,operation_id:input.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'issue_mission'},view:project_mission_view(candidate,this.store.mission_definitions)};
     }

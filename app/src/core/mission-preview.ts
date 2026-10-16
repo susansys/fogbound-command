@@ -12,13 +12,15 @@ import type {MissionDefinition} from './mission-definition';
 import {evaluate_mission_authority} from './mission-authority';
 import {evaluate_mission_gate} from './mission-gates';
 import {validate_mission_evidence} from './mission-evidence';
+type MissionCatalogs=MissionDefinition['catalogs'];
+export type MissionPublicDefinition=Pick<MissionDefinition,'profile'|'capabilities'|'rules'>&{catalogs:Pick<MissionCatalogs,'map'|'authority'|'movement_causes'>&{actor:Pick<MissionCatalogs['actor'],'load'|'load_capacity'|'space'|'space_capacity'|'qualification_refs'>}};
 export async function preview_mission(state:MissionState,editing_seq:number,input:unknown,owned:readonly MissionDefinition[]=[]):Promise<MissionPreview>{
   const draft:MissionDraft=parse_mission_draft(input,state.run_id),definition=mission_definition_for_package(state.definition_hash,owned);
   validate_mission_references(draft,definition);
   validate_mission_evidence(draft.evidence_refs,state,definition);
   return {kind:'mission_plan',run_id:state.run_id,revision:state.revision,editing_seq,draft_digest:await hash(canonical(draft)),phases:mission_phase_previews(state,draft,definition)};
 }
-export function mission_phase_previews(state:MissionState,draft:MissionDraft,definition:MissionDefinition):MissionPreview['phases']{
+export function mission_phase_previews(state:Pick<MissionState,'revision'|'sim_time'|'known'>,draft:MissionDraft,definition:MissionPublicDefinition):MissionPreview['phases']{
   const p=definition.profile.parameters;
   const basis={capability_ref:'R:move',speed:p.base_speed,unit:'fictional_metre/s' as const,load:definition.catalogs.actor.load,terrain_factor:p.terrain_factor,environment_factor:p.environment_factor,load_factor_per_unit:definition.rules.load_factor_per_unit,length_scale:1000000 as const,applied_causes:definition.catalogs.movement_causes.map(c=>({...c,consumer:'R:move' as const,slot:c.slot as 'terrain'|'environment'})),evidence_refs:[]};
   const phases=draft.phases.map(phase=>{

@@ -21,7 +21,7 @@ export async function apply_save_plan(state:MissionState,envelope:SavePlanEnvelo
   const preview=await preview_mission(state,0,envelope.intent.draft,owned),candidate=structuredClone(state);
   const version=candidate.plans.length+1,plan_id=envelope.intent.draft.plan_id;
   candidate.plans.push({plan_id,version,draft:structuredClone(envelope.intent.draft),preview});
-  candidate.mission={id:'M1',object_revision:(candidate.mission?.object_revision??0)+1,status:state.mission?.status==='completed'?'completed':'draft',current_plan_ref:{run_id:state.run_id,kind:'plan',id:plan_id,version},support_refs:[]};
+  candidate.mission={id:'M1',object_revision:(candidate.mission?.object_revision??0)+1,status:state.mission?.status??'draft',current_plan_ref:{run_id:state.run_id,kind:'plan',id:plan_id,version},support_refs:[]};
   candidate.revision++;
   candidate.inputs.push({envelope:structuredClone(envelope),at:state.sim_time,revision:candidate.revision});
   return candidate;

@@ -2,6 +2,7 @@ import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
 import {prestart_case_refs} from './contracts';
 import {valid_route_draft,valid_route_plan} from './route-validation';
+import {parse_evaluate_mission} from './mission-protocol';
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -30,6 +31,8 @@ export function valid_request(
   if(value.kind==='preview_mission')return fields(value,['kind','request_id','run_id','revision','editing_seq','draft'])&&valid_id(value.run_id)&&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>=1&&typeof value.editing_seq==='number'&&Number.isSafeInteger(value.editing_seq)&&value.editing_seq>=0;
   if(value.kind==='save_plan')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='issue_mission')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='append_explanation')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='evaluate_decision'){if(!fields(value,['kind','request_id','run_id','view_revision','decision_ref']))return false;try{parse_evaluate_mission({run_id:value.run_id,view_revision:value.view_revision,decision_ref:value.decision_ref});return true;}catch{return false;}}
   if(value.kind==='operate_mission')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")

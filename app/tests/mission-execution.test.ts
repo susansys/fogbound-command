@@ -14,7 +14,7 @@ async function issued(store:Persistence,value:MissionDefinition|typeof definitio
   const saved=await game.save_plan({run_id:initial.run_id,operation_id:'save',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
   const ref=<K extends string>(kind:K,id:string)=>({run_id:initial.run_id,kind,id,version:1});
   const input:IssueMissionEnvelope={run_id:initial.run_id,operation_id:'issue',expected_revision:saved.view.revision,intent:{kind:'issue_mission',expected_object_revision:1,plan_ref:ref('plan','plan-M1'),phase_ref:ref('phase','P1'),grant_ref:ref('authority','B22-STATIC-GRANT'),preview:await game.preview_plan(initial.run_id,saved.view.revision,0,draft),evidence_refs:draft.evidence_refs}};
-  const result=await game.issue_order(input);return {game,view:result.view};
+  const result=await game.issue_order(input);return {game,view:result.view,before:saved.view};
 }
 
 test.each([['unknown','U'],['known_false','F']] as const)('B22 HQ-equivalent local %s holds until6000 without auto-resuming after a lawful local update',async(kind,truth)=>{
@@ -27,14 +27,16 @@ test.each([['unknown','U'],['known_false','F']] as const)('B22 HQ-equivalent loc
     const normal=await issued(normalStore,definition,gate),held=await issued(heldStore,variant,gate);
     // Fresh Game runs have different legitimate run-bound cryptographic IDs.
     // Verify those bindings independently, then compare every public field with
-    // only the run identity and its two opaque digest fields normalized.
+    // only the run identity and its three independently verified digest fields normalized.
     const sort=(v:unknown):unknown=>Array.isArray(v)?v.map(sort):v!==null&&typeof v==='object'?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b)).map(([k,x])=>[k,sort(x)])):v;
     const digest=(v:unknown)=>createHash('sha256').update(JSON.stringify(sort(v))).digest('hex');
     for(const [store,current] of [[normalStore,normal],[heldStore,held]] as const){
       const persisted=await store.read_committed(current.view.run_id);if(persisted?.schema!==8)throw Error('Expected mission state');
       expect(persisted.orders[0].frozen_payload_digest).toBe(digest(persisted.orders[0].frozen_payload));expect(current.view.plans[0].preview.draft_digest).toBe(digest(current.view.plans[0].draft));
+      expect(current.view.decision_records[0].view_digest).toBe(digest(current.before));
     }
-    const normalize=(view:unknown,run:string)=>JSON.parse(JSON.stringify(view,(key,value)=>['frozen_payload_digest','draft_digest'].includes(key)?'VERIFIED_RUN_BOUND_DIGEST':value).replaceAll(run,'RUN'));
+    const normalize=(view:unknown,run:string)=>JSON.parse(JSON.stringify(view,(key,value)=>['frozen_payload_digest','draft_digest','view_digest'].includes(key)?'VERIFIED_RUN_BOUND_DIGEST':value).replaceAll(run,'RUN'));
+    expect(normalize(held.before,held.view.run_id)).toEqual(normalize(normal.before,normal.view.run_id));
     expect(normalize(held.view,held.view.run_id)).toEqual(normalize(normal.view,normal.view.run_id));
     const at1000=await held.game.control_clock({run_id:held.view.run_id,operation_id:'receive',expected_revision:held.view.revision,intent:{kind:'advance',to:1000}}),met1000=await normal.game.control_clock({run_id:normal.view.run_id,operation_id:'receive',expected_revision:normal.view.revision,intent:{kind:'advance',to:1000}});
     expect(normalize(at1000.view,held.view.run_id)).toEqual(normalize(met1000.view,normal.view.run_id));

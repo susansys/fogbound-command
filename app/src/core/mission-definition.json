@@ -405,6 +405,23 @@
       "executing_replacement",
       "free_surface",
       "full_play_outcome"
+    ],
+    "decision_checks": [
+      {
+        "id": "context_completeness",
+        "version": 1,
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract/AT236/context_completeness"
+      },
+      {
+        "id": "public_rule_compliance",
+        "version": 1,
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract/AT236/public_rule_compliance"
+      },
+      {
+        "id": "declared_reason_evaluability",
+        "version": 1,
+        "source_ref": "B22-MISSION-DESIGN-1.0.0/mission-contract/AT236/declared_reason_evaluability"
+      }
     ]
   },
   "catalogs": {
@@ -959,9 +976,9 @@
   "hashes": {
     "profile": "e48174ee479b1a07dcd7e0af306d777f5ba55439080b8a6e6aea66e9da0ccd34",
     "capabilities": "351a13165784a2365cce0c72c1bb6f936e9700f3fbeeb83e57d6919f1894355a",
-    "rules": "a1211e66f51c74168ad17fe9b4bf4349c4e5a606f4146b0e3edd6b547903980a",
+    "rules": "68ef608a3b80b58af79e9f24fa9c7ac698483c81e8d13617942f2cc7fced653d",
     "catalogs": "05bfaa3454fb7547a6d8eee4a6a983061a71e647c4b83f6450a1917758832479",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "a84511bca9fdff148ff323c513e2ca68f9a9f9066d0b3e94f9ec6758f9351e9b"
+  "definition_hash": "fd4c10a5c927f5f7074770b19d8cd403c03dc5d130a1edbda60a0b215194003d"
 }

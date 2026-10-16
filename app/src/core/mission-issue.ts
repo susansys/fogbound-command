@@ -9,7 +9,8 @@ import {canonical} from './snapshot';
 import {hash} from './scenario';
 
 const equal=(a:unknown,b:unknown)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
-export function assert_mission_phase(state:MissionState,draft:MissionDraft,phase:MissionDraft['phases'][number],checked:MissionPreview['phases'][number],definition:MissionDefinition){
+export type MissionIssueContext=Pick<MissionState,'mission'|'sim_time'|'known'|'held_windows'|'ended'>&{orders:Array<Pick<import('../mission-contracts').MissionOrder,'id'|'phase_ref'|'plan_ref'|'status'>>;outbound_messages:Array<{sent:number}>};
+export function assert_mission_phase(state:MissionIssueContext,draft:MissionDraft,phase:MissionDraft['phases'][number],checked:MissionPreview['phases'][number],definition:import('./mission-preview').MissionPublicDefinition){
   const p=definition.profile.parameters;
   if(state.mission?.status==='completed')throw new GameError('STATE_CONFIRMATION_REQUIRED');
   if(checked.authorization.status!=='met')throw new GameError('AUTHORITY_DENIED');

@@ -43,6 +43,14 @@ for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.strin
 if(sha(JSON.stringify([]))!==corridorDefinition.hashes.media)throw Error('corridor media mismatch');
 const {map_id,map_version,crs_id,geometry_version}=corridorDefinition.catalogs.map;
 const corridor={id:corridorDefinition.id,schema:corridorDefinition.schema,contract:corridorDefinition.contract,version:corridorDefinition.version,geometry:{map_id,map_version,crs_id,geometry_version},rules_hash:corridorDefinition.hashes.rules,scope:'Public corridor identity; private package/source hashes and private message catalog omitted'};
+// Verify the complete mission package against the actual Worker without
+// publishing private package/source hashes or mechanism-test catalogs.
+const missionDefinition=JSON.parse(await fs.readFile('src/core/mission-definition.json')),{definition_hash:missionPrivateHash,...missionPayload}=missionDefinition;
+if(sha(JSON.stringify(missionPayload))!==missionPrivateHash||!worker.bytes.includes(Buffer.from(missionPrivateHash)))throw Error('mission package does not match served worker');
+for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.stringify(missionDefinition[key]))!==missionDefinition.hashes[key])throw Error('mission package component mismatch');
+if(sha(JSON.stringify([]))!==missionDefinition.hashes.media||Object.hasOwn(missionDefinition.catalogs,'decision_history'))throw Error('mission release must omit owned historical fixtures');
+const missionGeometry=missionDefinition.catalogs.map;
+const mission={id:missionDefinition.id,schema:missionDefinition.schema,contract:missionDefinition.contract,version:missionDefinition.version,geometry:{map_id:missionGeometry.map_id,map_version:missionGeometry.map_version,crs_id:missionGeometry.crs_id,geometry_version:missionGeometry.geometry_version},rules_hash:missionDefinition.hashes.rules,scope:'Public mission identity; private package/source hashes and owned mechanism catalogs omitted'};
 for(const match of html.matchAll(/href="([^"]+\.css)"/g)){const item=await asset(match[1]);styles.push({path:item.path,sha256:item.sha256});}
 const browser=await chromium.launch({headless:true,...(process.env.FB01_BROWSER?{executablePath:process.env.FB01_BROWSER}:{})});
 let browserVersion;try{browserVersion=browser.version();}finally{await browser.close();}
@@ -51,5 +59,6 @@ const optional=async path=>{try{return (await fs.readFile(path,'utf8')).trim();}
 const fingerprint={tested_sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),worktree_dirty:execFileSync('git',['-C','..','status','--porcelain','--','app','.github'],{encoding:'utf8'}).trim().length>0,pr_head_sha:event?.pull_request?.head?.sha??null,node:process.version,browser:browserVersion,platform:process.platform,architecture:process.arch,workflow_sha256:sha(await fs.readFile('../.github/workflows/fb01.yml')),lock_sha256:sha(await fs.readFile('package-lock.json')),definition_sha256:sha(await fs.readFile('src/core/engineering.json')),definitions,image_id:await optional('image-id.txt'),html_sha256:sha(html),main:{path:main.path,sha256:main.sha256},worker:{path:worker.path,sha256:worker.sha256},styles};
 fingerprint.mapping=mapping;
 fingerprint.corridor=corridor;
+fingerprint.mission=mission;
 await fs.mkdir('verification-output',{recursive:true});await fs.writeFile('verification-output/fingerprint.json',JSON.stringify(fingerprint,null,2));
 console.log(JSON.stringify(fingerprint,null,2));
