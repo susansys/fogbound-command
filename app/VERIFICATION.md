@@ -387,3 +387,40 @@ All original244AT remain not_run. HTTP/SQLite/file backup, full PLAY/Outcome, fo
 The fixed first T04 candidate bcaf06e failed its complete native Chrome run:198expected/5unexpected/0skipped/0flaky, all five waits at blank entry before gameplay. Local diagnostics captured net::ERR_ADDRESS_IN_USE on preloaded JavaScript, including when the exact same59 served files were mirrored by an owned native server. No Worker or pageerror occurred at those failures; this does not establish general product correctness or Windows port exhaustion. A process-only Windows comparison preserves every locked Playwright default disabled feature and additionally disables TcpPortRandomizationWin. The merged setting passed100 serial fresh-context entries, while the default comparison failed. Local browser/native runners explicitly record that environment and the exact dependency switch hash; it is not default Windows network acceptance. Product Playwright/CI configuration and OS/global network/browser/user settings remain unchanged. The native verification harness accepts and records this optional Windows-only test argument; absent that explicit input its launch behavior is unchanged. Ordinary final Linux CI remains required.
 
 Review repairs bind decision evaluation caches to complete run/kind/id/version, initialize only schema8 cloned command runs paused, and preserve genuinely selected received evidence at the original decision time. Registered initial/authority/movement evidence is checked against public catalogs. Selected Report/Delivery pairs are captured from actual received HQ records, with same-run/source/target/time/selection bounds; superseded selected position reports retain their real public source and Delivery, with closed DTO linkage checks. Evaluation never borrows later material or treats arbitrary selected strings as evidence. Historical first-choice fixtures carry an empty selected-receipt list. Actual RED/GREEN checks cover static references, previously delivered acceptance/Delivery, type-spoof rejection, original-profile restore and historical reevaluation. This is a repaired local candidate; latest fixed-head review, complete browser/native/visual and final remote/main gates require separate current receipts. Original244AT and formal experience remain unaccepted.
+## B23 T01 implementation candidate — acceptance pending
+
+This candidate follows `B23-INTELLIGENCE-DESIGN-1.0.0`, manifest
+`3942addb02c20ab944d2e425b2b95e3b8cff46f6a5eccf725b17d8c36b156d27`,
+and the independently verified Stage2 release. SPEC #58 / T01 #59 remain open.
+T02–T04 have not started; no final B23 CI, PR, merge or batch acceptance is claimed.
+
+Schema9 is independent of retained schema4–8 definitions. T01 covers initial
+HQ/local knowledge, original reports versus received deliveries, explicit lineage
+and unknown independence, real source collection and its separate4/3/1 recipe,
+current save/recovery, UI source expansion and committed-node history. Processing
+requests and field activities intentionally return unsupported until T02/T03.
+The new resolved profile explicitly carries101 inherited and21 PLAY registry
+entries. Configuration declarations for other systems do not implement those
+systems, enable external calls or sign their original acceptance cases.
+
+Checks run through the owned exact-lock Windows runtime and immutable source
+mirrors. Every result records the actual command, source file hashes, Git identity,
+dirty state, exit and source preservation. Browser/native final checks additionally
+require `B23_REQUIRE_SERVED_MATCH=1`: all current runtime source inputs must match
+the served build. Native profiles and origin4196 are task-owned, never user data.
+
+Retained failures include missing schema9 dispatch, missing lineage handling,
+incorrect original publication time under delayed forwarding, incomplete resolved
+configuration/W initial position, self-hashed invalid lineage, absent/collapsed UI,
+and manual pause rejected after a delayed stale revision. Their focused regressions
+were fixed without removing assertions. Native driver setup failures and earlier
+build identities remain separate from product failures and current evidence.
+
+The old B22 32-version test hit its unchanged5000ms timeout in two default-pool
+full runs. Its isolated file passed25 tests. An identical full suite with one file
+worker passed507 tests at that earlier source; subsequent tests/changes require
+new final checks. This is resource isolation, not a claimed performance fix or a
+default-pool pass. No timeout or old oracle was relaxed; final remote CI remains
+mandatory. Old schemas/definitions and original244AT stay separate; original244AT
+are all `not_run`. T01 fixed-SHA independent Spec/Standards and final current-build
+native recovery are still required before integrating/closing the ticket.

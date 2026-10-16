@@ -30,8 +30,8 @@ const symbol = new ms.Symbol("SFGPU-----*****", {
   outlineWidth: 2,
 }).asSVG();
 export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
-  const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'?view:null;
-  const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'?null:view;
+  const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?view:null;
+  const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?null:view;
   const recording=view.scenario_kind==='record';
   const sites=legacy?(recording?(['H'] as const):legacy.geometry.N?(['H','N','T'] as const):(['H','T'] as const)):[];
   const site=(id:'H'|'N'|'T'):Coordinate=>{if(!legacy)throw Error('Legacy site requested for public scope branch');return legacy.geometry[id]??legacy.geometry.H;};
@@ -548,7 +548,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(play?['R','H','A','B']:recording?['R','H']:legacy?.geometry.N?['R','H','N','T']:['R','H','T']).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(play?['R','H','A','B']:recording?['R','H']:legacy?.geometry.N?['R','H','N','T']:['R','H','T']).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording||view.scenario_kind==='play_intelligence'?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
     </div>
   );
 }

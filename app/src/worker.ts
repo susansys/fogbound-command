@@ -8,6 +8,7 @@ import type { Request, Response } from "./transport";
 import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
 import missionDefinition from './core/mission-definition.json';
+import intelligenceDefinition from './core/intelligence-definition.json';
 import {parse_mission_draft,parse_issue_mission} from './mission-protocol';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-map-b-game-1");
@@ -37,7 +38,7 @@ let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
 let pendingPauses=0;
-function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?910000:view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
@@ -87,8 +88,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -104,7 +105,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
@@ -113,6 +114,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         if(original)rememberResult=active?.run_id===view.run_id;
         response={request_id:input.request_id,ok:true,view};
       } else if(input.kind==='management_pause'&&locked&&active){
+        if(input.reason==='manual'&&active.scenario_kind!=='play_intelligence')throw new GameError('INVALID_INPUT');
         const view=await game.get_view(active.run_id);
         if(view.mode==='command'&&!view.paused){
           const to=clockTarget(view);
@@ -142,7 +144,11 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
           ok: true,
           view: await (history??game).get_view(input.run_id),
         };
-      else if(input.kind==='preview_mission'&&locked){
+      else if(input.kind==='request_source_validation'&&locked){
+        await game.request_source_validation(input.envelope);throw new GameError('UNSUPPORTED');
+      }else if(input.kind==='issue_activity'&&locked){
+        await game.issue_activity(input.envelope);throw new GameError('UNSUPPORTED');
+      }else if(input.kind==='preview_mission'&&locked){
         response={request_id,ok:true,mission_preview:await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,parse_mission_draft(input.draft,input.run_id))};rememberResult=false;
       }else if(input.kind==='save_plan'&&locked){
         response={request_id,ok:true,...await game.save_plan(input.envelope)};

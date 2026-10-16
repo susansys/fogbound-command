@@ -50,7 +50,7 @@ test.each([['unknown','U'],['known_false','F']] as const)('B22 HQ-equivalent loc
     const at7000=await held.game.control_clock({run_id:held.view.run_id,operation_id:'terminal-delivery',expected_revision:at6000.view.revision,intent:{kind:'advance',to:7000}});
     expect(at7000.view).toMatchObject({issued_orders:[{status:'not_started'}],held_windows:[{status:'released'}],resources:{movement_energy:20,movement_energy_reserved:0,equipment_energy:14,equipment_wear:98,hq_energy:15},phase_results:[]});
     expect(Reflect.get(at7000.view,'reports')).toHaveLength(2);expect(Reflect.get(at7000.view,'deliveries')).toHaveLength(2);expect(valid_response({request_id:'held',ok:true,...at7000})).toBe(true);
-    const restored=await new Game(heldStore).restore(held.view.run_id,'restore-hold-terminal');expect(restored.view).toMatchObject({sim_time:7000,paused:true,resources:at7000.view.resources});
+    const restored=await new Game(heldStore).restore(held.view.run_id,'restore-hold-terminal');expect(restored.view).toMatchObject({sim_time:7000,paused:true,resources:Reflect.get(at7000.view,'resources')});
   }finally{await normalStore.delete();await heldStore.delete();}
 });
 
@@ -65,7 +65,7 @@ test('B22 P1 settles once at30500 while HQ only confirms its matching arrival at
     expect(delivered.view).toMatchObject({finished:false,issued_orders:[{status:'arrived'}],resources:{movement_energy:19,movement_energy_reserved:0,equipment_energy:14,equipment_wear:98,hq_energy:15},phase_results:[{order_ref:'mission-order-1',phase_ref:{id:'P1',version:1},verification_state:'confirmed'}],position_knowledge:{status:'known_scope',scope:{typed_geometry:{position:[150,150]}},observed:{kind:'known',value:30500}},can_issue:true});
     expect(Reflect.get(delivered.view,'reports')).toHaveLength(2);expect(Reflect.get(delivered.view,'deliveries')).toHaveLength(2);expect(valid_response({request_id:'arrived',ok:true,...delivered})).toBe(true);
     const restored=await new Game(store).restore(view.run_id,'restore-arrival');
-    expect(restored.view).toMatchObject({sim_time:31500,paused:true,resources:delivered.view.resources,phase_results:Reflect.get(delivered.view,'phase_results')});
+    expect(restored.view).toMatchObject({sim_time:31500,paused:true,resources:Reflect.get(delivered.view,'resources'),phase_results:Reflect.get(delivered.view,'phase_results')});
     expect(await store.read_committed(view.run_id)).toMatchObject({executions:[{status:'arrived',settled:true}],reports:[{kind:'accepted'},{kind:'arrived'}]});
   }finally{await store.delete();}
 });
@@ -81,7 +81,7 @@ test('B22 P1 independently accepts at1000 but HQ only receives its acceptance at
     expect(received.view).toMatchObject({issued_orders:[{status:'accepted'}],resources:{movement_energy:20,movement_energy_reserved:1,equipment_energy:15,equipment_wear:99,hq_energy:15},reports:[{kind:'accepted',actor:'R',position_scope:null}],deliveries:[{received:2000}]});
     expect(valid_response({request_id:'accepted',ok:true,...received})).toBe(true);
     const restored=await new Game(store).restore(view.run_id,'restore-accepted');
-    expect(restored.view).toMatchObject({sim_time:2000,paused:true,issued_orders:Reflect.get(received.view,'issued_orders'),resources:received.view.resources});
+    expect(restored.view).toMatchObject({sim_time:2000,paused:true,issued_orders:Reflect.get(received.view,'issued_orders'),resources:Reflect.get(received.view,'resources')});
     expect(await store.read_committed(view.run_id)).toMatchObject({executions:[{status:'moving',starts:1000,completes:30500}],transmissions:[{sender:'R',at:1000,until:2000}]});
   }finally{await store.delete();}
 });
@@ -96,7 +96,7 @@ test('B22 R independently refuses a mismatched legal start and reports it once w
     const delivered=await game.control_clock({run_id:view.run_id,operation_id:'refusal-delivery',expected_revision:local.view.revision,intent:{kind:'advance',to:2000}});
     expect(delivered.view).toMatchObject({issued_orders:[{status:'refused'}],reports:[{kind:'refused',refusal_reason:'start_mismatch'}],held_windows:[{status:'released'}],phase_results:[],resources:{movement_energy:20,movement_energy_reserved:0,equipment_energy:15,hq_energy:15}});
     expect(valid_response({request_id:'refused',ok:true,...delivered})).toBe(true);
-    const restored=await new Game(store).restore(view.run_id,'restore-refused');expect(restored.view).toMatchObject({sim_time:2000,paused:true,resources:delivered.view.resources});
+    const restored=await new Game(store).restore(view.run_id,'restore-refused');expect(restored.view).toMatchObject({sim_time:2000,paused:true,resources:Reflect.get(delivered.view,'resources')});
     expect(Reflect.get(restored.view,'reports')).toHaveLength(1);
   }finally{await store.delete();}
 });
@@ -197,7 +197,7 @@ test('B22 a registered slowdown after acceptance cuts motion off at31000 and set
   try{
     const {game,view}=await issued(store,variant),before=await game.control_clock({run_id:view.run_id,operation_id:'before-cutoff',expected_revision:view.revision,intent:{kind:'advance',to:30999}});
     expect(await store.read_committed(view.run_id)).toMatchObject({executions:[{status:'moving',completes:36000}],world:{resources:{movement_energy:20,movement_energy_reserved:1}}});
-    const restored=await new Game(store).restore(view.run_id,'restore-before-cutoff');expect(restored.view).toMatchObject({sim_time:30999,paused:true,resources:before.view.resources});
+    const restored=await new Game(store).restore(view.run_id,'restore-before-cutoff');expect(restored.view).toMatchObject({sim_time:30999,paused:true,resources:Reflect.get(before.view,'resources')});
     const fresh=new Game(store),cutoff=await fresh.control_clock({run_id:view.run_id,operation_id:'phase-cutoff',expected_revision:restored.view.revision,intent:{kind:'advance',to:31000}}),actual=await store.read_committed(view.run_id);
     expect(cutoff.view).toMatchObject({issued_orders:[{status:'accepted'}],reports:[{kind:'accepted'}],phase_results:[]});
     // 24000 nominal ms before slowdown +6000/2 =27000; x=50+100*27000/29500=8350/59.

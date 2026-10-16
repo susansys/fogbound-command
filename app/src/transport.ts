@@ -10,10 +10,12 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence';
   read_only?:boolean;
 };
 export type Request =
+  |{kind:'request_source_validation';envelope:unknown}
+  |{kind:'issue_activity';envelope:unknown}
   |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
   |{kind:'save_plan';envelope:unknown}
   |{kind:'issue_mission';envelope:unknown}
@@ -33,7 +35,7 @@ export type Request =
   | {kind:'replay';run_id:string;to:number;node_revision?:number}
   | {kind:'current';run_id:string}
   | {kind:'previous';run_id:string}
-  | {kind:'management_pause';reason:'focus_lost'|'application_hidden'};
+  | {kind:'management_pause';reason:'manual'|'focus_lost'|'application_hidden'};
 export type Response =
   | {
       request_id: string;

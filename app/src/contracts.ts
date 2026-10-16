@@ -1,6 +1,6 @@
 import type {RoutePlan} from './route-contracts';
 export type Mode = "command" | "research";
-export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01'|'B22-MISSION-01';
+export type DefinitionRef='FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01'|'B22-MISSION-01'|'B23-INTELLIGENCE-01';
 export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
 export type PrestartCaseRef=typeof prestart_case_refs[number];
 export type Position = {
