@@ -76,7 +76,7 @@ test.each(['report','delivery'] as const)('B22 evaluation preserves genuinely se
     const decision=next.view.decision_records[1],ref={run_id:run,kind:'decision' as const,id:decision.id,version:1};
     expect(decision.known_then.selected_received_evidence).toEqual([{kind:'mission_report',run_id:run,report_ref:acceptance.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:1000,received_at:2000}]);
     const result=await game.evaluate_decision({run_id:run,view_revision:next.view.revision,decision_ref:ref});expect(result.checks.map(c=>c.result)).toEqual(['met','met','not_evaluable']);expect(valid_response({request_id:'selected-received',ok:true,...next})).toBe(true);
-    for(const mutation of [{run_id:'foreign-run'},{received_at:32001},{delivery_ref:'unpaired-delivery'},{report_ref:'unselected-report'}]){
+    for(const mutation of [{run_id:'foreign-run'},{received_at:32001},{delivery_ref:'unpaired-delivery'},{report_ref:'unselected-report'},{kind:'position_report',delivery_ref:'unpaired-delivery'}]){
       const forged=structuredClone(next);Object.assign(forged.view.decision_records[1].known_then.selected_received_evidence[0],mutation);expect(valid_response({request_id:'forged-received',ok:true,...forged})).toBe(false);
     }
     const restored=await new Game(store).restore(run,'restore-selected'),rechecked=await game.evaluate_decision({run_id:run,view_revision:restored.view.revision,decision_ref:ref});if(restored.view.scenario_kind!=='play_mission')throw Error('Expected mission view');expect(rechecked.checks).toEqual(result.checks);expect(restored.view.decision_records[1]).toEqual(decision);
@@ -93,8 +93,16 @@ test('B22 a selected old delivered position remains lawful after newer arrival r
     if(before.view.scenario_kind!=='play_mission')throw Error('Expected mission view');
     expect(before.view.position_knowledge).toMatchObject({status:'known_scope',observed:{kind:'known',value:30500}});
     const second=await issue('issue-second','P2',before.view,['old-H-position']),decision=second.view.decision_records[1],ref={run_id:created.run_id,kind:'decision' as const,id:decision.id,version:1};
-    expect(decision.known_then.selected_received_evidence).toEqual([{kind:'position_report',run_id:created.run_id,report_ref:'old-H-position',delivery_ref:'position-delivery-old-H-position',origin:'R',target:'HQ',reported_at:1000,received_at:2000}]);
+    expect(decision.known_then.selected_received_evidence).toEqual([{kind:'position_report',run_id:created.run_id,report_ref:'old-H-position',delivery_ref:'position-delivery-old-H-position',origin:'R',target:'HQ',reported_at:1000,received_at:2000,position_source:{report:{...variant.catalogs.position_reports![0],run_id:created.run_id},delivery:{id:'position-delivery-old-H-position',run_id:created.run_id,report_ref:'old-H-position',received:2000}}}]);
     expect((await game.evaluate_decision({run_id:created.run_id,view_revision:second.view.revision,decision_ref:ref})).checks.map(c=>c.result)).toEqual(['met','met','not_evaluable']);expect(valid_response({request_id:'old-position',ok:true,...second})).toBe(true);
+    for(const mutation of ['pair','run','time','scope'] as const){
+      const forged=structuredClone(second),proof=forged.view.decision_records[1].known_then.selected_received_evidence[0];if(proof.kind!=='position_report')throw Error('Expected position source');
+      if(mutation==='pair')proof.position_source.delivery.report_ref='another-report';
+      if(mutation==='run')proof.position_source.report.run_id='another-run';
+      if(mutation==='time')proof.position_source.report.observed={kind:'known',value:32001,evidence:proof.report_ref};
+      if(mutation==='scope')proof.position_source.report.scope_ref='unregistered-scope';
+      expect(valid_response({request_id:'forged-old-position',ok:true,...forged})).toBe(false);
+    }
     const restored=await new Game(store).restore(created.run_id,'restore');if(restored.view.scenario_kind!=='play_mission')throw Error('Expected mission view');expect(restored.view.decision_records[1]).toEqual(decision);
   }finally{await store.delete();}
 });

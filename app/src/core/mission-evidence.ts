@@ -52,7 +52,7 @@ export function selected_mission_receipts(refs:readonly string[],state:MissionSt
   }
   for(const delivery of state.position_deliveries){
     const report=state.position_reports.find(r=>r.id===delivery.report_ref&&r.run_id===state.run_id&&r.origin==='R'&&r.target==='HQ');
-    if(report&&delivery.run_id===state.run_id&&report.reported_at<=delivery.received&&delivery.received<=state.sim_time&&selected(report.id,delivery.id))receipts.push({kind:'position_report',run_id:state.run_id,report_ref:report.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:report.reported_at,received_at:delivery.received});
+    if(report&&delivery.run_id===state.run_id&&report.reported_at<=delivery.received&&delivery.received<=state.sim_time&&selected(report.id,delivery.id))receipts.push({kind:'position_report',run_id:state.run_id,report_ref:report.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:report.reported_at,received_at:delivery.received,position_source:{report:{...structuredClone(report),origin:'R',target:'HQ'},delivery:structuredClone(delivery)}});
   }
   return receipts;
 }
