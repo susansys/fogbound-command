@@ -23,6 +23,7 @@ export type Request =
   |{kind:'append_explanation';envelope:unknown}
   |{kind:'evaluate_decision';run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>}
   |{kind:'operate_mission';envelope:Envelope}
+  |{kind:'operate_intelligence';envelope:Envelope}
   | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }

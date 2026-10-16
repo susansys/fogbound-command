@@ -46,20 +46,20 @@ export class Game {
   private epoch: number | null = null;
   private faulted=false;
   private history:StoredState|null=null;
-  private readonly verified_play_states=new Set<string>();
+  private readonly verified_replay_states=new Set<string>();
   constructor(readonly store: Persistence) {}
-  private remember_play_state(integrity:string){
-    this.verified_play_states.add(integrity);
-    if(this.verified_play_states.size>64)this.verified_play_states.delete(this.verified_play_states.values().next().value!);
+  private remember_replay_state(integrity:string){
+    this.verified_replay_states.add(integrity);
+    if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
   }
   private async validate_package(state:StoredState|undefined){
-    if(state?.schema!==7){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);return;}
+    if(state?.schema!==7&&state?.schema!==9){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);return;}
     try{
       if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
-      await load_definition(play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
-      if(!this.verified_play_states.has(state.integrity)){
+      await load_definition(state.schema===9?intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions):play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+      if(!this.verified_replay_states.has(state.integrity)){
         await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
-        this.remember_play_state(state.integrity);
+        this.remember_replay_state(state.integrity);
       }
     }catch{throw new GameError('INVALID_SAVE');}
   }
@@ -85,7 +85,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(source);
-    return this.create(source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
+    return this.create(source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -124,7 +124,7 @@ export class Game {
       await this.store.commit_batch(state,await this.writer(),expected,operation_id,fingerprint);
       // Only successful private Game transitions may seed the bounded cache.
       // Every later read still hashes the actual body and checks its lineage.
-      if(state.schema===7)this.remember_play_state(state.integrity!);
+      if(state.schema===7||state.schema===9)this.remember_replay_state(state.integrity!);
     }
     catch(error){
       if(error instanceof GameError&&['STALE_REVISION','HISTORY_READ_ONLY'].includes(error.code))throw error;

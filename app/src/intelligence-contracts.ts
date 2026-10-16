@@ -26,6 +26,7 @@ export type IntelligenceSourceGroup={report_ref:IntelligenceRef<'report'>;delive
 export type IntelligenceActorConfirmation={actor:'R'|'W';role:'record_keeper'|'work_keeper';people:number;position_scope:string;load:number;space:number;load_capacity:number;space_capacity:number;movement_energy:number;equipment_energy:number;durability:number;packs:number;link:{energy:number;durability:number}|null;confirmed_at:number};
 export type IntelligencePlayerView={
   scenario_kind:'play_intelligence';run_id:string;revision:number;sim_time:number;mode:Mode;rate:1|2|4;paused:boolean;finished:false;source_run:string|null;
+  public_rules:{deadline:number;receipt_grace:number};
   access:{blue:'unverified'|'verified';green:'unverified'|'verified'};received_reports:Array<{report:IntelligenceReport;delivery:IntelligenceDelivery}>;source_groups:IntelligenceSourceGroup[];
   geometry:PublicMap;can_issue:boolean;next_action:string;gap:string;replay_nodes:PlayerView['replay_nodes'];log:PlayerView['log'];
   position_knowledge:PositionKnowledge;
@@ -40,5 +41,5 @@ export type IntelligencePlayerView={
   field_activities:Array<{ref:IntelligenceRef<'field_order'>;actor:string;activity:string;issued_at:number;status:'issued'|'accepted'|'completed'|'refused'|'cutoff'}>;
   field_reports:Array<{report:IntelligenceFieldReport;delivery:IntelligenceFieldDelivery}>;
   artifact_reports:Array<{report:IntelligenceFieldReport;delivery:IntelligenceFieldDelivery}>;
-  field_options:Array<{intent:IntelligenceActivityRequest['intent'];label:string;available:boolean;missing:string[]}>;
+  field_options:Array<{intent:IntelligenceActivityRequest['intent'];label:string;available:boolean;missing:string[];estimated_complete_at:number}>;
 };

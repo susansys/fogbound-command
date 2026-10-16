@@ -39,8 +39,14 @@ export function advance_processing_work(state:IntelligenceState,to:number,defini
   for(const item of state.processing.items){
     if(item.status==='completed'||item.status==='cutoff'){available=Math.max(available,item.completed_at!);continue;}
     const begin=item.started_at??Math.max(item.eligible_at,available),end=begin+item.work_required_ms;
-    if(to<begin)break;
     const reservation=state.processing.reservations.find(r=>r.ref.id===item.reservation_ref.id)!;
+    if(item.started_at===null&&begin>=p.deadline){
+      if(to<p.deadline)break;
+      item.status='cutoff';item.completed_at=p.deadline;reservation.to=p.deadline;
+      state.processing.energy_reserved-=reservation.quantity;reservation.status='released';
+      available=p.deadline;continue;
+    }
+    if(to<begin)break;
     item.started_at=begin;item.status='running';reservation.from=begin;reservation.to=Math.min(end,p.deadline);
     item.work_done_ms=Math.max(0,Math.min(to,end,p.deadline)-begin);
     if(to<Math.min(end,p.deadline))break;

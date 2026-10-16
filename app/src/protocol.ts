@@ -35,6 +35,7 @@ export function valid_request(
   if(value.kind==='append_explanation')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='evaluate_decision'){if(!fields(value,['kind','request_id','run_id','view_revision','decision_ref']))return false;try{parse_evaluate_mission({run_id:value.run_id,view_revision:value.view_revision,decision_ref:value.decision_ref});return true;}catch{return false;}}
   if(value.kind==='operate_mission')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
+  if(value.kind==='operate_intelligence')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (

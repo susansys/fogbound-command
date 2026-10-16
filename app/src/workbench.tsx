@@ -80,7 +80,7 @@ export function Workbench() {
     if(next?.scenario_kind==='play_corridor'){setPlayView(next);setLegacyView(null);}
     else{setPlayView(null);setLegacyView(next);}
   }
-  function adoptNewPlayRun(next:PlayPlayerView|MissionPlayerView){
+  function adoptNewPlayRun(next:PlayPlayerView|MissionPlayerView|IntelligencePlayerView){
     const run=next.run_id;
     displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});
     setDisplayStatus('地图关联正在核验');setView(next);liveView.current=next;
@@ -357,7 +357,7 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
-  if(intelligenceView)return <IntelligenceWorkbench key={intelligenceView.run_id} view={intelligenceView} transport={transport} adopt={setView} history={history} hasLiveRun={liveView.current?.run_id===intelligenceView.run_id} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);liveView.current=null;createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
+  if(intelligenceView)return <IntelligenceWorkbench key={intelligenceView.run_id} view={intelligenceView} transport={transport} adopt={setView} history={history} onNewRun={adoptNewPlayRun} liveRunId={liveView.current?.run_id??null} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);liveView.current=null;createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   if(missionView)return <MissionWorkbench key={history?liveView.current?.run_id??missionView.run_id:missionView.run_id} view={missionView} transport={transport} adopt={setView} onNewRun={adoptNewPlayRun} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   const prestart=view?.scenario_kind==='prestart_move';
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';

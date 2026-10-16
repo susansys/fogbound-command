@@ -38,7 +38,7 @@ let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
 let pendingPauses=0;
-function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?910000:view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_corridor'||view.scenario_kind==='play_intelligence'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
@@ -78,7 +78,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
   const kind=event.data&&typeof event.data==='object'?Reflect.get(event.data,'kind'):null;
   const envelope=event.data&&typeof event.data==='object'?Reflect.get(event.data,'envelope'):null;
   const intent=envelope&&typeof envelope==='object'?Reflect.get(envelope,'intent'):null;
-  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
+  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission','operate_intelligence'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
   if(pause)pendingPauses++;
   queue = queue.then(async () => {
     let stalePauseView:import('./mission-contracts').MissionPlayerView|undefined;
@@ -88,8 +88,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -171,10 +171,11 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.editing_seq,
           ),
         };
-      else if ((input.kind === "operate"||input.kind==='operate_corridor'||input.kind==='operate_mission') && locked) {
+      else if ((input.kind === "operate"||input.kind==='operate_corridor'||input.kind==='operate_mission'||input.kind==='operate_intelligence') && locked) {
         const context=await game.get_view(input.envelope.run_id);
         if((input.kind==='operate_corridor')!==(context.scenario_kind==='play_corridor'))throw new GameError('INVALID_INPUT');
         if((input.kind==='operate_mission')!==(context.scenario_kind==='play_mission'))throw new GameError('INVALID_INPUT');
+        if((input.kind==='operate_intelligence')!==(context.scenario_kind==='play_intelligence'))throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
           is_task_intent(input.envelope.intent)

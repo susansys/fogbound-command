@@ -539,3 +539,44 @@ Game method during review, retaining typed public parsers and receipt/fault
 semantics. Focused recovery/gates/work/source tests and types passed after this
 refactor. Fresh full core, browser/native evidence and independent fixed-SHA
 rereviews remain required before ticket exit; previous runs are not relabeled.
+
+## B23 T04 work-in-progress review candidate
+
+The two public Game paths reach B-report receipt at284000/261000 with the frozen
+23000ms difference and full resource oracles. Real keyboard/Worker paths passed.
+New RED/GREENs cover schema9 restart dispatch, command-child paused start,
+unstarted queue cutoff release, the received milestone hidden by transient UI
+notices, public deadline/time-gap copy, and a real frontend rejection beyond the
+legacy610000ms wire bound. The latter now uses a closed operate_intelligence
+request with strict scenario matching; old request limits remain unchanged.
+The E43 constructor-only owned delayed-channel carrier has explicit registry
+source and10000/10001 delays; default1000ms and work recipes stay unchanged.
+
+Actual default Windows native checks passed six launches for both full paths
+and899999 cutoff save/reopen, plus four launches for command partial work,
+research terminal-pending receipt, trusted blur and explicit continue. They ran
+the recorded dirty candidate bytes; further runtime changes require fresh
+matching checks. Worker reply-loss query and unknown restart retry preserve the
+original operation. Legacy schemas4—8 restore beside schema9; self-hashed forged
+handover/resources/input-clock packages are rejected without altering bad data.
+
+E39's new120-input bounded functional diagnostic initially inherited Vitest's
+5000ms default and timed out; only that new diagnostic now has an explicit90s
+budget, with all original timeouts unchanged. The matching file baseline was
+6.29s test time; extending the existing64-entry verified-transition cache from
+schema7 to9 reduced it to2.23s. Every actual body is still hashed, definitions
+validated, unknown/cold packages fully replayed and parent lineage checked;
+only successful private Game commits seed it. This is no speed guarantee or
+2000-input claim. The default-Windows120/600/2000 by0/1/3-parent matrix remains
+pending under the frozen10min/2GiB/six-launch diagnostic budget.
+
+The paired visual collection captured both resolutions and DPR1/2, new sources,
+queue, approval/reservation, pending/received artifacts, actual map controls and
+page scale. First comparable brand pixels and header geometry are identical.
+The visual gate is still open: comparing controls' different positioned parents
+produced an anchor discrepancy, and the pre-existing MAP-B compact marker is
+36x36 versus locked0.2.1's text-bearing53.4375x38. Original frames/failures are
+retained. No reference/CSS edits or tolerance widening has been made to force a
+pass; comparator scope needs independent review and fresh evidence. Final T04,
+whole-batch reviews/CI/PR/main/artifact/safe sync/retro are not complete. All
+original244AT remain not_run; no formal player-pressure or reality claim.
