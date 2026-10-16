@@ -2,6 +2,7 @@ import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
 import {prestart_case_refs} from './contracts';
 import {valid_route_draft,valid_route_plan} from './route-validation';
+import {parse_evaluate_mission} from './mission-protocol';
 export function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -10,6 +11,7 @@ export function valid_id(value: unknown): value is string {
 }
 export function valid_public_field_path(value:unknown):value is string{
   if(typeof value!=='string'||value.length>180)return false;
+  if(['mission_draft.phases.self_dependency','mission_draft.phases.cyclic_dependencies','mission_draft.phases.dangling_dependency'].includes(value))return true;
   if(/^route_draft(?:\.(?:actor|map_id|map_version|crs_id|geometry_version|path)|\[(?:0|[1-9]\d{0,2})\])*$/.test(value))return true;
   if(['catalogs.movement_causes','catalogs.hq_terminal'].includes(value)||/^(?:profile\.parameters|rules)\.(?:report_budget|report_energy_cost|report_wear_cost|cause_policy)$/.test(value))return true;
   if(/^(?:capabilities(?:\[0\])?(?:\.(?:unit|speed|evidence_refs))?|catalogs\.actor(?:\.(?:load|space|qualification_refs))?)$/.test(value))return true;
@@ -26,13 +28,19 @@ export function valid_request(
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['focus_lost','application_hidden'].includes(value.reason);
+  if(value.kind==='preview_mission')return fields(value,['kind','request_id','run_id','revision','editing_seq','draft'])&&valid_id(value.run_id)&&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>=1&&typeof value.editing_seq==='number'&&Number.isSafeInteger(value.editing_seq)&&value.editing_seq>=0;
+  if(value.kind==='save_plan')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='issue_mission')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='append_explanation')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='evaluate_decision'){if(!fields(value,['kind','request_id','run_id','view_revision','decision_ref']))return false;try{parse_evaluate_mission({run_id:value.run_id,view_revision:value.view_revision,decision_ref:value.decision_ref});return true;}catch{return false;}}
+  if(value.kind==='operate_mission')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&['save','pause','continue','advance','rate'].includes(value.envelope.intent.kind);
   if (value.kind === "list") return fields(value, ["kind", "request_id"]);
   if (value.kind === "create")
     return (
       fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref']),...(value.case_ref===undefined?[]:['case_ref'])]) &&
       (value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&
       (value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE')&&
-      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01') &&
+      (value.definition_ref===undefined||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );

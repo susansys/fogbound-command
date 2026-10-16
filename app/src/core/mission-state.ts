@@ -1,0 +1,41 @@
+import type {Mode} from '../contracts';
+import type {MissionResources,SavedMissionPlan,KnownMission,SavePlanEnvelope,IssueMissionEnvelope,MissionOrder,MissionHeldWindow,MissionDraft,MissionAuthorization,MissionGateEvaluation} from '../mission-contracts';
+import type {PositionKnowledge} from '../play-contracts';
+import type {State} from './state';
+import type {MissionDefinition} from './mission-definition';
+import {rational_position,type RationalPosition,type PathTiming,type Fraction} from './play-timing';
+import type {MissionReport,MissionDelivery} from '../mission-contracts';
+export type MissionState={
+  schema:8;scenario_kind:'play_mission';contract:'0.5.1';integrity?:string;definition_hash:string;hashes:Record<string,string>;
+  run_id:string;revision:number;sim_time:number;mode:Mode;rate:1|2|4;paused:boolean;finished:false;ended:boolean;status:'draft'|'active'|'completed';actual_mission_status:'draft'|'active'|'assessing'|'completed';
+  source_run:string|null;rng:State['rng'];generation:number;origin_generation:number;phase:'committed';inputs:Array<{envelope:SavePlanEnvelope|IssueMissionEnvelope|import('../mission-contracts').AppendMissionExplanation|import('../contracts').Envelope;at:number;revision:number;clock_to?:number}>;
+  world:{position:RationalPosition;resources:MissionResources};known:{position_knowledge:PositionKnowledge;resources:MissionResources;phase_confirmations:Array<{phase_id:string;phase_version:number;plan_id:string;plan_version:number;order_ref:string;report_ref:string;delivery_ref:string}>};
+  mission:KnownMission|null;plans:SavedMissionPlan[];log:State['log'];decision_records:import('../mission-contracts').MissionDecisionRecord[];retrospective_explanations:import('../mission-contracts').MissionRetrospectiveExplanation[];
+  position_reports:Array<import('./mission-definition').MissionPositionRecord&{run_id:string}>;
+  position_deliveries:Array<{id:string;run_id:string;report_ref:string;received:number}>;
+  orders:Array<MissionOrder&{frozen_payload:{draft:MissionDraft;phase:MissionDraft['phases'][number];route:MissionDraft['routes'][number];grant:MissionDefinition['catalogs']['authority'];authorization:MissionAuthorization;gate:MissionGateEvaluation;evidence_refs:string[]}}>;
+  held_windows:MissionHeldWindow[];
+  outbound_messages:Array<{id:string;order_ref:string;origin:'HQ';target:'R';sent:number;deliver_at:number;payload_digest:string}>;
+  local:{reservations:NonNullable<MissionDefinition['catalogs']['local_reservations']>;resources:Omit<MissionResources,'hq_energy'|'hq_wear'>;revision:number;movement_time_factor:number;movement_changes:string[];obstacle_observations:Array<{obstacle_ref:string;execution_ref:string;observed:number}>;position_knowledge:import('../mission-contracts').MissionLocalPositionKnowledge;received_commands:string[];position_deliveries:string[];observations:Array<{id:string;at:number;scope:Exclude<import('../spatial').SpatialScope,{kind:'unresolved'}>;source_ref:'catalogs.actor.origin'|'terminal_observation'}>};
+  attempts:Array<{order_ref:string;received:number;checked:number|null;accept_until:number|null;status:'waiting_window'|'accepted'|'gate_hold'|'not_started'|'refused'|'arrived'|'blocked'|'cutoff';terminal_at:number|null;gate:MissionGateEvaluation|null;execution_ref:string|null;refusal_reason:import('../mission-contracts').MissionRefusalReason|null}>;
+  executions:Array<PathTiming&{id:string;order_ref:string;status:'moving'|'arrived'|'cutoff'|'blocked';starts:number;completes:number;elapsed:Fraction;last_updated:number;time_factor:number;path:MissionDraft['routes'][number]['path'];reserved:number;gate:MissionGateEvaluation;terminal_at:number|null;settled:boolean;settlement:{distance:Fraction;energy:number;released:number;at:number}|null}>;
+  phase_results:Array<{order_ref:string;phase_ref:MissionOrder['phase_ref'];plan_ref:MissionOrder['plan_ref'];actual_event_ref:string}>;
+  reports:Array<MissionReport|import('../mission-contracts').MissionUnsentReport>;deliveries:MissionDelivery[];
+  sent_reports:MissionReport[];pending_reports:Array<{report_ref:string;at:number}>;
+  transmissions:Array<{sender:'R';report_ref:string;at:number;until:number;energy:number;wear:number}>;
+};
+export function initial_mission_state(definition:MissionDefinition,run_id:string,mode:Mode,generation:number,source_run:string|null=null,rng_origin=run_id):MissionState{
+  const p=definition.profile.parameters,initial=definition.catalogs.initial_evidence;
+  const origin=definition.catalogs.map.scopes.find(x=>x.id===definition.catalogs.actor.origin);
+  if(origin?.kind!=='point')throw Error('Registered mission origin must be a point');
+  const scope=definition.catalogs.map.scopes.find(x=>x.id===initial.scope_ref)!;
+  const times={observed:structuredClone(initial.observed),reported:{kind:'unknown'} as const,source_event_time:structuredClone(initial.source_event_time),received:null,provenance:{kind:'registered_initial',initial_evidence_ref:initial.id} as const,evidence_refs:[initial.id]};
+  const knowledge:PositionKnowledge=scope.kind==='unresolved'?{status:'unresolved',...times}:{status:'known_scope',scope:structuredClone(scope),...times};
+  const resources={movement_energy:p.movement_energy,movement_energy_reserved:0,equipment_energy:p.equipment_energy,equipment_wear:p.equipment_wear,hq_energy:p.hq_energy,hq_wear:p.hq_wear,confirmed_at:0};
+  const actual_resources={...resources,...definition.catalogs.local_resources};
+  const {hq_energy,hq_wear,...local_resources}=actual_resources;
+  const local=definition.catalogs.local_initial_evidence,local_scope=local?definition.catalogs.map.scopes.find(s=>s.id===local.scope_ref)!:origin;
+  const local_times={observed:local?structuredClone(local.observed):{kind:'known' as const,value:0,evidence:'R-initial-self-position'},reported:{kind:'unknown' as const},source_event_time:local?structuredClone(local.source_event_time):{kind:'unknown' as const},received:null,provenance:{kind:'registered_initial' as const,initial_evidence_ref:local?.id??'R-initial-self-position'},evidence_refs:[local?.id??'R-initial-self-position']};
+  const local_position:import('../mission-contracts').MissionLocalPositionKnowledge=local_scope.kind==='unresolved'?{status:'unresolved',...local_times}:{status:'known_scope',scope:structuredClone(local_scope),...local_times,...(!local?{provenance:{kind:'local_observation' as const,observation_ref:'R-initial-self-position'}}:{})};
+  return {schema:8,scenario_kind:'play_mission',contract:'0.5.1',definition_hash:definition.definition_hash,hashes:structuredClone(definition.hashes),run_id,revision:1,sim_time:0,mode,rate:1,paused:mode==='research'||source_run!==null,finished:false,ended:false,status:'draft',actual_mission_status:'draft',source_run,rng:{algorithm:'xorshift32-v1',version:1,seed:1,state:1,origin:rng_origin,used:false},generation,origin_generation:generation,phase:'committed',inputs:[],decision_records:[],retrospective_explanations:[],orders:[],held_windows:[],outbound_messages:[],position_reports:[],position_deliveries:[],local:{reservations:structuredClone(definition.catalogs.local_reservations??[]),resources:structuredClone(local_resources),revision:1,movement_time_factor:1,movement_changes:[],obstacle_observations:[],position_knowledge:local_position,received_commands:[],position_deliveries:[],observations:local?[]:[{id:'R-initial-self-position',at:0,scope:structuredClone(origin),source_ref:'catalogs.actor.origin'}]},attempts:[],executions:[],phase_results:[],reports:[],sent_reports:[],pending_reports:[],deliveries:[],transmissions:[],mission:null,plans:[],world:{position:rational_position(origin.typed_geometry.position),resources:structuredClone(actual_resources)},known:{position_knowledge:knowledge,resources,phase_confirmations:[]},log:[{id:'b22-initial',at:0,kind:'initial_evidence',text:'初始位置依据已登记；任务尚未保存或下达。',evidence:initial.id}]};
+}

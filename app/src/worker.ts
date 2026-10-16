@@ -7,6 +7,8 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import type { Request, Response } from "./transport";
 import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
+import missionDefinition from './core/mission-definition.json';
+import {parse_mission_draft,parse_issue_mission} from './mission-protocol';
 const scope = self as unknown as DedicatedWorkerGlobalScope;
 const store = new Persistence("fogbound-map-b-game-1");
 const game = new Game(store);
@@ -34,7 +36,8 @@ let active:PlayerView|null=null;
 let history:Game|null=null;
 let anchor={wall:0,sim:0};
 let clockQueued=false;
-function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+let pendingPauses=0;
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_corridor'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
@@ -50,11 +53,11 @@ async function pauseActiveRun(){
   remember(result.view);
 }
 setInterval(()=>{
-  if(clockQueued||!locked||!active||active.mode!=='command'||active.paused)return;
+  if(clockQueued||pendingPauses||!locked||!active||active.mode!=='command'||active.paused)return;
   clockQueued=true;
   queue=queue.then(async()=>{
     try{
-      if(!active||active.mode!=='command'||active.paused)return;
+      if(pendingPauses||!active||active.mode!=='command'||active.paused)return;
       const to=clockTarget(active);
       if(to<=active.sim_time)return;
       const result=await game.tick(active.run_id,to,crypto.randomUUID());
@@ -68,14 +71,24 @@ setInterval(()=>{
   });
 },250);
 scope.onmessage = (event: MessageEvent<unknown>) => {
+  // Give an already received pause its turn before another automatic tick.
+  // Other requests do not suppress clock scheduling. Game still checks
+  // revisions and derives actual elapsed time when it commits the operation.
+  const kind=event.data&&typeof event.data==='object'?Reflect.get(event.data,'kind'):null;
+  const envelope=event.data&&typeof event.data==='object'?Reflect.get(event.data,'envelope'):null;
+  const intent=envelope&&typeof envelope==='object'?Reflect.get(envelope,'intent'):null;
+  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
+  if(pause)pendingPauses++;
   queue = queue.then(async () => {
+    let stalePauseView:import('./mission-contracts').MissionPlayerView|undefined;
     const raw: unknown = event.data,
       request_id = correlation(raw);
     try {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
-      if(history&&['create','takeover','restart','operate','operate_corridor'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -91,7 +104,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
@@ -129,6 +142,17 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
           ok: true,
           view: await (history??game).get_view(input.run_id),
         };
+      else if(input.kind==='preview_mission'&&locked){
+        response={request_id,ok:true,mission_preview:await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,parse_mission_draft(input.draft,input.run_id))};rememberResult=false;
+      }else if(input.kind==='save_plan'&&locked){
+        response={request_id,ok:true,...await game.save_plan(input.envelope)};
+      }else if(input.kind==='issue_mission'&&locked){
+        response={request_id,ok:true,...await game.issue_order(parse_issue_mission(input.envelope))};
+      }else if(input.kind==='evaluate_decision'&&locked){
+        response={request_id,ok:true,mission_evaluation:await (history??game).evaluate_decision({run_id:input.run_id,view_revision:input.view_revision,decision_ref:input.decision_ref})};rememberResult=false;
+      }else if(input.kind==='append_explanation'&&locked){
+        response={request_id,ok:true,...await game.append_explanation(input.envelope)};
+      }
       else if (input.kind === "preview" && locked)
         response = {
           request_id: input.request_id,
@@ -139,9 +163,10 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.editing_seq,
           ),
         };
-      else if ((input.kind === "operate"||input.kind==='operate_corridor') && locked) {
+      else if ((input.kind === "operate"||input.kind==='operate_corridor'||input.kind==='operate_mission') && locked) {
         const context=await game.get_view(input.envelope.run_id);
         if((input.kind==='operate_corridor')!==(context.scenario_kind==='play_corridor'))throw new GameError('INVALID_INPUT');
+        if((input.kind==='operate_mission')!==(context.scenario_kind==='play_mission'))throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
         const result =
           is_task_intent(input.envelope.intent)
@@ -162,7 +187,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       const code =
         error instanceof GameError ? error.code : "STORAGE_UNCONFIRMED";
       if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(code)){blocked=true;active=null;}
-      scope.postMessage({ request_id, ok: false, code,...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
-    }
+      scope.postMessage({ request_id, ok: false, code,...(code==='STALE_REVISION'&&stalePauseView?{mission_view:stalePauseView}:{}),...(error instanceof GameError&&['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(code)&&valid_public_field_path(error.field_path)?{field_path:error.field_path}:{}) } satisfies Response);
+    } finally {if(pause)pendingPauses--;}
   });
 };

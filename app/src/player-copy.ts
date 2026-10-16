@@ -6,6 +6,15 @@ const errors:Record<string,string>={
   WRITER_BUSY:'另一个窗口正在指挥。请先关闭原窗口，再在这里接手。',
   LOCK_UNSUPPORTED:'当前浏览器无法保证单一窗口指挥，请使用支持此演练的桌面浏览器。',
   INVALID_INPUT:'指令内容不完整或超出本次演练范围，请核对后再试。',
+  INVALID_REQUEST:'任务结构、引用或输入预算不符合要求，原记录与输入仍保留。请核对阶段依赖、路线和文字。',
+  OBJECT_VERSION_CONFLICT:'任务版本已更新，输入仍保留。请读取当前版本并重新核对。',
+  AUTHORITY_DENIED:'既有参谋预授权未覆盖当前任务、主体、行动、路线、时段或风险，请核对授权缺口。',
+  EVIDENCE_REQUIRED:'缺少当前主体可合法使用的依据，或尚无唯一精确起点；原记录与输入保留。',
+  CONSTRAINT_HOLD:'门槛依据未知或已过期，请核实后重新核对；本次未下达。',
+  CONSTRAINT_DENIED:'已知硬条件、资源或时间窗不满足；接受风险或备注不能覆盖，原记录保留。',
+  CAPACITY_CONFLICT:'当前已知的预约或发送窗口冲突，请核对已有安排。',
+  STATE_CONFIRMATION_REQUIRED:'请先等待对应阶段的合法终止或确认回报；未知结果不能当作已完成。',
+  OPERATION_ID_REUSED:'原操作身份已用于另一份内容，请先查询原操作结果。',
   INVALID_DEFINITION:'演练资料无法核对，未开始新的行动。请重新打开页面。',
   INVALID_SAVE:'存档资料无法核对，原记录仍保留。本次没有恢复行动。',
   HISTORY_READ_ONLY:'历史记录只能查看，请返回当前行动后再操作。',
@@ -26,7 +35,14 @@ const errors:Record<string,string>={
   STORAGE_UNCONFIRMED:'本次操作尚未确认保存。请保留输入，恢复最近的可靠记录后再继续。',
   ENGINE_UNCONFIRMED:'当前行动记录无法核对，本次操作未确认保存。请保留输入并恢复最近记录。',
 };
-export function error_copy(code:string):string {return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';}
+export function error_copy(code:string,field_path?:string):string {
+  if(code==='INVALID_REQUEST'){
+    if(field_path==='mission_draft.phases.self_dependency')return '阶段不能依赖自身（自环）。请修改前置阶段；原记录与输入仍保留。';
+    if(field_path==='mission_draft.phases.cyclic_dependencies')return '阶段前置关系形成循环。请修改依赖；原记录与输入仍保留。';
+    if(field_path==='mission_draft.phases.dangling_dependency')return '前置阶段不存在。请核对引用；原记录与输入仍保留。';
+  }
+  return errors[code]??'本次操作暂未得到可靠确认，请保留输入并查看最近的行动记录。';
+}
 export function log_copy(entry:LogEntry):string {
   if(entry.text.startsWith('准备期'))return entry.observed===undefined?entry.text:`${entry.text} 观察 ${clock(entry.observed)} · 总部收到 ${clock(entry.at)}。`;
   if(entry.text.startsWith('档案任务'))return '档案简报已送达，记录组 R 最后确认位于工位 H。';

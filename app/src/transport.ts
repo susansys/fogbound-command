@@ -3,16 +3,23 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
+import type {MissionPreview,MissionPlayerView,MissionDecisionEvaluation,MissionRef} from './mission-contracts';
 export type RunSummary = {
   run_id: string;
   revision: number;
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission';
   read_only?:boolean;
 };
 export type Request =
+  |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
+  |{kind:'save_plan';envelope:unknown}
+  |{kind:'issue_mission';envelope:unknown}
+  |{kind:'append_explanation';envelope:unknown}
+  |{kind:'evaluate_decision';run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>}
+  |{kind:'operate_mission';envelope:Envelope}
   | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
@@ -34,9 +41,11 @@ export type Response =
       view?: PlayerView;
       runs?: RunSummary[];
       plan?: PreviewPlan;
+      mission_preview?:MissionPreview;
+      mission_evaluation?:MissionDecisionEvaluation;
       receipt?: Receipt | null;
     }
-  | { request_id: string; ok: false; code: string;field_path?:string };
+  | { request_id: string; ok: false; code: string;field_path?:string;mission_view?:MissionPlayerView };
 export class Transport {
   private listeners=new Set<(response:Response)=>void>();
   subscribe(listener:(response:Response)=>void){this.listeners.add(listener);return ()=>{this.listeners.delete(listener);};}

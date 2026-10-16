@@ -14,6 +14,8 @@ import ms from 'milsymbol';
 import type {GamePlayerView,PlayPlayerView} from './play-contracts';
 import {PlayWorkbench} from './play-workbench';
 import {is_legacy_plan} from './route-contracts';
+import type {MissionPlayerView} from './mission-contracts';
+import {MissionWorkbench} from './mission-workbench';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
 function isRecordPlan(plan: Plan | null | undefined): plan is Extract<Plan,{kind:'record'}> {
   return !!plan && 'kind' in plan && plan.kind==='record';
@@ -65,12 +67,15 @@ export function Workbench() {
     [listReady,setListReady]=useState(false),
     [busy, setBusy] = useState(false);
   const [playView,setPlayView]=useState<PlayPlayerView|null>(null);
-  const shownRun=useRef<string|null>(null);shownRun.current=playView?.run_id??view?.run_id??null;
+  const [missionView,setMissionView]=useState<MissionPlayerView|null>(null);
+  const shownRun=useRef<string|null>(null);shownRun.current=missionView?.run_id??playView?.run_id??view?.run_id??null;
   function setView(next:GamePlayerView|null){
+    if(next?.scenario_kind==='play_mission'){setMissionView(next);setPlayView(null);setLegacyView(null);return;}
+    setMissionView(null);
     if(next?.scenario_kind==='play_corridor'){setPlayView(next);setLegacyView(null);}
     else{setPlayView(null);setLegacyView(next);}
   }
-  function adoptNewPlayRun(next:PlayPlayerView){
+  function adoptNewPlayRun(next:PlayPlayerView|MissionPlayerView){
     const run=next.run_id;
     displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});
     setDisplayStatus('地图关联正在核验');setView(next);liveView.current=next;
@@ -78,6 +83,7 @@ export function Workbench() {
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:GamePlayerView){
+    if(next.scenario_kind==='play_mission'){setMissionView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setPlayView(null);setLegacyView(null);return;}
     if(next.scenario_kind==='play_corridor'){setPlayView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setLegacyView(null);}
     else setLegacyView(old=>!old||(next.run_id===old.run_id&&next.revision>=old.revision)?next:old);
   }
@@ -230,7 +236,7 @@ export function Workbench() {
       if(view.mode==='command'&&(!isCurrent()||!response.ok&&response.code==='STALE_REVISION')){
         const fresh=await transport.request({kind:'view',run_id:context.run_id});
         if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
-        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'){if(!fresh.ok)setError(fresh.code);return;}
+        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'||fresh.view.scenario_kind==='play_mission'){if(!fresh.ok)setError(fresh.code);return;}
         if(fresh.view.revision>=currentView.current.revision){currentView.current=fresh.view;adoptView(fresh.view);}
         context.revision=currentView.current.revision;continue;
       }
@@ -344,6 +350,7 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
+  if(missionView)return <MissionWorkbench key={history?liveView.current?.run_id??missionView.run_id:missionView.run_id} view={missionView} transport={transport} adopt={setView} onNewRun={adoptNewPlayRun} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   const prestart=view?.scenario_kind==='prestart_move';
   const moveTarget=prestart&&!view?.issued_orders.length?'N':'T';
   const selectedPoint=view?.geometry[selected==='N'?'N':selected==='T'?'T':'H'];
@@ -398,7 +405,7 @@ export function Workbench() {
           <p>
             本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option></select></label>
           {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}
