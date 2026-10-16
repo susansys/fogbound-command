@@ -16,6 +16,8 @@ function initial_draft(view:MissionPlayerView):MissionDraft{
   return {run_id,plan_id:'plan-M1',mission_ref:ref('mission','M1'),intent:{id:'intent-M1',version:1,purpose:'',desired_end_state:'',key_tasks:['沿登记走廊移动'],priorities:['先A后B'],constraint_refs:['registered-corridors'],acceptable_risk:'registered_low',delegation_ref:ref('authority','B22-STATIC-GRANT')},objective:{id:'objective-M1',purpose:'抵达目标点并等待合法确认',success_expr:{kind:'compare',field_ref:'position.scope',operator:'eq',typed_value:'B'},failure_expr:{kind:'not',child:ready},deadline_time_ms:900000,verification_requirements:['matching_arrival_report_and_delivery'],priority:1,dependencies:[]},phases:[{id:'P1',version:1,kind:'move',dependencies:[],entry_gate:ready,exit_gate:{kind:'compare',field_ref:'phase.confirmed',operator:'eq',typed_value:true},earliest_start_time_ms:1000,latest_finish_time_ms:31000,activity:{kind:'move',actor:'R',route_ref:ref('route','route-P1')}},{id:'P2',version:1,kind:'move',dependencies:[ref('phase','P1')],entry_gate:ready,exit_gate:{kind:'compare',field_ref:'phase.confirmed',operator:'eq',typed_value:true},earliest_start_time_ms:33000,latest_finish_time_ms:64000,activity:{kind:'move',actor:'R',route_ref:ref('route','route-P2')}}],routes:[{id:'route-P1',version:1,path:[[50,150],[150,150]]},{id:'route-P2',version:1,path:[[150,150],[250,150]]}],actor_assignments:['R'],support_windows:[],assumptions:[],evidence_refs:view.position_knowledge.status==='conflicting'?[]:[...view.position_knowledge.evidence_refs],decision_points:[],note:''};
 }
 function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([k,v])=>[k,canonical(v)])):value;}
+const decisionKey=(record:MissionDecisionRecord)=>JSON.stringify([record.run_id,'decision',record.id,record.version]);
+function matchesDecision(result:MissionDecisionEvaluation,record:MissionDecisionRecord){const ref=result.decision_ref;return result.run_id===record.run_id&&ref.run_id===record.run_id&&ref.kind==='decision'&&ref.id===record.id&&ref.version===record.version;}
 async function digest(value:unknown){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(canonical(value))));return [...new Uint8Array(bytes)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 function nextObjectVersion<T extends {id:string;version:number}>(value:T,saved:readonly T[]):number{
   const previous=saved.filter(x=>x.id===value.id).sort((a,b)=>b.version-a.version)[0];
@@ -132,8 +134,8 @@ export function MissionWorkbench({view,transport,adopt,onNewRun,history,onHistor
       const r=await transport.request({kind:'evaluate_decision',run_id:v.run_id,view_revision:v.revision,decision_ref:{run_id:v.run_id,kind:'decision',id:record.id,version:record.version}});
       if(!r.ok){setError(r.code);return;}
       const evaluation=r.mission_evaluation;
-      if(!evaluation||evaluation.run_id!==v.run_id||evaluation.view_revision!==v.revision||evaluation.decision_ref.id!==record.id||evaluation.decision_ref.version!==record.version||evaluation.record_source.kind!=='current_run'){setError('CHANNEL_UNCERTAIN');return;}
-      if(historyRef.current===wasHistory)setEvaluations(old=>({...old,[record.id]:evaluation}));
+      if(!evaluation||evaluation.run_id!==v.run_id||evaluation.view_revision!==v.revision||!matchesDecision(evaluation,record)||evaluation.record_source.kind!=='current_run'){setError('CHANNEL_UNCERTAIN');return;}
+      if(historyRef.current===wasHistory)setEvaluations(old=>({...old,[decisionKey(record)]:evaluation}));
     }catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function checkIssue(confirm=false){
@@ -280,9 +282,9 @@ export function MissionWorkbench({view,transport,adopt,onNewRun,history,onHistor
   const routeLocked=history||activeRouteSigned;
   const ruleLabels={context_completeness:'上下文与引用',public_rule_compliance:'当时公开硬规则',declared_reason_evaluability:'声明理由的可评性'};
   const resultLabels={met:'满足',violated:'违反',not_evaluable:'不可评价'};
-  const missingLabels:Record<string,string>={mission:'任务',plan:'计划版本',position_knowledge:'当时位置依据',resources:'当时资源依据',phase_results:'阶段凭证',prior_orders:'既有指令记录',held_windows:'能力占用',outbound_sent_times:'发送时刻',plan_or_phase_ref:'计划或阶段引用',declared_reason:'当时声明理由'};
+  const missingLabels:Record<string,string>={mission:'任务',plan:'计划版本',position_knowledge:'当时位置依据',resources:'当时资源依据',phase_results:'阶段凭证',prior_orders:'既有指令记录',held_windows:'能力占用',outbound_sent_times:'发送时刻',selected_received_evidence:'当时所选送达凭证',plan_or_phase_ref:'计划或阶段引用',declared_reason:'当时声明理由'};
   const decisionRecords=<section aria-label="下达时记录"><p>记录只引用下达当时总部可见的材料。检查不评分，也不以事后结果补齐理由；阅读和编辑不会暂停时间。</p>{view.decision_records.length===0&&<p>尚无已下达的决策记录。</p>}{view.decision_records.map(record=>{
-    const assessment=evaluations[record.id];
+    const cached=evaluations[decisionKey(record)],assessment=cached&&matchesDecision(cached,record)?cached:undefined;
     return <article className="record" data-testid="mission-decision-record" key={record.id}>
       <h2>{record.phase_ref.id} · 下达时记录 · {clock(record.at)}</h2><p>计划版本 {record.plan_ref.version} · 阶段版本 {record.phase_ref.version} · 当时知识记录 {record.knowledge_revision}</p><p>当时任务目的：{record.actual_intent.purpose}</p><p>当时声明理由：{record.reason_status==='recorded'?record.declared_reason:'未记录'}</p>
       <details><summary>查看当时依据</summary><p>期望结果：{record.actual_intent.desired_end_state}</p><p>采用既有参谋预授权 · {record.authority_ref.id} · 版本 {record.authority_ref.version}</p><p>所选凭证：{record.evidence_refs.join('、')||'未另选凭证'}</p><p>当时总部已确认移动能量 {record.known_then.resources.movement_energy} · 联络能量 {record.known_then.resources.equipment_energy}</p></details>

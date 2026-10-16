@@ -12,10 +12,10 @@ function canonical_public(value:unknown):unknown{
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,entry])=>[key,canonical_public(entry)]));
   return value;
 }
-async function decision_fixture(store:Persistence,reason?:string){
+async function decision_fixture(store:Persistence,reason?:string,selectedEvidence?:string[]){
   const game=new Game(store),created=await game.create_run(definition,'research','create'),draft=mission_draft(created.run_id);
   const saved=await game.save_plan({run_id:created.run_id,operation_id:'save',expected_revision:created.revision,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
-  const input:IssueMissionEnvelope={run_id:created.run_id,operation_id:'issue',expected_revision:saved.view.revision,intent:{kind:'issue_mission',expected_object_revision:saved.view.mission!.object_revision,plan_ref:saved.view.mission!.current_plan_ref,phase_ref:{run_id:created.run_id,kind:'phase',id:'P1',version:1},grant_ref:draft.intent.delegation_ref,preview:await game.preview_plan(created.run_id,saved.view.revision,0,draft),evidence_refs:draft.evidence_refs,...(reason===undefined?{}:{reason})}};
+  const input:IssueMissionEnvelope={run_id:created.run_id,operation_id:'issue',expected_revision:saved.view.revision,intent:{kind:'issue_mission',expected_object_revision:saved.view.mission!.object_revision,plan_ref:saved.view.mission!.current_plan_ref,phase_ref:{run_id:created.run_id,kind:'phase',id:'P1',version:1},grant_ref:draft.intent.delegation_ref,preview:await game.preview_plan(created.run_id,saved.view.revision,0,draft),evidence_refs:selectedEvidence??draft.evidence_refs,...(reason===undefined?{}:{reason})}};
   const issued=await game.issue_order(input),record=issued.view.decision_records[0],ref={run_id:created.run_id,kind:'decision' as const,id:record.id,version:record.version};
   return {game,created,saved,input,issued,record,ref};
 }
@@ -33,7 +33,7 @@ test('B22 PG30 successful issue automatically records the lawful then-context on
     // Independent standard SHA of the actual legal before-view catches hashing
     // private State or an earlier/later view instead of the deciding HQ view.
     expect(record.view_digest).toBe(createHash('sha256').update(JSON.stringify(canonical_public(before))).digest('hex'));
-    expect(record.known_then).toMatchObject({mission:before.mission,plan:before.plans[0],position_knowledge:before.position_knowledge,resources:before.resources,phase_results:[],prior_orders:[],held_windows:[],outbound_sent_times:[]});
+    expect(record.known_then).toMatchObject({mission:before.mission,plan:before.plans[0],position_knowledge:before.position_knowledge,resources:before.resources,phase_results:[],prior_orders:[],held_windows:[],outbound_sent_times:[],selected_received_evidence:[]});
     expect(JSON.stringify(record)).not.toMatch(/"(?:world|local|attempts|executions|sent_reports|pending_reports)":/);
     expect(valid_response({request_id:'decision-result',ok:true,...issued})).toBe(true);
     const committed=await store.read_committed(before.run_id),duplicate=await game.issue_order(input);
@@ -53,6 +53,49 @@ test('B22 PG30 readonly finite evaluation distinguishes complete public context 
     expect(result.checks.map(c=>[c.rule_ref.id,c.rule_ref.version,c.result])).toEqual([['context_completeness',1,'met'],['public_rule_compliance',1,'met'],['declared_reason_evaluability',1,'not_evaluable']]);
     expect(result.checks[0].known_then_refs).toEqual([ref,record.plan_ref,record.authority_ref]);expect(result.checks[2].known_then_refs).toEqual([ref]);expect(result.checks[2].missing).toEqual(['declared_reason']);
     expect(result).not.toHaveProperty('score');expect(await store.read_committed(created.run_id)).toEqual(before);expect(await game.get_view(created.run_id)).toEqual(issued.view);
+  }finally{await store.delete();}
+});
+
+test.each(['B22-STATIC-GRANT','B21-INITIAL-TERRAIN','B21-INITIAL-ENVIRONMENT'])('B22 evaluation recognizes genuinely selected registered public evidence %s',async evidence=>{
+  const store=new Persistence('b22-owned-t04-selected-'+evidence);
+  try{
+    const {game,issued,record,ref}=await decision_fixture(store,undefined,[evidence]),before=await store.read_committed(issued.view.run_id);expect(record.evidence_refs).toEqual([evidence]);
+    const checked=await game.evaluate_decision({run_id:issued.view.run_id,view_revision:issued.view.revision,decision_ref:ref});expect(checked.checks.map(c=>c.result)).toEqual(['met','met','not_evaluable']);expect(checked.checks[0].missing).toEqual([]);expect(checked.checks[1].missing).toEqual([]);expect(await store.read_committed(issued.view.run_id)).toEqual(before);
+  }finally{await store.delete();}
+});
+
+test.each(['report','delivery'] as const)('B22 evaluation preserves genuinely selected previously received acceptance %s',async selected=>{
+  const store=new Persistence('b22-owned-t04-selected-acceptance-'+selected);
+  try{
+    const {game,issued}=await decision_fixture(store),run=issued.view.run_id;
+    const arrived=await game.control_clock({run_id:run,operation_id:'arrived',expected_revision:issued.view.revision,intent:{kind:'advance',to:31500}});
+    const before=await game.control_clock({run_id:run,operation_id:'next-window',expected_revision:arrived.view.revision,intent:{kind:'advance',to:32000}});if(before.view.scenario_kind!=='play_mission')throw Error('Expected mission view');const draft=before.view.plans[0].draft;
+    const acceptance=before.view.reports.find(r=>r.kind==='accepted')!,delivery=before.view.deliveries.find(d=>d.report_ref===acceptance.id)!;
+    expect(delivery.received).toBe(2000);expect(before.view.phase_results[0].known_report_delivery_refs).not.toContain(acceptance.id);
+    const next=await game.issue_order({run_id:run,operation_id:'second-issue',expected_revision:before.view.revision,intent:{kind:'issue_mission',expected_object_revision:before.view.mission!.object_revision,plan_ref:before.view.mission!.current_plan_ref,phase_ref:{run_id:run,kind:'phase',id:'P2',version:1},grant_ref:draft.intent.delegation_ref,preview:await game.preview_plan(run,before.view.revision,0,draft),evidence_refs:[selected==='report'?acceptance.id:delivery.id]}});
+    const decision=next.view.decision_records[1],ref={run_id:run,kind:'decision' as const,id:decision.id,version:1};
+    expect(decision.known_then.selected_received_evidence).toEqual([{kind:'mission_report',run_id:run,report_ref:acceptance.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:1000,received_at:2000}]);
+    const result=await game.evaluate_decision({run_id:run,view_revision:next.view.revision,decision_ref:ref});expect(result.checks.map(c=>c.result)).toEqual(['met','met','not_evaluable']);expect(valid_response({request_id:'selected-received',ok:true,...next})).toBe(true);
+    for(const mutation of [{run_id:'foreign-run'},{received_at:32001},{delivery_ref:'unpaired-delivery'},{report_ref:'unselected-report'}]){
+      const forged=structuredClone(next);Object.assign(forged.view.decision_records[1].known_then.selected_received_evidence[0],mutation);expect(valid_response({request_id:'forged-received',ok:true,...forged})).toBe(false);
+    }
+    const restored=await new Game(store).restore(run,'restore-selected'),rechecked=await game.evaluate_decision({run_id:run,view_revision:restored.view.revision,decision_ref:ref});if(restored.view.scenario_kind!=='play_mission')throw Error('Expected mission view');expect(rechecked.checks).toEqual(result.checks);expect(restored.view.decision_records[1]).toEqual(decision);
+    const past=await game.get_replay(run,0,next.view.revision);expect((await past.evaluate_decision({run_id:run,view_revision:next.view.revision,decision_ref:ref})).checks).toEqual(result.checks);
+  }finally{await store.delete();}
+});
+
+test('B22 a selected old delivered position remains lawful after newer arrival replaces the current position',async()=>{
+  const variant=await mission_variant(value=>{value.catalogs.position_reports=[{id:'old-H-position',origin:'R',target:'HQ',scope_ref:'H',observed:{kind:'known',value:1000,evidence:'old-H-position'},source_event_time:{kind:'unknown'},reported_at:1000,delivery_at:2000}];}),store=new Persistence('b22-owned-t04-selected-old-position',[],[variant]);
+  try{
+    const game=new Game(store),created=await game.create_run(variant,'research','create'),draft=mission_draft(created.run_id),saved=await game.save_plan({run_id:created.run_id,operation_id:'save',expected_revision:created.revision,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
+    const issue=async(id:string,phase:string,view:typeof saved.view,refs:string[])=>game.issue_order({run_id:view.run_id,operation_id:id,expected_revision:view.revision,intent:{kind:'issue_mission',expected_object_revision:view.mission!.object_revision,plan_ref:view.mission!.current_plan_ref,phase_ref:{run_id:view.run_id,kind:'phase',id:phase,version:1},grant_ref:draft.intent.delegation_ref,preview:await game.preview_plan(view.run_id,view.revision,0,draft),evidence_refs:refs}});
+    const first=await issue('issue-first','P1',saved.view,draft.evidence_refs),before=await game.control_clock({run_id:created.run_id,operation_id:'next-window',expected_revision:first.view.revision,intent:{kind:'advance',to:32000}});
+    if(before.view.scenario_kind!=='play_mission')throw Error('Expected mission view');
+    expect(before.view.position_knowledge).toMatchObject({status:'known_scope',observed:{kind:'known',value:30500}});
+    const second=await issue('issue-second','P2',before.view,['old-H-position']),decision=second.view.decision_records[1],ref={run_id:created.run_id,kind:'decision' as const,id:decision.id,version:1};
+    expect(decision.known_then.selected_received_evidence).toEqual([{kind:'position_report',run_id:created.run_id,report_ref:'old-H-position',delivery_ref:'position-delivery-old-H-position',origin:'R',target:'HQ',reported_at:1000,received_at:2000}]);
+    expect((await game.evaluate_decision({run_id:created.run_id,view_revision:second.view.revision,decision_ref:ref})).checks.map(c=>c.result)).toEqual(['met','met','not_evaluable']);expect(valid_response({request_id:'old-position',ok:true,...second})).toBe(true);
+    const restored=await new Game(store).restore(created.run_id,'restore');if(restored.view.scenario_kind!=='play_mission')throw Error('Expected mission view');expect(restored.view.decision_records[1]).toEqual(decision);
   }finally{await store.delete();}
 });
 
@@ -103,7 +146,7 @@ test('B22 PG31 the registered historical public violation and missing-material p
     // Author the explicitly approved historical mechanism directory from real
     // lawful public context before registering its complete package. This is
     // not an accepted order or a State/Report insert into either Game.
-    const complete:MissionEvaluationRecord={id:'history-public-risk-choice',run_id:view.run_id,version:1,actor:'staff',operation:'issue_mission',knowledge_revision:view.revision,view_digest:createHash('sha256').update(JSON.stringify(canonical_public(view))).digest('hex'),at:view.sim_time,actual_intent:structuredClone(draft.intent),selected_action:structuredClone(draft.phases[0].activity),plan_ref:view.mission!.current_plan_ref,phase_ref:{run_id:view.run_id,kind:'phase',id:'P1',version:1},authority_ref:draft.intent.delegation_ref,order_ref:'history-attempt-no-current-order',evidence_refs:[...draft.evidence_refs],reason_status:'not_recorded',known_then:{mission:structuredClone(view.mission!),plan:structuredClone(view.plans[0]),position_knowledge:structuredClone(view.position_knowledge),resources:structuredClone(view.resources),phase_results:[],prior_orders:[],held_windows:[],outbound_sent_times:[]}};
+    const complete:MissionEvaluationRecord={id:'history-public-risk-choice',run_id:view.run_id,version:1,actor:'staff',operation:'issue_mission',knowledge_revision:view.revision,view_digest:createHash('sha256').update(JSON.stringify(canonical_public(view))).digest('hex'),at:view.sim_time,actual_intent:structuredClone(draft.intent),selected_action:structuredClone(draft.phases[0].activity),plan_ref:view.mission!.current_plan_ref,phase_ref:{run_id:view.run_id,kind:'phase',id:'P1',version:1},authority_ref:draft.intent.delegation_ref,order_ref:'history-attempt-no-current-order',evidence_refs:[...draft.evidence_refs],reason_status:'not_recorded',known_then:{mission:structuredClone(view.mission!),plan:structuredClone(view.plans[0]),position_knowledge:structuredClone(view.position_knowledge),resources:structuredClone(view.resources),phase_results:[],prior_orders:[],held_windows:[],outbound_sent_times:[],selected_received_evidence:[]}};
     const missing=structuredClone(complete);missing.id='history-missing-position';delete missing.known_then.position_knowledge;
     const history:MissionDecisionHistory={id:'B22-AT236-HISTORY-01',version:1,source_ref:'B22-MISSION-DESIGN-1.0.0/mission-contract/AT236/registered-history',records:[{case_id:'complete_public_violation',record:complete},{case_id:'missing_necessary_evidence',record:missing}]};
     const variant=await mission_variant(value=>{Reflect.set(value.catalogs,'decision_history',history);});

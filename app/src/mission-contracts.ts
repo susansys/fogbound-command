@@ -34,11 +34,12 @@ export type MissionReport={id:string;run_id:string;actor:'R';target:'HQ';kind:'a
 export type MissionDelivery={id:string;report_ref:string;received:number};
 export type MissionUnsentReport=Omit<MissionReport,'reported'>&{reported:{kind:'unknown'}};
 export type MissionPhaseResult={order_ref:string;phase_ref:MissionRef<'phase'>;plan_ref:MissionRef<'plan'>;known_report_delivery_refs:[string,string];verification_state:'confirmed'};
+export type MissionDecisionEvidenceReceipt={kind:'mission_report'|'position_report';run_id:string;report_ref:string;delivery_ref:string;origin:'R';target:'HQ';reported_at:number;received_at:number};
 export type MissionDecisionRecord={
   id:string;run_id:string;version:1;actor:'staff';operation:'issue_mission';knowledge_revision:number;view_digest:string;at:number;
   actual_intent:MissionDraft['intent'];selected_action:MissionDraft['phases'][number]['activity'];plan_ref:MissionRef<'plan'>;phase_ref:MissionRef<'phase'>;authority_ref:MissionRef<'authority'>;order_ref:string;evidence_refs:string[];
   reason_status:'recorded'|'not_recorded';declared_reason?:string;
-  known_then:{mission:KnownMission;plan:SavedMissionPlan;position_knowledge:PositionKnowledge;resources:MissionResources;phase_results:MissionPhaseResult[];prior_orders:Array<Pick<MissionOrder,'id'|'phase_ref'|'plan_ref'|'status'>>;held_windows:MissionHeldWindow[];outbound_sent_times:number[]};
+  known_then:{mission:KnownMission;plan:SavedMissionPlan;position_knowledge:PositionKnowledge;resources:MissionResources;phase_results:MissionPhaseResult[];prior_orders:Array<Pick<MissionOrder,'id'|'phase_ref'|'plan_ref'|'status'>>;held_windows:MissionHeldWindow[];outbound_sent_times:number[];selected_received_evidence:MissionDecisionEvidenceReceipt[]};
 };
 export type MissionDecisionRuleId='context_completeness'|'public_rule_compliance'|'declared_reason_evaluability';
 export type MissionEvaluationRecord=Omit<MissionDecisionRecord,'known_then'>&{known_then:Partial<MissionDecisionRecord['known_then']>};

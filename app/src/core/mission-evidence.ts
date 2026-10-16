@@ -3,7 +3,7 @@ import type {MissionState} from './mission-state';
 import type {MissionDefinition} from './mission-definition';
 import type {PositionKnowledge} from '../play-contracts';
 import {canonical} from './snapshot';
-import type {MissionLocalPositionKnowledge,MissionLocalPositionCandidate} from '../mission-contracts';
+import type {MissionLocalPositionKnowledge,MissionLocalPositionCandidate,MissionDecisionEvidenceReceipt} from '../mission-contracts';
 
 type Candidate=MissionLocalPositionCandidate;
 const scope_identity=(scope:Candidate['scope'])=>{
@@ -43,6 +43,19 @@ export function deliver_mission_position_records(state:MissionState,definition:M
   }
 }
 
+export function selected_mission_receipts(refs:readonly string[],state:MissionState):MissionDecisionEvidenceReceipt[]{
+  const selected=(report:string,delivery:string)=>refs.includes(report)||refs.includes(delivery);
+  const receipts:MissionDecisionEvidenceReceipt[]=[];
+  for(const delivery of state.deliveries){
+    const report=state.sent_reports.find(r=>r.id===delivery.report_ref&&r.run_id===state.run_id&&r.actor==='R'&&r.target==='HQ');
+    if(report&&report.reported<=delivery.received&&delivery.received<=state.sim_time&&selected(report.id,delivery.id))receipts.push({kind:'mission_report',run_id:state.run_id,report_ref:report.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:report.reported,received_at:delivery.received});
+  }
+  for(const delivery of state.position_deliveries){
+    const report=state.position_reports.find(r=>r.id===delivery.report_ref&&r.run_id===state.run_id&&r.origin==='R'&&r.target==='HQ');
+    if(report&&delivery.run_id===state.run_id&&report.reported_at<=delivery.received&&delivery.received<=state.sim_time&&selected(report.id,delivery.id))receipts.push({kind:'position_report',run_id:state.run_id,report_ref:report.id,delivery_ref:delivery.id,origin:'R',target:'HQ',reported_at:report.reported_at,received_at:delivery.received});
+  }
+  return receipts;
+}
 export function validate_mission_evidence(refs:string[],state:MissionState,definition:MissionDefinition):void{
   const legal=new Set([
     definition.catalogs.initial_evidence.id,definition.catalogs.authority.id,
@@ -50,8 +63,7 @@ export function validate_mission_evidence(refs:string[],state:MissionState,defin
     ...definition.catalogs.map.scopes.flatMap(scope=>scope.evidence_refs),
     ...definition.catalogs.movement_causes.map(c=>c.evidence_ref),
     ...state.known.phase_confirmations.flatMap(c=>[c.report_ref,c.delivery_ref]),
-    ...state.deliveries.filter(d=>d.received<=state.sim_time&&state.reports.some(r=>r.id===d.report_ref&&r.run_id===state.run_id&&r.actor==='R'&&r.target==='HQ')).flatMap(d=>[d.report_ref,d.id]),
-    ...state.position_deliveries.filter(d=>d.run_id===state.run_id&&d.received<=state.sim_time).flatMap(d=>[d.report_ref,d.id])
+    ...selected_mission_receipts(refs,state).flatMap(r=>[r.report_ref,r.delivery_ref])
   ]);
   if(refs.some(ref=>!legal.has(ref)))throw new GameError('EVIDENCE_REQUIRED');
 }

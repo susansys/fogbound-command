@@ -13,7 +13,7 @@ import {evaluate_mission_authority} from './mission-authority';
 import {evaluate_mission_gate} from './mission-gates';
 import {validate_mission_evidence} from './mission-evidence';
 type MissionCatalogs=MissionDefinition['catalogs'];
-export type MissionPublicDefinition=Pick<MissionDefinition,'profile'|'capabilities'|'rules'>&{catalogs:Pick<MissionCatalogs,'map'|'authority'|'movement_causes'>&{actor:Pick<MissionCatalogs['actor'],'load'|'load_capacity'|'space'|'space_capacity'|'qualification_refs'>}};
+export type MissionPublicDefinition=Pick<MissionDefinition,'profile'|'capabilities'|'rules'>&{catalogs:Pick<MissionCatalogs,'map'|'authority'|'movement_causes'>&{initial_evidence:Pick<MissionCatalogs['initial_evidence'],'id'>;actor:Pick<MissionCatalogs['actor'],'load'|'load_capacity'|'space'|'space_capacity'|'qualification_refs'>}};
 export async function preview_mission(state:MissionState,editing_seq:number,input:unknown,owned:readonly MissionDefinition[]=[]):Promise<MissionPreview>{
   const draft:MissionDraft=parse_mission_draft(input,state.run_id),definition=mission_definition_for_package(state.definition_hash,owned);
   validate_mission_references(draft,definition);

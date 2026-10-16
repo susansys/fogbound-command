@@ -8,6 +8,7 @@ import {hash} from './scenario';
 import {GameError} from '../contracts';
 import {mission_phase_previews,type MissionPublicDefinition} from './mission-preview';
 import {parse_append_mission} from '../mission-protocol';
+import {selected_mission_receipts} from './mission-evidence';
 
 export async function apply_recorded_issue(state:MissionState,input:IssueMissionEnvelope,owned:readonly MissionDefinition[]=[]):Promise<MissionState>{
   const candidate=await apply_issue_mission(state,input,owned),before=project_mission_view(state,owned),order=candidate.orders.at(-1)!;
@@ -17,7 +18,7 @@ export async function apply_recorded_issue(state:MissionState,input:IssueMission
   const record:MissionDecisionRecord={
     id:'decision-'+order.id,run_id:state.run_id,version:1,actor:'staff',operation:'issue_mission',knowledge_revision:before.revision,view_digest:await hash(canonical(before)),at:before.sim_time,
     actual_intent:structuredClone(plan.draft.intent),selected_action:structuredClone(phase.activity),plan_ref:structuredClone(order.plan_ref),phase_ref:structuredClone(order.phase_ref),authority_ref:structuredClone(order.grant_ref),order_ref:order.id,evidence_refs:[...input.intent.evidence_refs],reason_status:reason===undefined?'not_recorded':'recorded',...(reason===undefined?{}:{declared_reason:reason}),
-    known_then:{mission:structuredClone(before.mission!),plan:structuredClone(plan),position_knowledge:structuredClone(before.position_knowledge),resources:structuredClone(before.resources),phase_results:structuredClone(before.phase_results),prior_orders:before.issued_orders.map(({id,phase_ref,plan_ref,status})=>({id,phase_ref:structuredClone(phase_ref),plan_ref:structuredClone(plan_ref),status})),held_windows:structuredClone(before.held_windows),outbound_sent_times:before.issued_orders.map(o=>o.sent)}
+    known_then:{mission:structuredClone(before.mission!),plan:structuredClone(plan),position_knowledge:structuredClone(before.position_knowledge),resources:structuredClone(before.resources),phase_results:structuredClone(before.phase_results),prior_orders:before.issued_orders.map(({id,phase_ref,plan_ref,status})=>({id,phase_ref:structuredClone(phase_ref),plan_ref:structuredClone(plan_ref),status})),held_windows:structuredClone(before.held_windows),outbound_sent_times:before.issued_orders.map(o=>o.sent),selected_received_evidence:selected_mission_receipts(input.intent.evidence_refs,state)}
   };
   candidate.decision_records.push(record);
   return candidate;
@@ -37,13 +38,13 @@ export function evaluate_mission_decision(record:MissionEvaluationRecord,definit
   const ref={run_id:record.run_id,kind:'decision' as const,id:record.id,version:record.version};
   const refs:MissionAssessmentRef[]=[ref,record.plan_ref,record.authority_ref];
   const rule=(id:MissionDecisionRuleId)=>{const selected=definition.rules.decision_checks.find(r=>r.id===id);if(!selected||selected.version!==1)throw new GameError('INVALID_DEFINITION');return {id,version:selected.version};};
-  const required=['mission','plan','position_knowledge','resources','phase_results','prior_orders','held_windows','outbound_sent_times'] as const;
+  const required=['mission','plan','position_knowledge','resources','phase_results','prior_orders','held_windows','outbound_sent_times','selected_received_evidence'] as const;
   const missing:string[]=required.filter(field=>record.known_then[field]===undefined||record.known_then[field]===null);
   const context=record.known_then as MissionDecisionRecord['known_then'];
   if(!missing.length){
     if(context.plan.plan_id!==record.plan_ref.id||context.plan.version!==record.plan_ref.version||!context.plan.draft.phases.some(p=>p.id===record.phase_ref.id&&p.version===record.phase_ref.version))missing.push('plan_or_phase_ref');
     const position=context.position_knowledge,position_refs=position.status==='conflicting'?position.candidates.flatMap(c=>c.evidence_refs):position.evidence_refs;
-    const available=new Set([...context.plan.draft.evidence_refs,...position_refs,...context.phase_results.flatMap(r=>r.known_report_delivery_refs),...definition.capabilities.flatMap(c=>c.evidence_refs),...definition.catalogs.map.scopes.flatMap(s=>s.evidence_refs)]);
+    const available=new Set([definition.catalogs.initial_evidence.id,definition.catalogs.authority.id,...definition.catalogs.movement_causes.map(c=>c.evidence_ref),...context.plan.draft.evidence_refs,...position_refs,...context.phase_results.flatMap(r=>r.known_report_delivery_refs),...context.selected_received_evidence.flatMap(r=>[r.report_ref,r.delivery_ref]),...definition.capabilities.flatMap(c=>c.evidence_refs),...definition.catalogs.map.scopes.flatMap(s=>s.evidence_refs)]);
     for(const id of record.evidence_refs)if(!available.has(id))missing.push('evidence:'+id);
   }
   const checks:MissionDecisionCheck[]=[{rule_ref:rule('context_completeness'),known_then_refs:refs,result:missing.length?'not_evaluable':'met',missing:[...missing],violations:[]}];

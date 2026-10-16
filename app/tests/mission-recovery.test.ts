@@ -98,3 +98,16 @@ test.each(['integrity','definition_hash','capability_hash','unknown_schema','inv
     await expect(new Game(store).restore(created.run_id,'refused-restore')).rejects.toThrow('INVALID_SAVE');expect(await store.read_committed(created.run_id)).toEqual(damaged);expect(await store.receipt(created.run_id,'refused-restore')).toBeUndefined();
   }finally{await store.delete();}
 });
+
+test('B22 command restart creates one paused child with the same RNG origin and requires explicit continue',async()=>{
+  const store=new Persistence('b22-owned-t04-command-clone');
+  try{
+    const game=new Game(store),created=await game.create_run(definition,'command','create');expect(created.paused).toBe(false);
+    await game.control_clock({run_id:created.run_id,operation_id:'pause-parent',expected_revision:created.revision,intent:{kind:'pause',reason:'manual'}});const parent=await store.read_committed(created.run_id);
+    const child=await game.restart_run(created.run_id,'restart-command');expect(child).toMatchObject({source_run:created.run_id,mode:'command',sim_time:0,paused:true});expect(child.run_id).not.toBe(created.run_id);expect(await store.read_committed(created.run_id)).toEqual(parent);
+    expect(await game.restart_run(created.run_id,'restart-command')).toEqual(child);const childState=await store.read_committed(child.run_id);expect(childState!.rng.origin).toBe(parent!.rng.origin);expect(childState!.rng.seed).toBe(parent!.rng.seed);
+    await expect(game.control_clock({run_id:created.run_id,operation_id:'write-parent',expected_revision:parent!.revision,intent:{kind:'continue'}})).rejects.toThrow('HISTORY_READ_ONLY');
+    const fresh=new Game(store),restored=await fresh.restore(child.run_id,'restore-child');expect(restored.view).toMatchObject({run_id:child.run_id,paused:true,sim_time:0});await expect(fresh.tick(child.run_id,1000,'paused-child-tick')).rejects.toThrow('CLOCK_PAUSED');
+    const continued=await fresh.control_clock({run_id:child.run_id,operation_id:'continue-child',expected_revision:restored.view.revision,intent:{kind:'continue'}});expect(continued.view.paused).toBe(false);const tick=await fresh.tick(child.run_id,1000,'explicit-child-tick');expect(tick.view).toMatchObject({sim_time:1000,source_run:created.run_id,issued_orders:[]});expect(await store.read_committed(created.run_id)).toEqual(parent);
+  }finally{await store.delete();}
+});

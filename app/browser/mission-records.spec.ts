@@ -22,8 +22,8 @@ async function observe(page:Page,fault:'none'|'hold_append'|'drop_append'|'abort
   },fault);
 }
 async function current(page:Page){return page.evaluate(()=>{const views=Reflect.get(window,'__b22RecordViews') as MissionPlayerView[];return views.at(-1)!;});}
-async function begin(page:Page,fault:Parameters<typeof observe>[1]='none'){
-  await observe(page,fault);await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+async function begin(page:Page,fault:Parameters<typeof observe>[1]='none',mode:'research'|'command'='research'){
+  await observe(page,fault);await page.goto('/');await page.getByLabel('演练任务').selectOption('B22-MISSION-01');await page.getByLabel('时间方式').selectOption(mode);await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
   await page.getByLabel('任务目的',{exact:true}).fill('核对两处联络点');await page.getByLabel('期望结果',{exact:true}).fill('总部收到两阶段合法抵达凭证');
   await save(page,1);
 }
@@ -123,3 +123,22 @@ test('B22 a lost real restart reply retains one identity and prevents leaving be
   await expect(page.getByLabel('任务目的',{exact:true})).toHaveValue('');const child=await current(page);expect(child.source_run).toBe(parent.run_id);expect(child.run_id).not.toBe(parent.run_id);
   const proof=await page.evaluate(()=>{const requests=Reflect.get(window,'__b22RecordRequests') as Array<{kind:string;operation_id?:string}>;return requests.filter(r=>r.kind==='restart').map(r=>r.operation_id);});expect(proof).toHaveLength(2);expect(proof[1]).toBe(proof[0]);
 });
+
+test('B22 parent and child decisions with the same local ID retain their own reason checks',async({page})=>{
+  await begin(page);await page.getByRole('button',{name:'核对当前阶段',exact:true}).press('Enter');await page.getByLabel('下达理由（可留空）',{exact:true}).fill('父局当时记录的理由');await page.getByRole('button',{name:'确认下达 P1',exact:true}).press('Enter');await expect(page.getByTestId('issued-plan-line')).toHaveCount(1);const parent=await current(page);
+  await page.getByRole('button',{name:'行动复盘',exact:true}).press('Enter');await page.getByRole('button',{name:'重开这场演练',exact:true}).press('Enter');await page.getByRole('button',{name:'确认重开',exact:true}).press('Enter');await expect(page.getByLabel('任务目的',{exact:true})).toHaveValue('');await page.getByLabel('任务目的',{exact:true}).fill('子局独立任务');await page.getByLabel('期望结果',{exact:true}).fill('保留各自当时的依据');await save(page,1);await issue(page,'P1');const child=await current(page);expect(child.decision_records[0].id).toBe(parent.decision_records[0].id);expect(child.run_id).not.toBe(parent.run_id);
+  await page.getByRole('button',{name:'指挥记录',exact:true}).press('Enter');const card=page.getByTestId('mission-decision-record');await card.getByRole('button',{name:'检查当时记录',exact:true}).press('Enter');await expect(card.getByTestId('mission-decision-checks')).toContainText('声明理由的可评性 · 不可评价');
+  await page.getByRole('button',{name:'行动复盘',exact:true}).press('Enter');await page.getByRole('button',{name:'查看上一场记录',exact:true}).press('Enter');await page.getByRole('button',{name:'指挥记录',exact:true}).press('Enter');await expect(card).toContainText('当时声明理由：父局当时记录的理由');await card.getByRole('button',{name:'检查当时记录',exact:true}).press('Enter');await expect(card.getByTestId('mission-decision-checks')).toContainText('声明理由的可评性 · 满足');
+  await page.getByRole('button',{name:'行动复盘',exact:true}).press('Enter');await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');await page.getByRole('button',{name:'指挥记录',exact:true}).press('Enter');await expect(card).toContainText('当时声明理由：未记录');await expect(card.getByTestId('mission-decision-checks')).toContainText('声明理由的可评性 · 不可评价');
+});
+
+for(const fault of ['none','drop_restart'] as const){
+test(`B22 command restart ${fault} adopts one paused child and only advances after explicit continue`,async({page})=>{
+  test.setTimeout(45000);await begin(page,fault,'command');await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();const parent=await current(page);
+  await page.getByRole('button',{name:'行动复盘',exact:true}).press('Enter');await page.getByRole('button',{name:'重开这场演练',exact:true}).press('Enter');await page.getByRole('button',{name:'确认重开',exact:true}).press('Enter');
+  if(fault==='drop_restart'){await expect(page.getByRole('button',{name:'重试原重开操作',exact:true})).toBeVisible({timeout:15000});await expect(page.getByRole('button',{name:'更换演练任务',exact:true})).toBeDisabled();await page.getByRole('button',{name:'重试原重开操作',exact:true}).press('Enter');}
+  await expect(page.getByLabel('任务目的',{exact:true})).toHaveValue('');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();const child=await current(page);expect(child).toMatchObject({source_run:parent.run_id,mode:'command',paused:true,sim_time:0,issued_orders:[]});expect(child.run_id).not.toBe(parent.run_id);await page.waitForTimeout(800);expect(await current(page)).toEqual(child);
+  const ids=await page.evaluate(()=>(Reflect.get(window,'__b22RecordRequests') as Array<{kind:string;operation_id?:string}>).filter(r=>r.kind==='restart').map(r=>r.operation_id));expect(ids).toHaveLength(fault==='drop_restart'?2:1);expect(new Set(ids).size).toBe(1);
+  await page.getByRole('button',{name:'继续行动',exact:true}).press('Enter');await expect.poll(async()=>(await current(page)).sim_time).toBeGreaterThan(0);await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();expect((await current(page)).issued_orders).toEqual([]);
+});
+}
