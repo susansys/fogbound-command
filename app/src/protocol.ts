@@ -27,7 +27,7 @@ export function valid_request(
   value: unknown,
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
-  if(value.kind==='request_source_validation'||value.kind==='issue_activity')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
+  if(value.kind==='request_source_validation'||value.kind==='request_preparation'||value.kind==='issue_activity')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['manual','focus_lost','application_hidden'].includes(value.reason);
   if(value.kind==='preview_mission')return fields(value,['kind','request_id','run_id','revision','editing_seq','draft'])&&valid_id(value.run_id)&&typeof value.revision==='number'&&Number.isSafeInteger(value.revision)&&value.revision>=1&&typeof value.editing_seq==='number'&&Number.isSafeInteger(value.editing_seq)&&value.editing_seq>=0;
   if(value.kind==='save_plan')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);

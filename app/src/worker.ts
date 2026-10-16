@@ -88,8 +88,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -145,7 +145,9 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
           view: await (history??game).get_view(input.run_id),
         };
       else if(input.kind==='request_source_validation'&&locked){
-        await game.request_source_validation(input.envelope);throw new GameError('UNSUPPORTED');
+        response={request_id,ok:true,...await game.request_source_validation(input.envelope)};
+      }else if(input.kind==='request_preparation'&&locked){
+        response={request_id,ok:true,...await game.request_preparation(input.envelope)};
       }else if(input.kind==='issue_activity'&&locked){
         await game.issue_activity(input.envelope);throw new GameError('UNSUPPORTED');
       }else if(input.kind==='preview_mission'&&locked){

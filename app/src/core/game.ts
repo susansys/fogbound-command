@@ -18,8 +18,7 @@ import {project_intelligence_view} from './intelligence-knowledge';
 import {initial_intelligence_state} from './intelligence-state';
 import {is_intelligence_definition,intelligence_definition_for_package} from './intelligence-definition';
 import {apply_intelligence_control} from './intelligence-game';
-import {parse_intelligence_source_request} from '../intelligence-protocol';
-import {validate_source_request} from './intelligence-validation';
+import {parse_intelligence_source_request,parse_intelligence_plan,parse_intelligence_preparation} from '../intelligence-protocol';
 import {initial_mission_state} from './mission-state';
 import {is_mission_definition,mission_definition_for_package,type MissionDefinition} from './mission-definition';
 import type {MissionDraft,MissionPreview,IssueMissionEnvelope,MissionPlayerView} from '../mission-contracts';
@@ -338,13 +337,25 @@ export class Game {
     if(actor!==definition.catalogs.source.actor)throw new GameError('UNSUPPORTED');
     return {run_id:run,actor,sim_time:state.sim_time,work:structuredClone(state.source.work),resources:structuredClone(state.source.resources),published_reports:structuredClone(state.reports.filter(r=>r.id===state.source.published_report_ref))};
   }
-  async request_source_validation(input:unknown):Promise<never>{
+  async request_source_validation(input:unknown):Promise<{receipt:Receipt;view:import('../intelligence-contracts').IntelligencePlayerView}>{
     const request=parse_intelligence_source_request(input);await this.assert_writable(request.run_id);
     const state=await this.store.read_committed(request.run_id);if(!state)throw new GameError('RUN_NOT_FOUND');
     await this.validate_stored_state(state);if(state.schema!==9)throw new GameError('INVALID_REQUEST');
-    validate_source_request(state,request);
-    // T01 closes the reference boundary; actual processing belongs to T02.
-    throw new GameError('UNSUPPORTED');
+    const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);
+    if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'request_source_validation'},view:project_intelligence_view(state,this.store.intelligence_definitions)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    const candidate=apply_intelligence_control(state,request,undefined,this.store.intelligence_definitions);await this.commit(candidate,state.revision,request.operation_id,fingerprint);
+    return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'request_source_validation'},view:project_intelligence_view(candidate,this.store.intelligence_definitions)};
+  }
+  async request_preparation(input:unknown):Promise<{receipt:Receipt;view:import('../intelligence-contracts').IntelligencePlayerView}>{
+    const request=parse_intelligence_preparation(input);await this.assert_writable(request.run_id);
+    const state=await this.store.read_committed(request.run_id);if(!state)throw new GameError('RUN_NOT_FOUND');
+    await this.validate_stored_state(state);if(state.schema!==9)throw new GameError('INVALID_REQUEST');
+    const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);
+    if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'request_preparation'},view:project_intelligence_view(state,this.store.intelligence_definitions)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    const candidate=apply_intelligence_control(state,request,undefined,this.store.intelligence_definitions);await this.commit(candidate,state.revision,request.operation_id,fingerprint);
+    return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'request_preparation'},view:project_intelligence_view(candidate,this.store.intelligence_definitions)};
   }
   async issue_activity(input:unknown):Promise<never>{
     this.assert_current();
@@ -376,7 +387,21 @@ export class Game {
     if(envelope?.intent?.kind!=='save')throw new GameError('INVALID_INPUT');
     return this.operate(envelope,clock_to);
   }
-  async save_plan(input:unknown):Promise<{receipt:Receipt;view:import('../mission-contracts').MissionPlayerView}>{
+  async save_plan(input:import('../mission-contracts').SavePlanEnvelope):Promise<{receipt:Receipt;view:import('../mission-contracts').MissionPlayerView}>;
+  async save_plan(input:import('../intelligence-contracts').SaveIntelligencePlan):Promise<{receipt:Receipt;view:import('../intelligence-contracts').IntelligencePlayerView}>;
+  async save_plan(input:unknown):Promise<{receipt:Receipt;view:import('../mission-contracts').MissionPlayerView|import('../intelligence-contracts').IntelligencePlayerView}>;
+  async save_plan(input:unknown):Promise<{receipt:Receipt;view:import('../mission-contracts').MissionPlayerView|import('../intelligence-contracts').IntelligencePlayerView}>{
+    this.assert_current();
+    const intelligence=record(input)&&valid_id(input.run_id)?await this.store.read_committed(input.run_id):null;
+    if(intelligence?.schema===9){
+      const envelope=parse_intelligence_plan(input);await this.assert_writable(envelope.run_id);await this.validate_stored_state(intelligence);
+      const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(envelope.run_id,envelope.operation_id);
+      if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return{receipt:{run_id:envelope.run_id,operation_id:envelope.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'save_plan'},view:project_intelligence_view(intelligence,this.store.intelligence_definitions)};}
+      if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+      const candidate=apply_intelligence_control(intelligence,envelope,undefined,this.store.intelligence_definitions);
+      await this.commit(candidate,intelligence.revision,envelope.operation_id,fingerprint);
+      return{receipt:{run_id:envelope.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'save_plan'},view:project_intelligence_view(candidate,this.store.intelligence_definitions)};
+    }
     this.assert_current();const envelope=parse_save_plan(input);
     await this.assert_writable(envelope.run_id);
     const state=await this.store.read_committed(envelope.run_id);

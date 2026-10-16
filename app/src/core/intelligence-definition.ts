@@ -17,12 +17,20 @@ export function intelligence_original_metadata(definition:IntelligenceDefinition
 export async function load_intelligence_definition(input:unknown,owned:readonly IntelligenceDefinition[]=[]):Promise<IntelligenceDefinition>{
   if(!record(input)||!record(input.profile)||!record(input.profile.parameters)||!Array.isArray(input.profile.registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
   if(!Array.isArray(input.profile.resolved_registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
+  // E14 owns explicit low-energy definitions passed through the existing
+  // synthetic registry seam. The normal registered definition stays immutable;
+  // neither the Worker nor the UI can register variants.
+  const ownedFixture=owned.some(d=>d.definition_hash===input.definition_hash),e14Source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E14';
+  const lowProcessing=ownedFixture&&input.profile.parameters.processing_energy===1,lowSource=ownedFixture&&input.profile.parameters.source_energy===1;
   for(const required of registered.profile.resolved_registry){
     const entries=input.profile.resolved_registry.filter(e=>record(e)&&e.id===required.id),entry=entries[0];
     if(!entries.length||!record(entry)||!Object.hasOwn(entry,'type_unit')||!Object.hasOwn(entry,'value'))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
     if(entry.type_unit!==required.type_unit)throw new GameError('CONFIG_UNIT_MISMATCH','profile.registry');
-    if(entries.length!==1||entry.entry_version!==required.entry_version||entry.owner_system!==required.owner_system||entry.source_type!=='design_assumption'||entry.calibration_status!=='uncalibrated'||entry.source_ref!==required.source_ref)throw new GameError('INVALID_DEFINITION');
+    const lowEnergy=lowProcessing&&required.id==='PLAY S15 work.energy'||lowSource&&required.id==='PLAY S08 source_actor';
+    if(entries.length!==1||entry.entry_version!==required.entry_version||entry.owner_system!==required.owner_system||entry.source_type!=='design_assumption'||entry.calibration_status!=='uncalibrated'||entry.source_ref!==(lowEnergy?e14Source:required.source_ref))throw new GameError('INVALID_DEFINITION');
     const expected=structuredClone(required.value);
+    if(lowProcessing&&required.id==='PLAY S15 work.energy'&&record(expected))Reflect.set(expected,'initial',1);
+    if(lowSource&&required.id==='PLAY S08 source_actor'&&record(expected))Reflect.set(expected,'energy',1);
     if(required.id==='PLAY S08 credential'&&record(expected)&&record(input.catalogs)&&record(input.catalogs.engine_conditions))Reflect.set(expected,'actual',input.catalogs.engine_conditions.actual_access);
     if(required.id==='PLAY S08 source_records'&&record(expected)&&record(expected.R1)&&record(input.catalogs)&&Array.isArray(input.catalogs.forwardings)&&input.catalogs.forwardings.every(record))Reflect.set(expected.R1,'received',input.catalogs.forwardings.map(f=>f.received));
     if(JSON.stringify(entry.value)!==JSON.stringify(expected))throw new GameError('INVALID_DEFINITION');
@@ -32,7 +40,8 @@ export async function load_intelligence_definition(input:unknown,owned:readonly 
     const entries=input.profile.registry.filter(x=>record(x)&&x.id===required.id);
     if(!Object.hasOwn(input.profile.parameters,required.id)||!entries.length||!record(entries[0])||!Object.hasOwn(entries[0],'unit'))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
     if(entries[0].unit!==required.unit)throw new GameError('CONFIG_UNIT_MISMATCH','profile.registry');
-    if(entries.length!==1||entries[0].value!==input.profile.parameters[required.id]||entries[0].value!==required.value||entries[0].entry_version!==1||entries[0].source_type!=='design_assumption'||entries[0].calibration_status!=='uncalibrated'||entries[0].source_ref!==required.source_ref)throw new GameError('INVALID_DEFINITION');
+    const lowEnergy=lowProcessing&&required.id==='processing_energy'||lowSource&&required.id==='source_energy';
+    if(entries.length!==1||entries[0].value!==input.profile.parameters[required.id]||entries[0].value!==(lowEnergy?1:required.value)||entries[0].entry_version!==1||entries[0].source_type!=='design_assumption'||entries[0].calibration_status!=='uncalibrated'||entries[0].source_ref!==(lowEnergy?e14Source:required.source_ref))throw new GameError('INVALID_DEFINITION');
   }
   let selected:IntelligenceDefinition;try{selected=intelligence_definition_for_package(input.definition_hash,owned);}catch{throw new GameError('INVALID_DEFINITION');}
   if(JSON.stringify(input)!==JSON.stringify(selected)||selected.schema!==9||selected.id!==registered.id||selected.version!==1||selected.contract!=='0.5.1'||selected.scenario_kind!=='play_intelligence')throw new GameError('INVALID_DEFINITION');

@@ -435,3 +435,49 @@ UI RED failed with the actual DTO available; the interface now displays its
 registered initial confirmation separately from still-unverified access.
 Current repair verification and independent fixed-commit rereview remain pending;
 earlier14a0b34 native four-launch recovery passed but cannot sign this new source.
+
+T01 exit was subsequently verified atb18b2ab:521 core tests, types/boundaries,
+27 actual Windows browser regressions, and four default Chrome/Edge native
+launches passed. Both fixed-commit review axes had no remaining blockers. The
+integration branch was safely fast-forwarded and pushed; issue59 closed with its
+approved body unchanged. This was a ticket exit, not final B23 CI/main delivery.
+
+T02 is an unaccepted implementation candidate. Public Game/Worker/DTO/UI now
+distinguish versioned draft saving, explicit processing requests, queued/running
+work, completed products and received products. Preparation reserves only six
+processing energy at submission; after six work its approval and headquarters'
+two-pack commitment commit together. Headquarters sees that commitment only
+after delivery; W-local packs are not consumed. Processing energy ends at12 after
+validation plus preparation. A competing lawful plan can receive a not-approved
+result rather than duplicate the same two-pack commitment.
+
+Focused checks cover frozen order timings, independent processing/REC energy,
+version references and budget32, same-operation receipts, partial-work restore and
+Dexie/fake-indexeddb transaction abort at the storage boundary. This is core
+evidence, not native-browser transaction-fault acceptance. E14 low-energy
+definitions exist only through the owned synthetic Persistence registry, with
+matching complete registry/hash/source references; Worker has no import route.
+The normal registered definition, selected4/3/1 recipe and old schemas are intact.
+
+Retained T02 failures include absent interfaces, rejected new DTO fields, missing
+request/approval UI, stale public verification copy, key-order-dependent reference
+comparison, unregistered version-limit error, and an overly broad T01 substring
+oracle that mistook legal headquarters processing reservations for private source
+balances. That oracle now excludes only the legal own desk and still rejects
+source energy/pack reservation fields everywhere else. An ambiguous test selector
+and a missing committed-clock precondition were harness failures, preserved and
+corrected without changing expected behavior or timeouts. Current complete
+checks, fixed-SHA independent reviews and actual native T02 recovery remain
+pending. Original244AT and formal experience are not accepted.
+
+The subsequent dirty T02 runtime candidate passed four actual default Windows
+Chrome/Edge launches in98.865s: same-profile/origin full-process close and paused
+restore preserved partial preparation/validation work and reservations; reading
+and unsaved editing kept the command clock running; actual trusted native blur
+caused Game-confirmed pause and required explicit continue. Completion consumed
+processing energy once (14 for preparation alone,18 for validation alone), with
+one product/Delivery, headquarters pack commitment only for preparation and W
+packs still2. Source collection retained16/97/0 once. Both browsers recorded zero
+page errors and failed requests. These are owned synthetic profiles, not user
+data. Final fixed-source review and complete current checks still precede T02
+exit; final B23 same-SHA CI/main/default-browser/full visual gates remain open.

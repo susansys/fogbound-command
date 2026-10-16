@@ -23,7 +23,11 @@ test('B23 E07 source performs its complete two-work recipe before publication an
       if(to===84999)expect(local).toMatchObject({work:{status:'running',done_ms:19999},published_reports:[]});
       if(to>=85000)expect(local).toMatchObject({work:{status:'completed',done_ms:20000},resources:{energy:16,durability:97,packs:0,energy_reserved:0,packs_reserved:0},published_reports:[{id:'R3',source_published:85000,typed_payload:{kind:'access',value:'green'}}]});
       const received=Reflect.get(view,'received_reports');expect(received.filter((x:{report:{id:string}})=>x.report.id==='R3')).toHaveLength(to<86000?0:1);
-      expect(JSON.stringify(view)).not.toContain('energy_reserved');
+      // Only headquarters' own processing desk may expose its new reservation.
+      // Source-local reservations must remain absent from every other HQ field.
+      const withoutOwnDesk=Object.fromEntries(Object.entries(view).filter(([key])=>key!=='processing'));
+      expect(JSON.stringify(withoutOwnDesk)).not.toContain('energy_reserved');
+      expect(JSON.stringify(view)).not.toContain('packs_reserved');
       expect(JSON.stringify(local)).not.toContain('fixed_terminal_energy');
     }
     expect(view).toMatchObject({access:{green:'unverified'},source_groups:[{independent_evidence_count:{kind:'unknown'}},{independent_evidence_count:{kind:'unknown'}}]});

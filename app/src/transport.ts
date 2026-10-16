@@ -15,6 +15,7 @@ export type RunSummary = {
 };
 export type Request =
   |{kind:'request_source_validation';envelope:unknown}
+  |{kind:'request_preparation';envelope:unknown}
   |{kind:'issue_activity';envelope:unknown}
   |{kind:'preview_mission';run_id:string;revision:number;editing_seq:number;draft:unknown}
   |{kind:'save_plan';envelope:unknown}

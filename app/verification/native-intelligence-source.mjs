@@ -63,7 +63,7 @@ try{
     await expect.poll(async()=>(await view(page)).sim_time,{timeout:15000,intervals:[200]}).toBeGreaterThanOrEqual(86000);
     await manualPause();
     const final=await diagnosticSnapshot(page,resumed.run_id),publicView=await view(page);expect(final.state.source.resources).toEqual({energy:16,durability:97,packs:0,energy_reserved:0,packs_reserved:0});expect(final.state.source.work.done_ms).toBe(20000);expect(final.state.reports.filter(r=>r.id==='R3')).toHaveLength(1);expect(final.state.deliveries.filter(d=>d.report_ref.id==='R3')).toHaveLength(1);expect(publicView.received_reports).toHaveLength(4);
-    reopened.final={view:publicView,source:final.state.source,integrity:final.state.integrity};reopened.trace=await trace(page);await page.getByTestId('intelligence-source-R1').getByRole('button').press('Enter');await page.screenshot({path:owned+'evidence/'+label+'-'+browser.toLowerCase()+'-recovered.png',fullPage:true});await close();
+    reopened.final={view:publicView,source:final.state.source,integrity:final.state.integrity};reopened.trace=await trace(page);await page.getByTestId('intelligence-source-R1').getByRole('button',{name:'展开原文及递交',exact:true}).press('Enter');await page.screenshot({path:owned+'evidence/'+label+'-'+browser.toLowerCase()+'-recovered.png',fullPage:true});await close();
   }
 }catch(e){failure=String(e);if(page&&!page.isClosed()){await page.screenshot({path:owned+'evidence/'+label+'-failed.png',fullPage:true}).catch(()=>{});try{receipt.failure_trace=await trace(page);const latest=await view(page);receipt.failure_committed_diagnostic=await diagnosticSnapshot(page,latest.run_id);}catch(diagnosticError){receipt.failure_diagnostic_error=String(diagnosticError);}}}
 finally{
