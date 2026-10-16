@@ -21,14 +21,15 @@ type Props = {
   onRoutePoint?:(point:Coordinate)=>void;
   onRouteCancel?:()=>void;
 };
-const symbol = new ms.Symbol("SFGPU-----*****", {
-  size: 30,
+const unitSymbol = (size:number) => new ms.Symbol("SFGPU-----*****", {
+  size,
   standard: "APP6",
   fill: true,
   fillColor: "#91becb",
   outlineColor: "#e4eee2",
   outlineWidth: 2,
 }).asSVG();
+const symbol=unitSymbol(30),intelligenceSymbol=unitSymbol(33);
 export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
   const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?view:null;
   const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?null:view;
@@ -482,7 +483,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
         {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<i key={scope.id} className="map-anchor" data-anchor={scope.id} aria-hidden="true" style={point(...scope.typed_geometry.position)}/>)}
         {play&&<svg className="plan-route" aria-hidden="true">{play.geometry.scopes.map(scope=>scope.kind==='point'&&<path key={scope.id} d={`M${point(...scope.typed_geometry.position).left} ${point(...scope.typed_geometry.position).top} v${scope.id==='approximate'?54:-44}`} stroke="#aabbb6" strokeWidth="1"/>)}</svg>}
         {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<button key={scope.id} className={`site-marker ${selected===scope.id?'selected':''}`} data-marker={scope.id} data-scope-kind="point" aria-label={`图上地点 ${scope.id}`} style={{...point(...scope.typed_geometry.position),marginTop:scope.id==='approximate'?54:-44}} onClick={()=>onSelect(scope.id)}><span className="site-shape">{scope.id==='approximate'?'?':scope.id}</span>{labels&&scope.uncertainty.kind==='known'&&scope.uncertainty.value>0&&<b>误差 {scope.uncertainty.value} 图上米</b>}</button>)}
-        {play&&knownPoint&&<button className={`unit-marker play-unit ${selected==='R'?'selected':''}`} data-marker="R" aria-label="编组R最后确认位置" style={point(...knownPoint.typed_geometry.position)} onClick={()=>onSelect('R')}><img className="mil-symbol" alt="虚构编组R" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(symbol)}`}/>{labels&&<b>R · 最后收到的位置</b>}</button>}
+        {play&&knownPoint&&<button className={`unit-marker play-unit ${selected==='R'?'selected':''}`} data-marker="R" aria-label="编组R最后确认位置" style={point(...knownPoint.typed_geometry.position)} onClick={()=>onSelect('R')}><img className="mil-symbol" alt="虚构编组R" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(view.scenario_kind==='play_intelligence'?intelligenceSymbol:symbol)}`}/>{labels&&<b>R · 最后收到的位置</b>}</button>}
       </div>
       <div className="map-tools map-controls" data-ui>
         <button aria-label="放大地图" onClick={() => magnify(1.2)}>

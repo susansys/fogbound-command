@@ -580,3 +580,33 @@ retained. No reference/CSS edits or tolerance widening has been made to force a
 pass; comparator scope needs independent review and fresh evidence. Final T04,
 whole-batch reviews/CI/PR/main/artifact/safe sync/retro are not complete. All
 original244AT remain not_run; no formal player-pressure or reality claim.
+
+T04 review a32a6be identified two Spec P2s and one Standards P2. New public
+Game tests expose preparation/validation +1ms estimates and FIFO waiting; the
+HQ view now publishes those estimates with explicit continuous-work assumptions.
+Both UI submission sites show the public gap without denying an otherwise legal
+pre-deadline attempt. An actual command restart reply-drop followed by native
+trusted blur reproduced loss of the retained operation. A synchronous pending
+reference plus same-run response guards now keep it locked until its original
+restart is confirmed. Research and command reply-loss regressions exercise the
+same operation id. Historical maps no longer receive the live run's persistence
+session; settled child/history/return map association is checked separately.
+
+The original E39 nine-cell attempt stopped at550318ms with cleanup and retained
+owned profiles; parents0/1 reached2000 but parents3 did not. Its120/600 historical
+reads were warm after a2000 cold restore, despite erroneous cold labels in that
+original script. Those labels are not accepted evidence. The corrected driver
+uses the contract's three suggested pairs120/0,600/1,2000/3, each full process
+closure and same-profile UI restore, within the original six-launch/10min/2GiB
+budget. Cold list/restore composites and first screen are separate from warm
+get_view/history. Native IDB clone/read/validation phases are not individually
+instrumented and are not assigned invented durations. A10s transport uncertainty
+may only retry the retained UI restore after the original real reply is observed.
+
+Visual correction keeps the original one-CSS-pixel and zero-brand-pixel limits.
+Controls now use the common map-canvas viewport instead of different offset
+parents. B23 alone uses the approved size33 natural military symbol, restoring
+the locked demo marker dimensions; other scenarios retain size30/compact CSS.
+Original failures and frames remain. These are review corrections, not final
+visual, native, whole-batch, CI or delivery signoff. Fresh fixed-source evidence
+and independent rereviews remain required; original244AT are all not_run.

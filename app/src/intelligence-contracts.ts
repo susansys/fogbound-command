@@ -37,7 +37,7 @@ export type IntelligencePlayerView={
   preparation:{status:'not_requested'}|{status:'under_review';plan_ref:IntelligenceRef<'plan'>}|{status:'approved'|'not_approved';plan_ref:IntelligenceRef<'plan'>;result_ref:IntelligencePreparationResult['ref']};
   preparation_results:Array<{result:IntelligencePreparationResult;delivery:IntelligenceProductDelivery}>;
   supply_commitments:IntelligenceSupplyCommitment[];
-  processing:{capacity:number;initial_occupied_until:number;energy_confirmed:number;energy_reserved:number;confirmed_at:number;queue:IntelligenceWorkItem[]};
+  processing:{capacity:number;initial_occupied_until:number;energy_confirmed:number;energy_reserved:number;confirmed_at:number;queue:IntelligenceWorkItem[];estimated_complete_at:{preparation:number;source_validation:number}};
   field_activities:Array<{ref:IntelligenceRef<'field_order'>;actor:string;activity:string;issued_at:number;status:'issued'|'accepted'|'completed'|'refused'|'cutoff'}>;
   field_reports:Array<{report:IntelligenceFieldReport;delivery:IntelligenceFieldDelivery}>;
   artifact_reports:Array<{report:IntelligenceFieldReport;delivery:IntelligenceFieldDelivery}>;

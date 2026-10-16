@@ -3,6 +3,26 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {intelligence_definition,intelligence_variant} from './intelligence-fixtures';
 
+test('B23 HQ estimates expose the one-millisecond preparation and validation gaps before submission and include accepted queue work',async()=>{
+  const store=new Persistence('b23-owned-t04-hq-estimate-gap');
+  try{
+    const game=new Game(store),initial=await game.create_run(await intelligence_definition(),'research','create');
+    const at=await game.control_clock({run_id:initial.run_id,operation_id:'late-prep',expected_revision:1,intent:{kind:'advance',to:840001}});
+    expect(at.view).toMatchObject({processing:{estimated_complete_at:{preparation:900001,source_validation:860001}}});
+    const saved=await game.save_plan({run_id:initial.run_id,operation_id:'draft',expected_revision:at.view.revision,intent:{kind:'save_plan',base_plan_ref:null,draft:{purpose:'公开时间缺口',repair_packs:2}}});
+    const prep=await game.request_preparation({run_id:initial.run_id,operation_id:'prepare',expected_revision:saved.view.revision,intent:{kind:'request_preparation',plan_ref:saved.view.plan!.ref}});
+    expect(prep.receipt.result).toBe('committed');
+    expect(prep.view).toMatchObject({processing:{estimated_complete_at:{preparation:960001,source_validation:920001}}});
+  }finally{await store.delete();}
+  const second=new Persistence('b23-owned-t04-hq-validation-gap');
+  try{
+    const game=new Game(second),initial=await game.create_run(await intelligence_definition(),'research','create'),at=await game.control_clock({run_id:initial.run_id,operation_id:'late-validation',expected_revision:1,intent:{kind:'advance',to:880001}});
+    expect(at.view).toMatchObject({processing:{estimated_complete_at:{source_validation:900001}}});
+    const validation=await game.request_source_validation({run_id:initial.run_id,operation_id:'verify',expected_revision:at.view.revision,intent:{kind:'request_source_validation',basis_delivery_refs:[{run_id:initial.run_id,kind:'report_delivery',id:'D-R3',version:1}]}});
+    expect(validation.receipt.result).toBe('committed');
+  }finally{await second.delete();}
+});
+
 test('B23 a public one-millisecond record estimate gap warns without forbidding the already-authorized pre-deadline attempt',async()=>{
   const store=new Persistence('b23-owned-t04-known-time-gap');
   try{
@@ -25,7 +45,7 @@ test('B23 E42 queued work that cannot start before the deadline releases its unu
     const cutoff=await game.control_clock({run_id:initial.run_id,operation_id:'cutoff',expected_revision:queued.view.revision,intent:{kind:'advance',to:900000}});
     expect(cutoff.view).toMatchObject({assessments:[],preparation_results:[],supply_commitments:[],processing:{energy_confirmed:14,energy_reserved:0,queue:[{status:'cutoff',started_at:840001,completed_at:900000,work_done_ms:59999},{status:'cutoff',started_at:null,completed_at:900000,work_done_ms:0}]}});
     const after=await game.control_clock({run_id:initial.run_id,operation_id:'old-due',expected_revision:cutoff.view.revision,intent:{kind:'advance',to:901001}});
-    expect(Reflect.get(after.view,'processing')).toEqual({...Reflect.get(cutoff.view,'processing'),confirmed_at:901001});expect(Reflect.get(after.view,'assessments')).toEqual([]);expect(Reflect.get(after.view,'preparation_results')).toEqual([]);
+    expect(Reflect.get(after.view,'processing')).toEqual({...Reflect.get(cutoff.view,'processing'),confirmed_at:901001,estimated_complete_at:{preparation:961001,source_validation:921001}});expect(Reflect.get(after.view,'assessments')).toEqual([]);expect(Reflect.get(after.view,'preparation_results')).toEqual([]);
   }finally{await store.delete();}
 });
 
