@@ -610,3 +610,23 @@ the locked demo marker dimensions; other scenarios retain size30/compact CSS.
 Original failures and frames remain. These are review corrections, not final
 visual, native, whole-batch, CI or delivery signoff. Fresh fixed-source evidence
 and independent rereviews remain required; original244AT are all not_run.
+
+Whole-batch review2f4e0e7..44c69e4 found another Spec P2: automatic clock-fault
+reached Workbench but was not passed into IntelligenceWorkbench. Two actual
+native-IDB automatic tick-abort browser REDs reproduced a silently stopped clock
+still labelled running. B23 now receives channel/storage fault state, displays
+unconfirmed progress, locks new writes and retains edited text. Recovery keeps
+its operation id across uncertainty and supports actual receipt query/retry;
+successful restore is same-run and paused, and never automatically continues an
+older uncertain control. That older operation remains for explicit query/retry.
+The9-case focused browser run passed, including dropped restore reply followed
+by original receipt query, native blur after unknown restart, deadline copy and
+symbol size. Fresh final-source runs and whole-batch rereview are still required.
+The earlier229-case full browser run at44c69e4 was deliberately stopped after112
+passes to fix the new review blocker; it is retained as cancelled, not green.
+
+The public CI fingerprint now verifies the schema9 definition/component hashes
+against the actual served Worker and emits only its public scenario/geometry/
+rules identity, following the existing schema7/8 disclosure boundary. Private
+definition/source hashes and owned diagnostic catalogs are not published. No
+new dependency, tool permission or workflow timeout was introduced.

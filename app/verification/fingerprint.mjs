@@ -51,6 +51,14 @@ for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.strin
 if(sha(JSON.stringify([]))!==missionDefinition.hashes.media||Object.hasOwn(missionDefinition.catalogs,'decision_history'))throw Error('mission release must omit owned historical fixtures');
 const missionGeometry=missionDefinition.catalogs.map;
 const mission={id:missionDefinition.id,schema:missionDefinition.schema,contract:missionDefinition.contract,version:missionDefinition.version,geometry:{map_id:missionGeometry.map_id,map_version:missionGeometry.map_version,crs_id:missionGeometry.crs_id,geometry_version:missionGeometry.geometry_version},rules_hash:missionDefinition.hashes.rules,scope:'Public mission identity; private package/source hashes and owned mechanism catalogs omitted'};
+// Bind schema9 to the actual served Worker while keeping private source and
+// mechanism hashes out of the public CI artifact, as for schemas7 and8.
+const intelligenceDefinition=JSON.parse(await fs.readFile('src/core/intelligence-definition.json')),{definition_hash:intelligencePrivateHash,...intelligencePayload}=intelligenceDefinition;
+if(sha(JSON.stringify(intelligencePayload))!==intelligencePrivateHash||!worker.bytes.includes(Buffer.from(intelligencePrivateHash)))throw Error('intelligence package does not match served worker');
+for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.stringify(intelligenceDefinition[key]))!==intelligenceDefinition.hashes[key])throw Error('intelligence package component mismatch');
+if(sha(JSON.stringify([]))!==intelligenceDefinition.hashes.media||intelligenceDefinition.schema!==9||intelligenceDefinition.scenario_kind!=='play_intelligence')throw Error('intelligence release identity differs');
+const intelligenceGeometry=intelligenceDefinition.catalogs.map;
+const intelligence={id:intelligenceDefinition.id,schema:intelligenceDefinition.schema,contract:intelligenceDefinition.contract,version:intelligenceDefinition.version,geometry:{map_id:intelligenceGeometry.map_id,map_version:intelligenceGeometry.map_version,crs_id:intelligenceGeometry.crs_id,geometry_version:intelligenceGeometry.geometry_version},rules_hash:intelligenceDefinition.hashes.rules,scope:'Public intelligence identity; private package/source hashes and owned mechanism catalogs omitted'};
 for(const match of html.matchAll(/href="([^"]+\.css)"/g)){const item=await asset(match[1]);styles.push({path:item.path,sha256:item.sha256});}
 const browser=await chromium.launch({headless:true,...(process.env.FB01_BROWSER?{executablePath:process.env.FB01_BROWSER}:{})});
 let browserVersion;try{browserVersion=browser.version();}finally{await browser.close();}
@@ -60,5 +68,6 @@ const fingerprint={tested_sha:execFileSync('git',['rev-parse','HEAD'],{encoding:
 fingerprint.mapping=mapping;
 fingerprint.corridor=corridor;
 fingerprint.mission=mission;
+fingerprint.intelligence=intelligence;
 await fs.mkdir('verification-output',{recursive:true});await fs.writeFile('verification-output/fingerprint.json',JSON.stringify(fingerprint,null,2));
 console.log(JSON.stringify(fingerprint,null,2));

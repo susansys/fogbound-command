@@ -3,27 +3,29 @@ import type {Envelope,Intent} from './contracts';
 import type {IntelligencePlayerView,SaveIntelligencePlan,IntelligencePreparationRequest,IntelligenceActivityRequest} from './intelligence-contracts';
 import type {IntelligenceSourceRequest} from './intelligence-protocol';
 import type {GamePlayerView} from './play-contracts';
-import type {Transport,Request} from './transport';
+import type {Transport,Request,Response} from './transport';
 import type {RegionalDisplaySession} from './regional-display';
 import {MapView} from './map';
 import {clock,error_copy} from './player-copy';
-type Props={view:IntelligencePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onNewRun:(view:IntelligencePlayerView)=>void;history:boolean;liveRunId:string|null;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>};
-export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liveRunId,onHistory,displaySession,onLeave}:Props){
+type Props={view:IntelligencePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onNewRun:(view:IntelligencePlayerView)=>void;history:boolean;liveRunId:string|null;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean;onStorageRecovered:()=>void};
+export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liveRunId,onHistory,displaySession,onLeave,channelError,storageFault,onStorageRecovered}:Props){
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[advance,setAdvance]=useState('21'),[selected,setSelected]=useState('R'),[pauseUnknown,setPauseUnknown]=useState(false);
   const [expanded,setExpanded]=useState<string[]>([]),[node,setNode]=useState('1');
   const [purpose,setPurpose]=useState(view.plan?.purpose??'取得B处记录');
   const [restartConfirm,setRestartConfirm]=useState(false),[restartPending,setRestartPending]=useState<{run_id:string;operation_id:string}|null>(null);
+  const [storageUnconfirmed,setStorageUnconfirmed]=useState(false),[recoveryUnknown,setRecoveryUnknown]=useState(false),[noReceipt,setNoReceipt]=useState(false);
+  const recoveryPending=useRef<{run_id:string;operation_id:string}|null>(null),hasStorageFault=storageFault||storageUnconfirmed;
   const restartPendingRef=useRef<typeof restartPending>(null);
   const current=useRef(view),pending=useRef<Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest|null>(null),inFlight=useRef(false),nodes=useRef(view.replay_nodes);current.current=view;
   if(!history)nodes.current=view.replay_nodes;
   async function request(input:Request){
     const response=await transport.request(input);
     if(response.ok&&response.view){adopt(response.view);setError('');}
-    else if(!response.ok)setError(response.code);
+    else if(!response.ok){setError(response.code);if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageUnconfirmed(true);}
     return response;
   }
   async function send(envelope:Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest){
-    if(inFlight.current)return;inFlight.current=true;setBusy(true);
+    if(inFlight.current)return;inFlight.current=true;setNoReceipt(false);setBusy(true);
     try{
       const result=envelope.intent.kind==='issue_activity'?await request({kind:'issue_activity',envelope}):envelope.intent.kind==='save_plan'?await request({kind:'save_plan',envelope}):envelope.intent.kind==='request_source_validation'?await request({kind:'request_source_validation',envelope}):envelope.intent.kind==='request_preparation'?await request({kind:'request_preparation',envelope}):await request({kind:'operate_intelligence',envelope:envelope as Envelope});
       if(result.ok){pending.current=null;setNotice('已提交 · '+clock(result.view?.sim_time??view.sim_time));}
@@ -31,25 +33,25 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
     }catch{setError('CHANNEL_UNCERTAIN');}finally{inFlight.current=false;setBusy(false);}
   }
   async function savePlan(){
-    if(history||pending.current||inFlight.current)return;
+    if(history||pending.current||inFlight.current||hasStorageFault||recoveryPending.current)return;
     const now=current.current,envelope:SaveIntelligencePlan={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent:{kind:'save_plan',base_plan_ref:now.plan?.ref??null,draft:{purpose,repair_packs:2}}};
     pending.current=envelope;await send(envelope);
   }
   async function validateSource(ids:string[]){
-    if(history||pending.current||inFlight.current)return;
+    if(history||pending.current||inFlight.current||hasStorageFault||recoveryPending.current)return;
     const now=current.current,envelope:IntelligenceSourceRequest={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent:{kind:'request_source_validation',basis_delivery_refs:ids.map(id=>({run_id:now.run_id,kind:'report_delivery',id,version:1}))}};
     pending.current=envelope;await send(envelope);
   }
   async function requestPreparation(){
-    const now=current.current;if(history||pending.current||inFlight.current||!now.plan)return;
+    const now=current.current;if(history||pending.current||inFlight.current||hasStorageFault||recoveryPending.current||!now.plan)return;
     const envelope:IntelligencePreparationRequest={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent:{kind:'request_preparation',plan_ref:now.plan.ref}};
     pending.current=envelope;await send(envelope);
   }
   async function issueActivity(intent:IntelligenceActivityRequest['intent']){
-    if(history||pending.current||inFlight.current)return;const now=current.current,envelope={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent};pending.current=envelope;await send(envelope);
+    if(history||pending.current||inFlight.current||hasStorageFault||recoveryPending.current)return;const now=current.current,envelope={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent};pending.current=envelope;await send(envelope);
   }
   async function control(intent:Intent){
-    if(history||pending.current||inFlight.current)return;
+    if(history||pending.current||inFlight.current||hasStorageFault||recoveryPending.current)return;
     if(intent.kind==='pause'){
       // The existing management queue asks Game to pause its current committed
       // revision. A delayed UI revision must not prevent a requested pause.
@@ -59,34 +61,50 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
     const envelope={run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent};pending.current=envelope;await send(envelope);
   }
   useEffect(()=>{
-    const lost=()=>{const requestedRun=current.current.run_id;if(current.current.mode==='command'&&!current.current.paused)void transport.request({kind:'management_pause',reason:document.hidden?'application_hidden':'focus_lost'}).then(result=>{if(result.ok&&result.view){if(!history&&!restartPendingRef.current&&current.current.run_id===requestedRun&&result.view.run_id===requestedRun)adopt(result.view);}else if(!result.ok)setError(result.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));};
+    const lost=()=>{const requestedRun=current.current.run_id;if(!hasStorageFault&&!recoveryPending.current&&current.current.mode==='command'&&!current.current.paused)void transport.request({kind:'management_pause',reason:document.hidden?'application_hidden':'focus_lost'}).then(result=>{if(result.ok&&result.view){if(!history&&!restartPendingRef.current&&current.current.run_id===requestedRun&&result.view.run_id===requestedRun)adopt(result.view);}else if(!result.ok)setError(result.code);}).catch(()=>setError('CHANNEL_UNCERTAIN'));};
     const hidden=()=>{if(document.hidden)lost();};window.addEventListener('blur',lost);document.addEventListener('visibilitychange',hidden);
     return()=>{window.removeEventListener('blur',lost);document.removeEventListener('visibilitychange',hidden);};
-  },[transport,adopt,history]);
+  },[transport,adopt,history,hasStorageFault]);
   async function review(){
-    if(busy||pending.current||restartPending)return;setBusy(true);
+    if(busy||pending.current||restartPending||hasStorageFault||recoveryPending.current)return;setBusy(true);
     try{const response=await transport.request({kind:'replay',run_id:view.run_id,to:0,node_revision:Number(node)});if(response.ok&&response.view){onHistory(true);adopt(response.view);}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
   async function currentView(){setBusy(true);try{const response=await transport.request({kind:'current',run_id:liveRunId??view.run_id});if(response.ok&&response.view){if(liveRunId){onHistory(false);adopt(response.view);}else await onLeave();}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
-  async function previous(){if(busy||history||pending.current||restartPending)return;setBusy(true);try{const response=await transport.request({kind:'previous',run_id:view.run_id});if(response.ok&&response.view){onHistory(true);adopt(response.view);}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function previous(){if(busy||history||pending.current||restartPending||hasStorageFault||recoveryPending.current)return;setBusy(true);try{const response=await transport.request({kind:'previous',run_id:view.run_id});if(response.ok&&response.view){onHistory(true);adopt(response.view);}else if(!response.ok)setError(response.code);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
   async function restart(){
-    if(history||inFlight.current||pending.current||pauseUnknown)return;
+    if(history||inFlight.current||pending.current||pauseUnknown||hasStorageFault||recoveryPending.current)return;
     const original=restartPendingRef.current??{run_id:view.run_id,operation_id:crypto.randomUUID()};restartPendingRef.current=original;setRestartPending(original);inFlight.current=true;setBusy(true);
     try{const response=await transport.request({kind:'restart',...original});
       if(response.ok&&response.view?.scenario_kind==='play_intelligence'&&response.view.run_id!==original.run_id&&response.view.source_run===original.run_id){restartPendingRef.current=null;onHistory(false);onNewRun(response.view);}
       else{const code=response.ok?'CHANNEL_UNCERTAIN':response.code;setError(code);if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(code)){restartPendingRef.current=null;setRestartPending(null);}}
     }catch{setError('CHANNEL_UNCERTAIN');}finally{inFlight.current=false;setBusy(false);}
   }
-  async function query(){const envelope=pending.current;if(!envelope||busy)return;setBusy(true);try{const response=await transport.request({kind:'receipt',run_id:envelope.run_id,operation_id:envelope.operation_id});if(response.ok&&response.receipt){pending.current=null;await request({kind:'view',run_id:envelope.run_id});setNotice('原操作已提交，未再次执行。');}else if(!response.ok)setError(response.code);else setNotice('尚未查到原操作收据；请保留原操作核查或重试。');}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  async function query(){const envelope=pending.current;if(!envelope||busy)return;setBusy(true);try{const response=await transport.request({kind:'receipt',run_id:envelope.run_id,operation_id:envelope.operation_id});if(response.ok&&response.receipt){setNoReceipt(false);pending.current=null;await request({kind:'view',run_id:envelope.run_id});setNotice('原操作已提交，未再次执行。');}else if(!response.ok)setError(response.code);else{setNoReceipt(true);setNotice('尚未查到原操作收据；请保留原操作核查或重试。');}}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}}
+  function finishRecovery(response:Response,original:{run_id:string;operation_id:string}){
+    if(!response.ok){setError(response.code);return;}
+    if(response.view?.scenario_kind!=='play_intelligence'||response.view.run_id!==original.run_id||!response.view.paused||response.receipt?.kind!=='restore'||response.receipt.operation_id!==original.operation_id){setError('CHANNEL_UNCERTAIN');return;}
+    adopt(response.view);recoveryPending.current=null;setRecoveryUnknown(false);setStorageUnconfirmed(false);setNoReceipt(false);onStorageRecovered();setError('');setNotice('最近已提交记录已恢复；输入与待查原操作保留，当前已暂停，请核对后明确继续。');
+  }
+  async function recover(){
+    if(history||busy||restartPendingRef.current||pending.current&&!noReceipt)return;
+    const original=recoveryPending.current??{run_id:current.current.run_id,operation_id:crypto.randomUUID()};recoveryPending.current=original;setRecoveryUnknown(true);setBusy(true);
+    try{finishRecovery(await transport.request({kind:'takeover',...original}),original);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
+  async function queryRecovery(){
+    const original=recoveryPending.current;if(!original||busy||history)return;setBusy(true);
+    try{const receipt=await transport.request({kind:'receipt',...original});if(!receipt.ok){setError(receipt.code);return;}if(!receipt.receipt){setNotice('尚未查到恢复回执；原恢复编号已保留，可重试原恢复操作。');return;}const response=await transport.request({kind:'view',run_id:original.run_id});if(!response.ok){setError(response.code);return;}finishRecovery({...response,receipt:receipt.receipt},original);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
+  }
   const deadlineGap=(kind:'preparation'|'source_validation')=>{const gap=view.processing.estimated_complete_at[kind]-view.public_rules.deadline;return view.sim_time<view.public_rules.deadline&&gap>0?<p>按总部公开席位队列、已接受次序和注册工时估计，假定无新增请求且连续处理，预计晚于实体截止{gap}毫秒；仍可在截止前申请，截止时仅结算已做工作。</p>:null;};
-  const blocked=busy||history||!!pending.current||pauseUnknown||!!restartPending;
+  const blocked=busy||history||!!pending.current||pauseUnknown||!!restartPending||hasStorageFault||recoveryUnknown;
   const verificationCopy=view.access.blue==='verified'&&view.access.green==='verified'?'蓝／绿凭证已核实':view.access.green==='verified'?'绿色凭证已核实':view.access.blue==='verified'?'蓝色凭证已核实':'凭证尚未核实';
   const preparationCopy=view.preparation.status==='under_review'?'准备审查中，尚未批准':view.preparation.status==='approved'?'准备批准已收到；只对应本版草案，不代表现场维修完成。':view.preparation.status==='not_approved'?'准备未获批准；已确认用品与已有承诺不足。':'尚未提交准备申请；保存不预留处理能量或维修包。';
   return <div className="app crisis-app mission-app intelligence-app">
-    <header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong><span className="brand-sub">联合任务指挥部</span></span><span className="demo-badge">情报协作</span><div className="clock"><strong>{clock(view.sim_time)}</strong><span>{history?'历史只读':view.paused?'已暂停':'指挥进行中'}</span></div><label>推进速度<select aria-label="推进速度" value={view.rate} disabled={blocked} onChange={event=>void control({kind:'rate',rate:Number(event.target.value) as 1|2|4})}><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option></select></label><button disabled={blocked||view.mode!=='command'} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{view.paused?'继续行动':'暂停行动'}</button><button disabled={blocked} onClick={()=>void control({kind:'save'})}>保存行动</button></header>
-    {error&&<div className="fault" role="alert">{error_copy(error)}</div>}
+    <header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong><span className="brand-sub">联合任务指挥部</span></span><span className="demo-badge">情报协作</span><div className="clock"><strong>{clock(view.sim_time)}</strong><span>{hasStorageFault||recoveryUnknown?'进度未确认':history?'历史只读':view.paused?'已暂停':'指挥进行中'}</span></div><label>推进速度<select aria-label="推进速度" value={view.rate} disabled={blocked} onChange={event=>void control({kind:'rate',rate:Number(event.target.value) as 1|2|4})}><option value="1">1倍</option><option value="2">2倍</option><option value="4">4倍</option></select></label><button disabled={blocked||view.mode!=='command'} onClick={()=>void control(view.paused?{kind:'continue'}:{kind:'pause',reason:'manual'})}>{view.paused?'继续行动':'暂停行动'}</button><button disabled={blocked} onClick={()=>void control({kind:'save'})}>保存行动</button></header>
+    {(error||channelError)&&<div className="fault" role="alert">{error_copy(error||channelError)}</div>}
+    {hasStorageFault&&!pending.current&&!recoveryUnknown&&<div className="fault"><span>推进尚未得到可靠提交确认。当前输入保留，恢复后保持暂停。</span><button disabled={busy||history||!!restartPending} onClick={()=>void recover()}>恢复最近记录并重新核对</button></div>}
+    {recoveryUnknown&&<div className="fault"><span>恢复结果待核查，恢复编号、原操作与输入已保留。</span><button disabled={busy||history} onClick={()=>void queryRecovery()}>查询恢复结果</button><button disabled={busy||history} onClick={()=>void recover()}>重试原恢复操作</button></div>}
     {pauseUnknown&&<div className="fault"><span>暂停尚未得到确认，当前状态以重新核对结果为准。</span><button disabled={busy} onClick={()=>void (async()=>{setBusy(true);try{const result=await request({kind:'view',run_id:view.run_id});if(result.ok&&result.view){setPauseUnknown(false);setNotice(result.view.paused?'暂停已确认，等待明确继续。':'当前仍在进行，可再次请求暂停。');}}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}})()}>核对暂停状态</button></div>}
-    {pending.current&&!busy&&<div className="fault"><span>原操作结果待核查，操作编号已保留。</span><button onClick={()=>void query()}>查询原操作</button><button onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button></div>}
+    {pending.current&&!busy&&!recoveryUnknown&&<div className="fault"><span>原操作结果待核查，操作编号已保留。</span><button onClick={()=>void query()}>查询原操作</button><button onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button>{noReceipt&&<button onClick={()=>void recover()}>恢复最近记录并重新核对</button>}</div>}
     <div className="contextbar"><strong>R／W · H—A—B</strong><span>取得两处记录并等待合法回报；本批不包含返程、交接或整局结局。</span></div>
     <div className="shell"><nav className="rail"><button className="active" onClick={()=>document.getElementById('intelligence-sources')?.focus()}>情报报告</button><button onClick={()=>document.getElementById('intelligence-history')?.focus()}>当时所知</button><button disabled={blocked} onClick={()=>void (async()=>{if(!view.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></nav>
     <main className="main"><div className="workspacebar"><h1>情报与协作任务</h1><span className="outline-tag">总部视图 · {verificationCopy}</span></div>
@@ -112,7 +130,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
           {open&&<div id={'source-details-'+report.id}><p className="original-report">{report.text}</p><p>{report.source_descriptor}</p><p>{report.source_event_time.kind==='unknown'?'来源时点不详':'来源时点 '+clock(report.source_event_time.value)} · 观察 {report.observed.kind==='known'?clock(report.observed.value):'时点不详'} · 发布 {clock(report.source_published)}</p><ul data-testid={'intelligence-deliveries-'+report.id}>{view.received_reports.filter(x=>group.delivery_refs.includes(x.delivery.id)).map(({delivery})=><li key={delivery.id}>收到 {clock(delivery.received)} · {delivery.forward_of?'附已收到的转交凭证':'来源关系尚未明确'}</li>)}</ul></div>}
         </article>;})}
       </aside></div>
-      <footer className="mission-footer"><label>历史节点<select id="intelligence-history" aria-label="历史节点" value={node} onChange={event=>setNode(event.target.value)}><option value="1">开局 · 记录 1</option>{nodes.current.map(n=><option value={n.revision} key={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy||!!pending.current||!!restartPending} onClick={()=>void review()}>查看历史节点</button>{history&&<button disabled={busy} onClick={()=>void currentView()}>{liveRunId?'返回当前行动':'返回演练入口'}</button>}{!history&&view.source_run&&<button disabled={blocked} onClick={()=>void previous()}>查看上一场记录</button>}{!history&&<button disabled={blocked} onClick={()=>setRestartConfirm(true)}>重开这场演练</button>}{restartConfirm&&<section role='region' aria-label='重开确认'><p>新局使用相同场景和起始条件，原行动保留为只读。新局保持暂停，等待明确继续；这不算独立的首次体验。</p><button disabled={busy||!!restartPending} onClick={()=>setRestartConfirm(false)}>保留当前行动</button><button disabled={busy} onClick={()=>void restart()}>{restartPending?'重试同一重开':'确认重开'}</button>{restartPending&&<p>原重开操作编号已保留；结果未知时只重试本操作，不创建第二个新局。</p>}</section>}{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={event=>setAdvance(event.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
+      <footer className="mission-footer"><label>历史节点<select id="intelligence-history" aria-label="历史节点" value={node} onChange={event=>setNode(event.target.value)}><option value="1">开局 · 记录 1</option>{nodes.current.map(n=><option value={n.revision} key={n.revision}>{n.label} · 记录 {n.revision}</option>)}</select></label><button disabled={busy||!!pending.current||!!restartPending||hasStorageFault||recoveryUnknown} onClick={()=>void review()}>查看历史节点</button>{history&&<button disabled={busy} onClick={()=>void currentView()}>{liveRunId?'返回当前行动':'返回演练入口'}</button>}{!history&&view.source_run&&<button disabled={blocked} onClick={()=>void previous()}>查看上一场记录</button>}{!history&&<button disabled={blocked} onClick={()=>setRestartConfirm(true)}>重开这场演练</button>}{restartConfirm&&<section role='region' aria-label='重开确认'><p>新局使用相同场景和起始条件，原行动保留为只读。新局保持暂停，等待明确继续；这不算独立的首次体验。</p><button disabled={busy||!!restartPending} onClick={()=>setRestartConfirm(false)}>保留当前行动</button><button disabled={busy} onClick={()=>void restart()}>{restartPending?'重试同一重开':'确认重开'}</button>{restartPending&&<p>原重开操作编号已保留；结果未知时只重试本操作，不创建第二个新局。</p>}</section>}{view.mode==='research'&&!history&&<label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" value={advance} onChange={event=>setAdvance(event.target.value)}/><button disabled={blocked} onClick={()=>void control({kind:'advance',to:Math.round(Number(advance)*1000)})}>推进到该时刻</button></label>}</footer>
     </main></div>
   </div>;
 }
