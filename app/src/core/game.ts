@@ -18,7 +18,7 @@ import {project_intelligence_view} from './intelligence-knowledge';
 import {initial_intelligence_state} from './intelligence-state';
 import {is_intelligence_definition,intelligence_definition_for_package} from './intelligence-definition';
 import {apply_intelligence_control} from './intelligence-game';
-import {parse_intelligence_source_request,parse_intelligence_plan,parse_intelligence_preparation} from '../intelligence-protocol';
+import {parse_intelligence_source_request,parse_intelligence_plan,parse_intelligence_preparation,parse_intelligence_activity} from '../intelligence-protocol';
 import {initial_mission_state} from './mission-state';
 import {is_mission_definition,mission_definition_for_package,type MissionDefinition} from './mission-definition';
 import type {MissionDraft,MissionPreview,IssueMissionEnvelope,MissionPlayerView} from '../mission-contracts';
@@ -333,7 +333,7 @@ export class Game {
     if(state.schema!==9)throw new GameError('INVALID_REQUEST');
     const definition=intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions);
     const local=definition.catalogs.actors.find(candidate=>candidate.id===actor);
-    if(local)return {run_id:run,actor,sim_time:state.sim_time,position_scope:local.origin,role:local.role,people:local.people,resources:structuredClone(local),known_reports:[],published_reports:[]};
+    if(local){const own=state.field.actors.find(a=>a.actor===actor)!;return {run_id:run,sim_time:state.sim_time,...structuredClone(own),position_scope:own.position.site,activities:structuredClone(state.field.orders.filter(o=>o.payload.actor_ref.id===actor)),artifacts:structuredClone(state.field.artifacts.filter(a=>a.custody_holder===actor)),record_materials:structuredClone(state.field.materials.filter(m=>state.field.artifacts.some(a=>a.custody_holder===actor&&a.material_refs.some(ref=>ref.id===m.ref.id)))),known_reports:[],message_facts:structuredClone(state.field.messages.filter(m=>m.actor===actor)),published_reports:structuredClone(state.field.reports.filter(r=>r.actor===actor))};}
     if(actor!==definition.catalogs.source.actor)throw new GameError('UNSUPPORTED');
     return {run_id:run,actor,sim_time:state.sim_time,work:structuredClone(state.source.work),resources:structuredClone(state.source.resources),published_reports:structuredClone(state.reports.filter(r=>r.id===state.source.published_report_ref))};
   }
@@ -357,14 +357,15 @@ export class Game {
     const candidate=apply_intelligence_control(state,request,undefined,this.store.intelligence_definitions);await this.commit(candidate,state.revision,request.operation_id,fingerprint);
     return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'request_preparation'},view:project_intelligence_view(candidate,this.store.intelligence_definitions)};
   }
-  async issue_activity(input:unknown):Promise<never>{
-    this.assert_current();
-    if(!record(input)||!valid_id(input.run_id)||!valid_id(input.operation_id)||!Number.isSafeInteger(input.expected_revision)||!record(input.intent)||input.intent.kind!=='issue_activity')throw new GameError('INVALID_REQUEST');
-    await this.assert_writable(input.run_id);const state=await this.store.read_committed(input.run_id);
-    if(!state)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(state);
-    if(state.schema!==9)throw new GameError('INVALID_REQUEST');
-    // No fallback actor/action. T03 will add the actual registered field seam.
-    throw new GameError('UNSUPPORTED');
+  async issue_activity(input:unknown):Promise<{receipt:Receipt;view:import('../intelligence-contracts').IntelligencePlayerView}>{
+    const request=parse_intelligence_activity(input);await this.assert_writable(request.run_id);
+    const state=await this.store.read_committed(request.run_id);if(!state)throw new GameError('RUN_NOT_FOUND');
+    await this.validate_stored_state(state);if(state.schema!==9)throw new GameError('INVALID_REQUEST');
+    const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);
+    if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:'issue_activity'},view:project_intelligence_view(state,this.store.intelligence_definitions)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    const candidate=apply_intelligence_control(state,request,undefined,this.store.intelligence_definitions);await this.commit(candidate,state.revision,request.operation_id,fingerprint);
+    return{receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:'issue_activity'},view:project_intelligence_view(candidate,this.store.intelligence_definitions)};
   }
   async restore(run:string,operation_id:string):Promise<{receipt:Receipt;view:PlayerView}>{
     this.assert_current();

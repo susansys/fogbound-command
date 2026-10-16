@@ -481,3 +481,49 @@ packs still2. Source collection retained16/97/0 once. Both browsers recorded zer
 page errors and failed requests. These are owned synthetic profiles, not user
 data. Final fixed-source review and complete current checks still precede T02
 exit; final B23 same-SHA CI/main/default-browser/full visual gates remain open.
+
+## B23 T03 field activity review candidate (2026-10-17)
+
+The new schema9 branch accepts one versioned move/record/repair intention at a
+time through Game, Worker and Transport. Headquarters issuance, local acceptance,
+local completion and received field ReportDelivery remain distinct. Registered
+geometry and current carried load produce29500ms/29000ms R movement; record and
+repair use45000ms/65000ms including5000ms setup. Actual work reserves the complete
+recipe, charges wear at first positive work and settles energy/items once.
+Record work creates immutable collected artifacts referencing generated synthetic
+record materials held by R; receipt at headquarters is neither handover nor final
+verification. Fixed communication has authorization/location checks and an actual
+1000ms Delivery, with no fixed-terminal energy/wear account. Unsendable facts
+remain local rather than producing a Delivery.
+
+Owned public-interface traces check normal five-action resource totals, missing
+qualification/equipment, REC3 with one pack, loadout17/13 rejection and16/12 with
+insufficient repair supplies, overlap, partial restore, boundary stepping and an
+actual Dexie/fake-indexeddb transaction abort. The latter is core transaction
+evidence, not native-browser fault acceptance. An explicitly scoped Knowledge
+projection pair changes private balances/artifact/pending report only; neither
+tampered candidate is written to or accepted by Game. The actual W200m movement
+used for fixed-terminal communication checks exists only in the owned E30
+registered carrier, not in the default five-phase scenario or Worker import.
+
+Retained failures include unrelated private qualification data in movement
+reports, absent fixed-terminal authorization checks, one-energy hardcoding for a
+two-energy controlled path, mutable current draft consultation after an already
+issued repair, an unchanged initial map marker, incomplete Report metadata and
+artifact references to an order rather than generated material. Each behavioral
+repair retains its real RED/GREEN. An invalid tick call in a new test, legacy
+untyped unknown-actor fixtures and a native-driver generator syntax error were
+harness/interface-binding errors, not product acceptance failures. Old history
+tests now explicitly require can_issue=false; unsupported actors/activities still
+use real typed refs and preserve exact zero-effect checks.
+
+Earlier T03 candidates passed556 core tests, types/import checks and32 actual
+Windows browser tests. The first native sample passed four default Chrome/Edge
+launches in40.119s, preserving partial field work and a completed-but-undelivered
+artifact across full recorded-process close and same-profile/origin paused
+restore; command mode required explicit continue and actual trusted blur caused
+Game pause. Subsequent map/Report/material changes require current-source checks;
+those earlier receipts are not relabeled as a final-SHA native run. This section
+is a review-candidate scope record. Fresh fixed-source gates and independent
+Spec/Standards must precede T03 exit. T04, final batch CI/PR/main and formal
+experience remain open; original244AT are all not_run.

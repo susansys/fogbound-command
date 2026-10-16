@@ -149,7 +149,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       }else if(input.kind==='request_preparation'&&locked){
         response={request_id,ok:true,...await game.request_preparation(input.envelope)};
       }else if(input.kind==='issue_activity'&&locked){
-        await game.issue_activity(input.envelope);throw new GameError('UNSUPPORTED');
+        response={request_id,ok:true,...await game.issue_activity(input.envelope)};
       }else if(input.kind==='preview_mission'&&locked){
         response={request_id,ok:true,mission_preview:await (history??game).preview_plan(input.run_id,input.revision,input.editing_seq,parse_mission_draft(input.draft,input.run_id))};rememberResult=false;
       }else if(input.kind==='save_plan'&&locked){

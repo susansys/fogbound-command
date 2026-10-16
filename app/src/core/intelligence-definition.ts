@@ -2,7 +2,8 @@ import registered from './intelligence-definition.json';
 import {GameError} from '../contracts';
 import {record,valid_id,fields} from '../protocol';
 import {hash} from './scenario';
-export type IntelligenceDefinition=Omit<typeof registered,'schema'|'scenario_kind'|'catalogs'>&{schema:9;scenario_kind:'play_intelligence';catalogs:Omit<typeof registered.catalogs,'forwardings'>&{forwardings:Array<{id:string;received:number;proof:string|null;proof_received?:number;report_id?:string}>}};
+export type IntelligenceLocalCondition={actor:string;qualifications:string[]|null;equipment:string[]|null;record_energy:number|null;record_packs:number|null;position_scope:string|null;facility_authorized:boolean|null;source_ref:string};
+export type IntelligenceDefinition=Omit<typeof registered,'schema'|'scenario_kind'|'catalogs'>&{schema:9;scenario_kind:'play_intelligence';catalogs:Omit<typeof registered.catalogs,'forwardings'|'local_conditions'>&{local_conditions:IntelligenceLocalCondition[];forwardings:Array<{id:string;received:number;proof:string|null;proof_received?:number;report_id?:string}>}};
 export function is_intelligence_definition(value:{schema:number}):value is IntelligenceDefinition{return value.schema===9;}
 export function intelligence_definition_for_package(digest:unknown,owned:readonly IntelligenceDefinition[]=[]):IntelligenceDefinition{
   const selected=[registered,...owned].find(d=>d.definition_hash===digest);
@@ -51,6 +52,19 @@ export async function load_intelligence_definition(input:unknown,owned:readonly 
   if(await hash([])!==selected.hashes.media||selected.profile.registry.length!==registered.profile.registry.length)throw new GameError('INVALID_DEFINITION');
   if(!record(selected.catalogs.engine_conditions)||!fields(selected.catalogs.engine_conditions,['actual_access'])||!['blue','green'].includes(selected.catalogs.engine_conditions.actual_access))throw new GameError('INVALID_DEFINITION');
   if(JSON.stringify(selected.catalogs.actors)!==JSON.stringify(registered.catalogs.actors))throw new GameError('INVALID_DEFINITION');
+  const controlledMove=ownedFixture&&selected.catalogs.activities.length===registered.catalogs.activities.length+1&&JSON.stringify(selected.catalogs.activities.at(-1))===JSON.stringify({id:'E30-W-move',actor:'W',action:'move',from:'B',to:'H',capability:'W:move-fixture',prerequisite:null,conditions:[],label:'W受控移动探针'});
+  if(JSON.stringify(selected.catalogs.activities.slice(0,registered.catalogs.activities.length))!==JSON.stringify(registered.catalogs.activities)||selected.catalogs.activities.length!==registered.catalogs.activities.length+(controlledMove?1:0))throw new GameError('INVALID_DEFINITION');
+  const expectedCapabilities=[...registered.capabilities,...(controlledMove?[{id:'W:move-fixture',actor:'W',action:'move',qualification:'none',equipment:'movement',unit:'fictional_metre',capacity:1}]:[])];
+  if(JSON.stringify(selected.capabilities)!==JSON.stringify(expectedCapabilities)||JSON.stringify(selected.rules)!==JSON.stringify(registered.rules))throw new GameError('INVALID_DEFINITION');
+  for(const key of ['map','authorities','equipment','supply_units','fixed_facilities','initial_known','source'] as const)if(JSON.stringify(selected.catalogs[key])!==JSON.stringify(registered.catalogs[key]))throw new GameError('INVALID_DEFINITION');
+  if(!Array.isArray(selected.catalogs.local_conditions)||selected.catalogs.local_conditions.length>2||new Set(selected.catalogs.local_conditions.map(c=>c.actor)).size!==selected.catalogs.local_conditions.length)throw new GameError('INVALID_DEFINITION');
+  for(const c of selected.catalogs.local_conditions){
+    const shape=ownedFixture&&fields(c,['actor','qualifications','equipment','record_energy','record_packs','position_scope','facility_authorized','source_ref'])&&['R','W'].includes(c.actor);
+    const qualification=c.source_ref==='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E24'&&c.position_scope===null&&c.facility_authorized===null&&c.record_energy===null&&c.record_packs===null&&(c.qualifications===null||Array.isArray(c.qualifications)&&c.qualifications.length===0)&&(c.equipment===null||Array.isArray(c.equipment)&&(c.equipment.length===1&&['REC','WORK'].includes(c.equipment[0])||c.actor==='R'&&JSON.stringify(c.equipment)===JSON.stringify(['WORK','LINK'])));
+    const energy=c.source_ref==='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E25'&&c.position_scope===null&&c.facility_authorized===null&&c.actor==='R'&&c.qualifications===null&&c.equipment===null&&c.record_energy===3&&c.record_packs===1;
+    const facility=c.source_ref==='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E30'&&c.actor==='W'&&c.qualifications===null&&c.equipment===null&&c.record_energy===null&&c.record_packs===null&&(c.position_scope===null&&c.facility_authorized===false||c.position_scope==='A'&&c.facility_authorized===null);
+    if(!shape||!qualification&&!energy&&!facility)throw new GameError('INVALID_DEFINITION');
+  }
   if(!Array.isArray(selected.catalogs.forwardings)||selected.catalogs.forwardings.length!==3||new Set(selected.catalogs.forwardings.map(f=>f.id)).size!==3)throw new GameError('INVALID_DEFINITION');
   for(const f of selected.catalogs.forwardings){
     if(!record(f)||!fields(f,['id','received','proof',...(Object.hasOwn(f,'report_id')?['report_id']:[]),...(Object.hasOwn(f,'proof_received')?['proof_received']:[])])||!valid_id(f.id)||!Number.isSafeInteger(f.received)||f.received<21000||f.received>910000||!(f.proof===null||valid_id(f.proof))||f.report_id!==undefined&&!valid_id(f.report_id)||f.proof_received!==undefined&&(!Number.isSafeInteger(f.proof_received)||f.proof_received<f.received||f.proof_received>910000))throw new GameError('INVALID_DEFINITION');

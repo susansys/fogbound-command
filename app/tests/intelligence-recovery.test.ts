@@ -10,7 +10,7 @@ test.each([0,31000])('B23 retained-history entry reads the latest committed sche
     const game=new Game(store);let view=await game.create_run(await intelligence_definition(),'research','create');
     if(at)({view}=await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:at}}));
     const reopened=new Game(store),history=await reopened.get_replay(view.run_id,at);
-    expect(await history.get_view(view.run_id)).toEqual({...view,next_action:'历史记录只能查看，请返回当前行动后安排任务'});
+    expect(await history.get_view(view.run_id)).toEqual({...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'});
     await expect(history.save({run_id:view.run_id,operation_id:'history-write',expected_revision:view.revision,intent:{kind:'save'}})).rejects.toThrow('HISTORY_READ_ONLY');
     expect(await reopened.get_view(view.run_id)).toEqual(view);
   }finally{await store.delete();}

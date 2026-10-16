@@ -2636,6 +2636,33 @@
       "equipment": "REC",
       "unit": "work",
       "capacity": 1
+    },
+    {
+      "id": "R:move",
+      "actor": "R",
+      "action": "move",
+      "qualification": "none",
+      "equipment": "movement",
+      "unit": "fictional_metre",
+      "capacity": 1
+    },
+    {
+      "id": "R:record",
+      "actor": "R",
+      "action": "record",
+      "qualification": "record_keeper",
+      "equipment": "REC",
+      "unit": "work",
+      "capacity": 1
+    },
+    {
+      "id": "W:repair",
+      "actor": "W",
+      "action": "repair",
+      "qualification": "work_keeper",
+      "equipment": "WORK",
+      "unit": "work",
+      "capacity": 1
     }
   ],
   "rules": {
@@ -3103,7 +3130,14 @@
         "space": 7,
         "record_energy": 20,
         "link_energy": 16,
-        "record_packs": 2
+        "record_packs": 2,
+        "qualifications": [
+          "record_keeper"
+        ],
+        "equipment": [
+          "REC",
+          "LINK"
+        ]
       },
       {
         "id": "W",
@@ -3113,7 +3147,13 @@
         "load": 8,
         "space": 6,
         "work_energy": 24,
-        "repair_packs": 2
+        "repair_packs": 2,
+        "qualifications": [
+          "work_keeper"
+        ],
+        "equipment": [
+          "WORK"
+        ]
       }
     ],
     "fixed_facilities": [
@@ -3177,14 +3217,121 @@
         "received": 41000,
         "proof": "F3"
       }
+    ],
+    "activities": [
+      {
+        "id": "R-to-A",
+        "actor": "R",
+        "action": "move",
+        "from": "H",
+        "to": "A",
+        "capability": "R:move",
+        "prerequisite": null,
+        "conditions": [],
+        "label": "R前往A"
+      },
+      {
+        "id": "A-record",
+        "actor": "R",
+        "action": "record",
+        "from": "A",
+        "to": "A",
+        "capability": "R:record",
+        "prerequisite": "R-to-A",
+        "conditions": [],
+        "label": "A处记录"
+      },
+      {
+        "id": "W-repair",
+        "actor": "W",
+        "action": "repair",
+        "from": "B",
+        "to": "B",
+        "capability": "W:repair",
+        "prerequisite": null,
+        "conditions": [],
+        "label": "W维修B"
+      },
+      {
+        "id": "R-to-B",
+        "actor": "R",
+        "action": "move",
+        "from": "A",
+        "to": "B",
+        "capability": "R:move",
+        "prerequisite": "A-record",
+        "conditions": [],
+        "label": "R前往B"
+      },
+      {
+        "id": "B-record",
+        "actor": "R",
+        "action": "record",
+        "from": "B",
+        "to": "B",
+        "capability": "R:record",
+        "prerequisite": "R-to-B",
+        "conditions": [
+          "verified_access",
+          "repair_report"
+        ],
+        "label": "B处记录"
+      }
+    ],
+    "authorities": [
+      {
+        "id": "HQ-field-authority",
+        "issuer": "HQ",
+        "actors": [
+          "R",
+          "W"
+        ],
+        "valid_from": 0,
+        "valid_to": 900000
+      }
+    ],
+    "local_conditions": [],
+    "equipment": [
+      {
+        "id": "REC",
+        "load": 4,
+        "space": 3,
+        "source_ref": "product-v0.5.1-parameters.md:130"
+      },
+      {
+        "id": "LINK",
+        "load": 3,
+        "space": 2,
+        "source_ref": "product-v0.5.1-parameters.md:131"
+      },
+      {
+        "id": "WORK",
+        "load": 6,
+        "space": 4,
+        "source_ref": "product-v0.5.1-parameters.md:132"
+      }
+    ],
+    "supply_units": [
+      {
+        "id": "record_pack",
+        "load": 1,
+        "space": 1,
+        "source_ref": "product-v0.5.1-parameters.md:136"
+      },
+      {
+        "id": "repair_pack",
+        "load": 1,
+        "space": 1,
+        "source_ref": "product-v0.5.1-parameters.md:136"
+      }
     ]
   },
   "hashes": {
     "profile": "92e6eba8f089b0fe113ee98ec6c0326529b7bd673820f5d03ed1a6a32c0a965d",
-    "capabilities": "56fb366220eeb73f163e23e604b3a29eceeabe3e783c301d127e7f1f82dece73",
+    "capabilities": "c01541998242ae9e73aa9e08ed6a59bc89e825a480d17caa9e85ca15e875173d",
     "rules": "c787ef28536653f89222ddbc33c0516c5bd6496e16a42ae67803ee724e6c4f18",
-    "catalogs": "9277994960b20b202b138a5b36e61aecfbcfb5583221fb2d0e6e5514e0dc5bfc",
+    "catalogs": "c9a8b4b5105a29720402401693dcdc26f27ee46d1c89eb4cd83643835baf523d",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "e1cc2e057085044de65f1369905a7f286b157256534366809be68526ef7a1bd1"
+  "definition_hash": "7a5b28f3bc831d2b59a57de52fa2ba499ea635be509906ba3571e21944297faa"
 }

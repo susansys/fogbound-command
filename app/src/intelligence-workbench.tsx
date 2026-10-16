@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import type {Envelope,Intent} from './contracts';
-import type {IntelligencePlayerView,SaveIntelligencePlan,IntelligencePreparationRequest} from './intelligence-contracts';
+import type {IntelligencePlayerView,SaveIntelligencePlan,IntelligencePreparationRequest,IntelligenceActivityRequest} from './intelligence-contracts';
 import type {IntelligenceSourceRequest} from './intelligence-protocol';
 import type {GamePlayerView} from './play-contracts';
 import type {Transport,Request} from './transport';
@@ -12,7 +12,7 @@ export function IntelligenceWorkbench({view,transport,adopt,history,hasLiveRun,o
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[advance,setAdvance]=useState('21'),[selected,setSelected]=useState('R'),[pauseUnknown,setPauseUnknown]=useState(false);
   const [expanded,setExpanded]=useState<string[]>([]),[node,setNode]=useState('1');
   const [purpose,setPurpose]=useState(view.plan?.purpose??'取得B处记录');
-  const current=useRef(view),pending=useRef<Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|null>(null),inFlight=useRef(false),nodes=useRef(view.replay_nodes);current.current=view;
+  const current=useRef(view),pending=useRef<Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest|null>(null),inFlight=useRef(false),nodes=useRef(view.replay_nodes);current.current=view;
   if(!history)nodes.current=view.replay_nodes;
   async function request(input:Request){
     const response=await transport.request(input);
@@ -20,10 +20,10 @@ export function IntelligenceWorkbench({view,transport,adopt,history,hasLiveRun,o
     else if(!response.ok)setError(response.code);
     return response;
   }
-  async function send(envelope:Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest){
+  async function send(envelope:Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest){
     if(inFlight.current)return;inFlight.current=true;setBusy(true);
     try{
-      const result=envelope.intent.kind==='save_plan'?await request({kind:'save_plan',envelope}):envelope.intent.kind==='request_source_validation'?await request({kind:'request_source_validation',envelope}):envelope.intent.kind==='request_preparation'?await request({kind:'request_preparation',envelope}):await request({kind:'operate',envelope:envelope as Envelope});
+      const result=envelope.intent.kind==='issue_activity'?await request({kind:'issue_activity',envelope}):envelope.intent.kind==='save_plan'?await request({kind:'save_plan',envelope}):envelope.intent.kind==='request_source_validation'?await request({kind:'request_source_validation',envelope}):envelope.intent.kind==='request_preparation'?await request({kind:'request_preparation',envelope}):await request({kind:'operate',envelope:envelope as Envelope});
       if(result.ok){pending.current=null;setNotice('已提交 · '+clock(result.view?.sim_time??view.sim_time));}
       else if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(result.code)){pending.current=null;if(result.code==='STALE_REVISION')await request({kind:'view',run_id:view.run_id});}
     }catch{setError('CHANNEL_UNCERTAIN');}finally{inFlight.current=false;setBusy(false);}
@@ -42,6 +42,9 @@ export function IntelligenceWorkbench({view,transport,adopt,history,hasLiveRun,o
     const now=current.current;if(history||pending.current||inFlight.current||!now.plan)return;
     const envelope:IntelligencePreparationRequest={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent:{kind:'request_preparation',plan_ref:now.plan.ref}};
     pending.current=envelope;await send(envelope);
+  }
+  async function issueActivity(intent:IntelligenceActivityRequest['intent']){
+    if(history||pending.current||inFlight.current)return;const now=current.current,envelope={run_id:now.run_id,operation_id:crypto.randomUUID(),expected_revision:now.revision,intent};pending.current=envelope;await send(envelope);
   }
   async function control(intent:Intent){
     if(history||pending.current||inFlight.current)return;
@@ -78,8 +81,10 @@ export function IntelligenceWorkbench({view,transport,adopt,history,hasLiveRun,o
       <p className="operation-status" role="status">{history?'仅显示所选记录提交时总部已收到的信息。':notice||view.next_action}</p>
       <div className="workbody mission-body"><MapView view={view} selected={selected} onSelect={setSelected} planned={false} displaySession={displaySession}/>
       <aside id="intelligence-sources" tabIndex={-1} className="intelligence-sources" aria-label="总部已收原始资料">
+        <section data-testid="intelligence-field"><h2>逐次下达现场指令</h2><p>每次只下达一个阶段；签发后等待接令与终态回报。</p>{view.field_options.map(option=><div key={option.intent.activity_ref.id}><button disabled={blocked||!option.available} onClick={()=>void issueActivity(option.intent)}>下达{option.label}</button>{option.missing.length>0&&<p>{option.label}：{option.missing.join('；')}</p>}</div>)}{view.field_activities.map(order=><p key={order.ref.id}>{view.field_options.find(o=>o.intent.activity_ref.id===order.activity)?.label} · {({issued:'已签发，等待接令回报',accepted:'接令回报已收到，等待终态回报',completed:'完成回报已收到',refused:'当地条件受阻回报已收到',cutoff:'截止回报已收到'})[order.status]} · 签发 {clock(order.issued_at)}</p>)}</section>
+        <section data-testid="intelligence-artifacts"><h3>成果回报</h3>{view.artifact_reports.length===0?<p>等待成果回报；当地发生与总部收到分开记录。</p>:view.artifact_reports.map(({report,delivery})=><p key={delivery.ref.id}>{report.artifact!.site} · 回报称现场已生成 · 当地 {clock(report.artifact!.created_at)} · 总部收到 {clock(delivery.received)}。保管方{report.artifact!.custody_holder}；尚未交接或终局核验。</p>)}</section>
         <section role="region" aria-label="总部最后确认的编组"><h2>最后确认的编组</h2>{view.actors.map(a=><div key={a.actor}><h3>{a.actor} · {a.role==='record_keeper'?'记录组':'作业组'} · {a.people}人</h3><p>确认于 {clock(a.confirmed_at)} · {a.position_scope} · 负重 {a.load}／{a.load_capacity} · 空间 {a.space}／{a.space_capacity}</p><p>{a.actor==='R'?'记录':'维修'}能量 {a.equipment_energy} · 耐久 {a.durability} · {a.actor==='R'?'记录':'维修'}包 {a.packs}</p>{a.link&&<p>便携联络能量 {a.link.energy} · 耐久 {a.link.durability}</p>}</div>)}</section>
-        <section role="region" aria-label="总部已知的任务前提"><h3>已知任务前提</h3><p>{view.repair_condition.site}需维修 · 开局公开条件 · 确认于 {clock(view.repair_condition.confirmed_at)}。</p><p>蓝／绿访问凭证仍待核实；维修完成须等待合法回报。</p></section>
+        <section role="region" aria-label="总部已知的任务前提"><h3>已知任务前提</h3><p>{view.repair_condition.site}{view.repair_condition.status==='required'?'需维修 · 开局公开条件':'维修完成回报已收到'} · 确认于 {clock(view.repair_condition.confirmed_at)}。</p><p>{verificationCopy}；B处记录还须携带已收维修凭证。</p></section>
         <section data-testid="intelligence-processing"><h3>一个处理席位</h3><p>开局已接受工作占用至 {clock(view.processing.initial_occupied_until)}。处理能量最后确认 {view.processing.energy_confirmed} · 已预留 {view.processing.energy_reserved}；产品须等待合法递交。</p>{view.processing.queue.map(item=><p key={item.ref.id}>{item.kind==="preparation"?"准备":"核实"}{item.status==='queued'?'待处理':item.status==='running'?'中':item.status==='completed'?'工作完成，产品另行递交':'已截止'} · 已做 {item.work_done_ms/1000}／{item.work_required_ms/1000} 秒{item.started_at!==null?' · 开始 '+clock(item.started_at):''}</p>)}</section>
         <section data-testid="intelligence-assessments"><h3>已收核实结论</h3>{view.assessments.length===0?<p>尚未收到核实产品；收到原文不等于核实。</p>:view.assessments.map(({assessment,delivery})=><p key={assessment.ref.id}>{assessment.conclusion.value==='green'?'绿色':'蓝色'}凭证已核实 · 完成 {clock(assessment.completed_at)} · 收到 {clock(delivery.received)}。原文保留，不据此增加独立来源数。</p>)}</section>
         <section data-testid="intelligence-plan"><h3>准备草案</h3><label>准备目的<textarea aria-label="准备目的" value={purpose} disabled={blocked} maxLength={2000} onChange={event=>setPurpose(event.target.value)}/></label><button disabled={blocked||!purpose.trim()} onClick={()=>void savePlan()}>保存准备草案</button>{view.plan?<><p>草案第{view.plan.ref.version}版 · {view.plan.purpose}。{preparationCopy}</p><button disabled={blocked||purpose!==view.plan.purpose||view.preparation.status!=='not_requested'} onClick={()=>void requestPreparation()}>提交准备申请</button>{purpose!==view.plan.purpose&&<p>当前编辑尚未保存；请先保存再申请。</p>}</>:<p>草案尚未保存。编辑与保存均不代替准备申请。</p>}</section>
