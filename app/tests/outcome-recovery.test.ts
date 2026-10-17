@@ -28,6 +28,17 @@ test('B24 E11 core same-run takeover pauses a partially running reception and ex
  }finally{await store.delete();}
 });
 
+test('B24 the saved-run list opens the latest clock commit as read-only without requiring another manual save',async()=>{
+ const {store,game,initial}=await runningW('b24-owned-t01-latest-record-list');
+ try{
+  const before=(await game.tick(initial.run_id,30000,'last-clock-input')).view;
+  const history=await new Game(store).get_replay(initial.run_id,30000),observed=await history.get_view(initial.run_id);
+  expect(observed).toMatchObject({run_id:initial.run_id,scenario_kind:'play_outcome',sim_time:30000,can_issue:false,return_plans:[{actor:'W',status:'returning'}]});
+  await expect(history.save({run_id:initial.run_id,operation_id:'write-history',expected_revision:observed.revision,intent:{kind:'save'}})).rejects.toThrow('HISTORY_READ_ONLY');
+  expect(await game.get_view(initial.run_id)).toEqual(before);expect(await game.get_receipt(initial.run_id,'write-history')).toBeNull();
+ }finally{await store.delete();}
+});
+
 test('B24 E11 actual owned transaction abort cannot leave half a reception or consume a once marker',async()=>{
  const{store,game,initial}=await runningW('b24-owned-t01-reception-abort'),native=IDBObjectStore.prototype.put;
  try{

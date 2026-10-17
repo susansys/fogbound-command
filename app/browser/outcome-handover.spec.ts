@@ -25,3 +25,19 @@ for(const sample of [{requests:1,status:'W组核验排队：处理席位占用�
  else{await advance('901');await expect(page.getByText('W组已收到核验时限回报',{exact:true})).toBeVisible();await expect(page.getByTestId('outcome-verification')).toContainText('已核验 0 人');}
  await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+test('B24 a handover at deadline reports verification cutoff only after the manifest actually arrives',async({page})=>{
+ await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+ const advance=async(seconds:string,clock:string)=>{await page.getByLabel('推进到时刻（秒）').fill(seconds);const button=page.getByRole('button',{name:'推进到该时刻',exact:true});await expect(button).toBeEnabled();await button.press('Enter');await expect(page.locator('.clock strong')).toHaveText(clock);};
+ await advance('815','13:35');const returning=page.getByRole('button',{name:'安排W返回交付',exact:true});await expect(returning).toBeEnabled();await returning.press('Enter');await page.getByRole('dialog').getByRole('button',{name:'确认返回交付',exact:true}).press('Enter');await expect(page.getByTestId('outcome-return-W')).toContainText('已签发');
+ await advance('900','15:00');await advance('901','15:01');await expect(page.getByTestId('outcome-reception')).toContainText('已确认接收 3 人');await expect(page.getByText('W组已收到核验时限回报',{exact:true})).toHaveCount(0);
+ await advance('902','15:02');await expect(page.getByText('W组已收到核验时限回报',{exact:true})).toBeVisible();await expect(page.getByTestId('outcome-verification')).toContainText('已核验 0 人');await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('B24 saved list opens the latest auto-committed clock record without a later manual save',async({page})=>{
+ await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+ await page.getByRole('button',{name:'安排W返回交付',exact:true}).press('Enter');await page.getByRole('dialog').getByRole('button',{name:'确认返回交付',exact:true}).press('Enter');await expect(page.getByTestId('outcome-return-W')).toContainText('已签发');
+ await page.getByLabel('推进到时刻（秒）').fill('30');const advance=page.getByRole('button',{name:'推进到该时刻',exact:true});await expect(advance).toBeEnabled();await advance.press('Enter');await expect(page.locator('.clock strong')).toHaveText('00:30');
+ await page.reload();await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByRole('button',{name:'查看记录',exact:true}).press('Enter');
+ await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();await expect(page.locator('.clock strong')).toHaveText('00:30');await expect(page.getByRole('button',{name:'安排W返回交付',exact:true})).toBeDisabled();await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();await expect(page.getByRole('alert')).toHaveCount(0);
+});

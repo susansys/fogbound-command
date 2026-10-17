@@ -107,6 +107,19 @@ test('B24 an unfunded manifest stops waiting at the entity deadline without inve
  }finally{await store.delete();}
 });
 
+test('B24 a handover completed exactly at deadline cannot backdate verification observation before INTEL receives its manifest',async()=>{
+ const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-late-manifest-observation',[],[],[],[definition]);
+ try{
+  const game=new Game(store),initial=await game.create_run(definition,'research','create');let view=initial;
+  const ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:initial.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+  await advance(815000);view=(await game.return_and_deliver({run_id:initial.run_id,operation_id:'late-return-W',expected_revision:view.revision,intent:{kind:'return_and_deliver',actor_ref:ref('actor','W'),return_route_ref:ref('return_route','W-B-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-W'),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:0,to:900000}}})).view;
+  await advance(900000);expect(await game.get_actor_view(initial.run_id,'H')).toMatchObject({reception:{received_personnel:3,batches:[{started_at:875000,completed_at:900000,status:'completed'}]}});
+  await advance(901000);const local=await game.get_actor_view(initial.run_id,'INTEL');expect(Reflect.get(local,'published_status_reports')).toMatchObject([{phase:'cutoff',observed:{value:901000},source_published:901000}]);expect(Reflect.get(view,'verification_feedback')).toEqual([]);
+  await advance(902000);expect(Reflect.get(view,'verification_feedback')).toMatchObject([{report:{phase:'cutoff',observed:{value:901000}},delivery:{sent:901000,received:902000}}]);expect(Reflect.get(view,'verification_reports')).toEqual([]);expect(Reflect.get(view,'processing')).toMatchObject({energy_confirmed:20,energy_reserved:0});expect(valid_response({request_id:'late-manifest-cutoff',ok:true,view})).toBe(true);
+ }finally{await store.delete();}
+});
+
 test('B24 E01/E02/E04/E08 path B keeps the public five-stage prefix and confirms two independent manifests by368000 with processing8',async()=>{
   const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-normal-B',[],[],[],[definition]);
   try{

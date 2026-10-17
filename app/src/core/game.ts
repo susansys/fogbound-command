@@ -100,7 +100,7 @@ export class Game {
     await this.validate_stored_state(latest);await validate_state(initial,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
     const context=new Game(this.store);
-    if((latest.schema===8||latest.schema===9)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
+    if((latest.schema===8||latest.schema===9||latest.schema===10)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
     if(nodeRevision!==undefined){
       if(!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
       const node=await this.store.snapshot(run,nodeRevision);
