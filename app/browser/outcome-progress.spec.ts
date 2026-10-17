@@ -1,0 +1,46 @@
+import {test,expect} from '@playwright/test';
+test.use({viewport:{width:1366,height:768}});
+
+test('B24 E23 UI reminds about no new HQ feedback without inventing an outcome or resetting on save',async({page})=>{
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+  await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();
+  await page.getByLabel('推进到时刻（秒）').fill('205.999');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.locator('.clock strong')).toHaveText('03:25.999');await expect(page.getByText('暂无新增总部反馈',{exact:true})).toHaveCount(0);
+  await page.getByLabel('推进到时刻（秒）').fill('206');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.getByText('暂无新增总部反馈',{exact:true})).toBeVisible();await expect(page.getByTestId('outcome-result')).toHaveCount(0);
+  await page.getByRole('button',{name:'保存行动',exact:true}).press('Enter');await expect(page.getByText('暂无新增总部反馈',{exact:true})).toBeVisible();await expect(page.locator('.clock strong')).toHaveText('03:26');await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('B24 E25 UI defers its reminder only after INTEL actual funded long-wait delivery',async({page})=>{
+  test.setTimeout(60000);
+  await page.addInitScript(()=>{const Native=Worker;window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args);worker.addEventListener('message',(event:MessageEvent)=>{if(event.data.ok&&event.data.view)Reflect.set(window,'__b24ProgressView',structuredClone(event.data.view));});return worker;}});});
+  const current=()=>page.evaluate(()=>Reflect.get(window,'__b24ProgressView'));
+  const commit=async(name:string)=>{const before=await current();await page.getByRole('button',{name,exact:true}).press('Enter');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(before.revision);};
+  const advance=async(seconds:number)=>{await page.getByLabel('推进到时刻（秒）').fill(String(seconds));await commit('推进到该时刻');};
+  await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();
+  await advance(1);await page.getByRole('button',{name:'安排W返回交付',exact:true}).press('Enter');await commit('确认返回交付');await advance(86);
+  const source=page.getByTestId('intelligence-source-R3');for(let i=0;i<9;i++){const before=await current();await source.getByRole('button',{name:'请求核实这份原文',exact:true}).press('Enter');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(before.revision);}
+  await advance(87);expect((await current()).progress.waiting_until).toBeNull();await advance(88);await expect(page.getByText('已收到预计等待至 04:47 的回报；仍以实际后续回报为准，不延长期限。',{exact:true})).toBeVisible();
+  await advance(230);expect((await current()).progress).toMatchObject({last_progress_at:107000,warning_at:227000,waiting_until:287000,warning:false});await expect(page.getByText('暂无新增总部反馈',{exact:true})).toHaveCount(0);await expect(page.getByTestId('outcome-result')).toHaveCount(0);await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+
+test('B24 E01/E13 default command verification-first keeps opening locked and five real choices through unique success',async({page},info)=>{
+ test.setTimeout(165000);page.setDefaultTimeout(10000);
+ await page.addInitScript(()=>{const Native=Worker,requests:Record<string,any>[]=[];Reflect.set(window,'__b24CommandRequests',requests);window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args),post=worker.postMessage.bind(worker);worker.postMessage=(request:Record<string,any>)=>{requests.push(structuredClone(request));post(request);};worker.addEventListener('message',(event:MessageEvent)=>{if(event.data.ok&&event.data.view)Reflect.set(window,'__b24CommandView',structuredClone(event.data.view));});return worker;}});});
+ const current=()=>page.evaluate(()=>Reflect.get(window,'__b24CommandView'));
+ const commit=async(name:string)=>{const before=await current();expect(before.paused).toBe(true);const button=page.getByRole('button',{name,exact:true});await expect(button).toBeEnabled();await button.press('Enter');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(before.revision);await expect(page.getByRole('alert')).toHaveCount(0);};
+ const pause=async()=>{await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect.poll(async()=>(await current()).paused).toBe(true);await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();};
+ const resume=async()=>{await commit('继续行动');await expect.poll(async()=>(await current()).paused).toBe(false);};
+ const done=async(id:string)=>{await expect.poll(async()=>(await current()).field_reports.some((item:Record<string,any>)=>item.report.typed_payload.activity_ref.id===id&&item.report.phase==='completed'),{timeout:25000}).toBe(true);};
+ const prepare=async()=>{await page.getByLabel('准备目的').fill('核对两处记录并分批返回交付');await commit('保存准备草案');await commit('提交准备申请');};
+ const returning=async(actor:string)=>{await page.getByRole('button',{name:'安排'+actor+'返回交付',exact:true}).press('Enter');await commit('确认返回交付');};
+ await page.goto('/');await page.bringToFront();await expect(page.getByLabel('时间方式')).toHaveValue('command');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();await expect(page.getByLabel('时间方式')).toHaveCount(0);await pause();
+ const beforeRate=await current();await page.getByLabel('推进速度').selectOption('4');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(beforeRate.revision);expect((await current()).rate).toBe(4);
+ await commit('下达R前往A');await resume();await done('R-to-A');await pause();await commit('下达A处记录');await resume();await done('A-record');await pause();await commit('下达R前往B');await resume();
+ await expect(page.getByTestId('intelligence-source-R3')).toBeVisible();await pause();const beforeSource=await current();await page.getByTestId('intelligence-source-R3').getByRole('button',{name:'请求核实这份原文',exact:true}).press('Enter');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(beforeSource.revision);await resume();
+ await expect.poll(async()=>(await current()).assessments.length,{timeout:10000}).toBe(1);await pause();await prepare();await resume();
+ await done('R-to-B');await expect.poll(async()=>(await current()).preparation.status,{timeout:25000}).toBe('approved');await pause();await commit('下达W维修B');await resume();await done('W-repair');await pause();await returning('W');await commit('下达B处记录');await resume();await done('B-record');await pause();await returning('R');
+ const returned=await current(),lastReturn=returned.decision_records.findLast((d:Record<string,any>)=>d.intent.kind==='return_and_deliver'&&d.intent.actor_ref.id==='R');expect(lastReturn).toBeTruthy();const expectedFinish=lastReturn.at+106000;await resume();
+ await expect.poll(async()=>(await current()).finished,{timeout:35000}).toBe(true);const final=await current();expect(final).toMatchObject({mode:'command',paused:true,sim_time:expectedFinish,outcome:{result:'success',finished_at:expectedFinish,missing_people:[],confirmed_people:['R-person-1','R-person-2','R-person-3','W-person-1','W-person-2','W-person-3']},processing:{energy_confirmed:8,energy_reserved:0},actors:[{actor:'R',movement_energy:16,link:{energy:7,durability:91}},{actor:'W',movement_energy:18}]});expect(final.outcome.qualified_artifacts).toHaveLength(2);expect(final.return_reports).toHaveLength(4);expect(final.reception_reports).toHaveLength(4);expect(final.verification_reports).toHaveLength(2);
+ const requests=await page.evaluate(()=>Reflect.get(window,'__b24CommandRequests'));expect(requests.filter((r:Record<string,any>)=>r.envelope?.intent?.kind==='issue_activity').map((r:Record<string,any>)=>r.envelope.intent.activity_ref.id)).toEqual(['R-to-A','A-record','R-to-B','W-repair','B-record']);expect(requests.filter((r:Record<string,any>)=>r.envelope?.intent?.kind==='return_and_deliver')).toHaveLength(2);await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeDisabled();await expect(page.getByRole('alert')).toHaveCount(0);
+ const evidence={route:'verification-first',actual_inputs:requests,expected_finish_basis:'Actual public R return decision time plus independently frozen57000 movement, three1000 message legs,25000 reception,20000 verification and1000 final delivery =106000; management pauses explicit, not load-pressure evidence.',expectedFinish,final_view:final};await import('node:fs/promises').then(fs=>fs.writeFile(info.outputPath('command-verification-first-evidence.json'),JSON.stringify(evidence,null,2),{flag:'wx'}));await page.screenshot({path:info.outputPath('command-verification-first-final.png'),fullPage:true});
+});

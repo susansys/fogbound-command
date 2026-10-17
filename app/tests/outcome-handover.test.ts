@@ -137,7 +137,7 @@ test('B24 E01/E02/E04/E08 path B keeps the public five-stage prefix and confirms
     await advance(262000);await returning('R');await advance(272000);
     expect(await game.get_actor_view(initial.run_id,'H')).toMatchObject({reception:{reserved_personnel:3,received_personnel:0,batches:[{actor:'W',status:'running',started_at:272000}]}});
     await advance(319000);expect(view).toMatchObject({handover:{received_personnel:3},verification_reports:[{report:{personnel:[{status:'verified'},{status:'verified'},{status:'verified'}]},delivery:{received:319000}}]});
-    await advance(368000);expect(view).toMatchObject({finished:false,handover:{received_personnel:6},processing:{energy_confirmed:8,energy_reserved:0},verification_reports:[{delivery:{received:319000}},{report:{artifacts:[{status:'verified'},{status:'verified'}]},delivery:{received:368000}}]});
+    await advance(368000);expect(view).toMatchObject({finished:true,outcome:{result:"success",finished_at:368000,confirmed_people:["R-person-1","R-person-2","R-person-3","W-person-1","W-person-2","W-person-3"],qualified_artifacts:[expect.any(String),expect.any(String)],missing_people:[]},handover:{received_personnel:6},processing:{energy_confirmed:8,energy_reserved:0},verification_reports:[{delivery:{received:319000}},{report:{artifacts:[{status:'verified'},{status:'verified'}]},delivery:{received:368000}}]});
     expect(await game.get_actor_view(initial.run_id,'R')).toMatchObject({position:{site:'H'},resources:{movement_energy:16,record_energy:12,record_packs:0,durability:94,link_energy:7,link_durability:91},artifacts:[]});
     expect(valid_response({request_id:'normal-B-final',ok:true,view})).toBe(true);
   }finally{await store.delete();}
@@ -162,7 +162,7 @@ test('B24 E01/E02/E05/E08 normal A independently confirms both manifests at39100
     expect(await game.get_actor_view(initial.run_id,'H')).toMatchObject({reception:{received_personnel:0,reserved_personnel:3,batches:[{actor:'W',started_at:295000,status:'running'}]}});
     await advance(342000);expect(view).toMatchObject({handover:{received_personnel:3},verification_reports:[{delivery:{received:342000}}]});
     await advance(390000);expect(view).toMatchObject({handover:{received_personnel:6},verification_reports:[{delivery:{received:342000}}]});
-    await advance(391000);expect(view).toMatchObject({finished:false,processing:{energy_confirmed:8,energy_reserved:0},verification_reports:[{delivery:{received:342000}},{report:{artifacts:[{status:'verified'},{status:'verified'}]},delivery:{received:391000}}]});
+    await advance(391000);expect(view).toMatchObject({finished:true,outcome:{result:"success",finished_at:391000,confirmed_people:["R-person-1","R-person-2","R-person-3","W-person-1","W-person-2","W-person-3"],qualified_artifacts:[expect.any(String),expect.any(String)],missing_people:[]},processing:{energy_confirmed:8,energy_reserved:0},verification_reports:[{delivery:{received:342000}},{report:{artifacts:[{status:'verified'},{status:'verified'}]},delivery:{received:391000}}]});
     expect(await game.get_actor_view(initial.run_id,'R')).toMatchObject({resources:{movement_energy:16,record_energy:12,link_energy:7,link_durability:91}});
     expect(valid_response({request_id:'normal-A-final',ok:true,view})).toBe(true);
   }finally{await store.delete();}

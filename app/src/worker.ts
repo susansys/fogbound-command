@@ -7,7 +7,7 @@ import type {GamePlayerView as PlayerView} from './play-contracts';
 import type { Request, Response } from "./transport";
 import { valid_request, correlation,valid_public_field_path } from "./protocol";
 import {valid_response} from './dto';
-import outcomeDefinition from './core/outcome-definition.json';
+import {outcome_definition_by_ref} from './core/outcome-definition';
 import {parse_outcome_envelope} from './outcome-protocol';
 import missionDefinition from './core/mission-definition.json';
 import intelligenceDefinition from './core/intelligence-definition.json';
@@ -107,7 +107,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='B24-OUTCOME-01'?outcomeDefinition:input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref?.startsWith('B24-OUTCOME-')?outcome_definition_by_ref(input.definition_ref):input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();

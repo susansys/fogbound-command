@@ -419,7 +419,7 @@ export function Workbench() {
           <p>
             {(definitionRef==='B23-INTELLIGENCE-01'||definitionRef==='B24-OUTCOME-01')?'本次演练可指挥R、W两支编组，逐阶段下达指令，以总部已收到的回报确认结果。':'本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。'}
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option><option value="B23-INTELLIGENCE-01">情报与协作</option><option value="B24-OUTCOME-01">返回与交付</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option><option value="B23-INTELLIGENCE-01">情报与协作</option><option value="B24-OUTCOME-01">返回与交付</option><option value="B24-OUTCOME-NARROW-01">返回与交付 · 紧迫时限</option><option value="B24-OUTCOME-HARD-BOUNDARY-02">返回与交付 · 公开硬截止</option></select></label>
           {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}

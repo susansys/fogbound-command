@@ -3,6 +3,7 @@ import {valid_envelope} from './protocol';import {parse_intelligence_plan,parse_
 export function parse_outcome_envelope(value:unknown):OutcomeEnvelope{
  if(!record(value)||!record(value.intent))throw new GameError('INVALID_REQUEST');
  switch(value.intent.kind){
+  case 'abort_outcome':return parse_abort_outcome(value);
   case 'return_and_deliver':return parse_return_and_deliver(value);
   case 'save_plan':return parse_intelligence_plan(value);
   case 'request_source_validation':return parse_intelligence_source_request(value);
@@ -10,6 +11,10 @@ export function parse_outcome_envelope(value:unknown):OutcomeEnvelope{
   case 'issue_activity':return parse_intelligence_activity(value);
   default:if(valid_envelope(value,910000,true)&&['save','pause','continue','advance','rate'].includes(value.intent.kind))return structuredClone(value);throw new GameError('INVALID_REQUEST');
  }
+}
+export function parse_abort_outcome(value:unknown):import('./outcome-contracts').AbortOutcome{
+ if(!record(value)||!fields(value,['run_id','operation_id','expected_revision','intent'])||!valid_id(value.run_id)||!valid_id(value.operation_id)||!Number.isSafeInteger(value.expected_revision)||Number(value.expected_revision)<1||!record(value.intent)||!fields(value.intent,['kind'])||value.intent.kind!=='abort_outcome')throw new GameError('INVALID_REQUEST');
+ return structuredClone(value) as import('./outcome-contracts').AbortOutcome;
 }
 export function parse_return_and_deliver(value:unknown):ReturnAndDeliver{
  const bad=()=>{throw new GameError('INVALID_REQUEST');};
