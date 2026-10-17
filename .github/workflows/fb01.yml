@@ -75,8 +75,10 @@ jobs:
             [[ "$container_id" =~ ^[0-9a-f]{64}$ ]]
             remaining_container="$(docker container ls --all --quiet --no-trunc --filter "id=$container_id")"
             if [ -n "$remaining_container" ]; then
-              test "$(docker container inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$container_id")" = "$owner"
-              test "$(docker container inspect --format '{{.Image}}' "$container_id")" = "$(cat image-id.txt)"
+              container_owner="$(docker container inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$container_id")"
+              test "$container_owner" = "$owner"
+              container_image="$(docker container inspect --format '{{.Image}}' "$container_id")"
+              test "$container_image" = "$(cat image-id.txt)"
               docker stop "$container_id"
             fi
             for cleanup_attempt in {1..40}; do
@@ -93,7 +95,8 @@ jobs:
             [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
             image_ids="$(docker image ls --quiet --no-trunc)"
             if grep -Fxq -- "$image_id" <<< "$image_ids"; then
-              test "$(docker image inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$image_id")" = "$owner"
+              image_owner="$(docker image inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$image_id")"
+              test "$image_owner" = "$owner"
               image_users="$(docker container ls --all --quiet --filter "ancestor=$image_id")"
               if [ -z "$image_users" ]; then
                 docker image rm "$image_id"

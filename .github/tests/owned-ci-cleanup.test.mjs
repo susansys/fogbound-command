@@ -41,7 +41,7 @@ if (args[0] === 'stop' && args[1] === state.container) {
 if (args[0] === 'container' && args[1] === 'inspect') {
   if (args.at(-1) !== state.container) finish(90);
   if (!state.containerPresent) finish(1);
-  if (args[2] === '--format') finish(0, args[3].includes('Labels') ? state.owner : (state.containerImage || state.image));
+  if (args[2] === '--format') finish(args[3].includes('Labels') ? (state.containerOwnerQueryExit || 0) : (state.containerImageQueryExit || 0), args[3].includes('Labels') ? state.owner : (state.containerImage || state.image));
   finish(0, '[]');
 }
 if (args[0] === 'container' && args[1] === 'ls') {
@@ -70,7 +70,7 @@ if (args[0] === 'image' && args[1] === 'inspect') {
     if (failure) finish(failure);
   }
   if (!state.imagePresent) finish(1);
-  finish(0, args[2] === '--format' ? (state.imageOwner || state.owner) : '[]');
+  finish(args[2] === '--format' ? (state.imageOwnerQueryExit || 0) : 0, args[2] === '--format' ? (state.imageOwner || state.owner) : '[]');
 }
 if (args[0] === 'image' && args[1] === 'rm' && args[2] === state.image) {
   state.imagePresent = false;
@@ -213,3 +213,13 @@ test('a final image-absence query failure cannot produce a removal receipt', () 
   assert.equal(result.status, 37);
   assert.ok(!result.stdout.includes('Owned unused image removed:'));
 });
+
+for (const [field, code] of [['containerOwnerQueryExit', 41], ['containerImageQueryExit', 43], ['imageOwnerQueryExit', 47]]) {
+  test(field + ' fails even when the query prints the expected value', () => {
+    const result = runCleanup({[field]: code});
+    assert.equal(result.status, code);
+    assert.equal(result.state.imagePresent, true);
+    if (field !== 'imageOwnerQueryExit') assert.equal(result.state.stopped, false);
+    assert.ok(!result.stdout.includes('Owned unused image removed:'));
+  });
+}
