@@ -79,6 +79,18 @@ test('B23 E44 save at899999 restores the same partial command run paused and cut
   }finally{await store.delete();}
 });
 
+test('B23 E43 owned receipt-delay definitions reject coerced numeric aliases before creating a run',async()=>{
+  for(const delay of ['10000',[10000]]){
+    const source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E43',definition=await intelligence_variant(d=>{
+      Reflect.set(d.profile.parameters,'link_ms',delay);const entry=d.profile.registry.find(r=>r.id==='link_ms')!;Reflect.set(entry,'value',delay);entry.source_ref=source;
+      const resolved=d.profile.resolved_registry.find(r=>r.id==='S10 link.text')!;Reflect.set(resolved.value as object,'normal_ms',delay);resolved.source_ref=source;
+      for(const forwarding of d.catalogs.forwardings)forwarding.received+=9000;
+    }),store=new Persistence('b23-owned-t04-invalid-delay-'+typeof delay,[],[],[definition]);
+    try{await expect(new Game(store).create_run(definition,'research','invalid-delay')).rejects.toThrow('INVALID_DEFINITION');expect(await store.list_runs()).toEqual([]);}
+    finally{await store.delete();}
+  }
+});
+
 test.each([1000,10000,10001] as const)('B23 E43 an explicitly registered owned %ims transport delivers a completed record only within receipt grace',async delay=>{
   const source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E43';
   const definition=await intelligence_variant(d=>{

@@ -630,3 +630,39 @@ against the actual served Worker and emits only its public scenario/geometry/
 rules identity, following the existing schema7/8 disclosure boundary. Private
 definition/source hashes and owned diagnostic catalogs are not published. No
 new dependency, tool permission or workflow timeout was introduced.
+
+Final whole-batch review also found schema9 cold validation coercing an array
+mode into a valid string, and response DTOs coercing mode/rate enum values.
+Two actual compatibility REDs accepted malformed self-hashed mode and response
+values. The cold boundary now requires exact mode literals; B23 response enum
+membership uses original values without String/Number coercion. The focused
+compatibility GREEN retains legal mode/rate values and the owned original save.
+Another actual browser RED found the B23 entry still claiming one actor/task;
+the entry now identifies R/W and stage-by-stage orders. Its browser GREEN checks
+the accurate entry and the existing deadline behavior. These are corrections
+within the original44 engineering cases, not additional product acceptance.
+Their changed runtime assets require fresh identity and affected verification;
+older local evidence remains labelled with its actual tested SHA. Final remote
+CI, merge/main, documentation sync and batch closure are still pending.
+The same review then found coerced activity reference kinds at the request
+boundary. An actual Game RED committed an array actor kind; the strict string
+check now rejects array actor/activity/authority kinds without changing state or
+creating a receipt. This remains part of E06/E36, not a new engineering case.
+The constructor-owned E43 delay seam also now requires numeric10000/10001;
+actual RED accepted a string alias and produced concatenated estimated times.
+String/array aliases are rejected before run creation, while existing numeric
+E43 boundary checks remain. The Worker still cannot register such variants.
+
+The owner retained the original aggregate20 browser runner minutes. The local
+two-job40-minute proposal was rejected and is not the delivery workflow. One
+browser job keeps its20-minute timeout, headed CFT155/SwiftShader, worker1 and
+retries0. The complete231-test discovery/actual-passed-ID check rejects skipped,
+retried, missing or unfinished contracts. The existing quality job stays15min.
+Projection navigation and the shared map start helper use visible/enabled
+buttons through Enter; all map mouse moves/drags, DPR screenshots, control
+points, numeric bounds and original assertions remain. A bounded one-case local
+headed SwiftShader diagnostic passed before/after; its17.0/14.7s observations do
+not prove Linux CI capacity. The affected49 defaultWindows cases passed with
+the exact driver changes; actual final-SHA CI duration is still required.
+The window-manager install reuses apt indexes already refreshed by the pinned
+Playwright install-deps step. No new dependency, renderer or timeout is added.

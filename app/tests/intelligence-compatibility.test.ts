@@ -4,7 +4,47 @@ import {Persistence} from '../src/core/persistence';
 import {engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition} from '../src/core/scenario';
 import mission from '../src/core/mission-definition.json';
 import {intelligence_definition} from './intelligence-fixtures';
-import {state_hash} from '../src/core/snapshot';
+import {state_hash,validate_state} from '../src/core/snapshot';
+import {valid_response} from '../src/dto';
+
+test('B23 E36 activity requests reject array reference kinds without a receipt or state change',async()=>{
+  const store=new Persistence('b23-owned-t04-request-enum');
+  try{
+    const game=new Game(store),view=await game.create_run(await intelligence_definition(),'research','create'),before=await store.read_committed(view.run_id);
+    const ref=(kind:string,id:string)=>({run_id:view.run_id,kind,id,version:1});
+    for(const key of ['actor_ref','activity_ref','authority_ref'] as const){
+      const request={run_id:view.run_id,operation_id:'bad-'+key,expected_revision:view.revision,intent:{kind:'issue_activity',actor_ref:ref('actor','R'),activity_ref:ref('activity','R-to-A'),authority_ref:ref('authority','HQ-field-authority'),basis_delivery_refs:[]}};
+      Reflect.set(request.intent[key],'kind',[request.intent[key].kind]);
+      await expect(game.issue_activity(request)).rejects.toThrow('INVALID_REQUEST');
+      expect(await store.read_committed(view.run_id)).toEqual(before);expect(await store.receipt(view.run_id,request.operation_id)).toBeUndefined();
+    }
+  }finally{await store.delete();}
+});
+
+test('B23 E36 cold schema9 validation refuses a self-hashed array mode without coercion',async()=>{
+  const store=new Persistence('b23-owned-t04-mode-enum');
+  try{
+    const game=new Game(store),initial=await game.create_run(await intelligence_definition(),'research','create'),original=await store.read_committed(initial.run_id);
+    for(const mode of [['research'],['command']]){
+      const damaged=structuredClone(original);if(!damaged||damaged.schema!==9)throw Error('Owned schema9 missing');
+      Reflect.set(damaged,'mode',mode);damaged.paused=false;damaged.integrity=await state_hash(damaged);
+      await expect(validate_state(damaged)).rejects.toThrow('INVALID_SAVE');
+    }
+    expect(await store.read_committed(initial.run_id)).toEqual(original);
+  }finally{await store.delete();}
+});
+
+test('B23 E36 the response boundary rejects coerced mode and rate while retaining legal enum values',async()=>{
+  const store=new Persistence('b23-owned-t04-dto-enum');
+  try{
+    const view=await new Game(store).create_run(await intelligence_definition(),'research','create');
+    for(const mode of ['research','command'])for(const rate of [1,2,4])expect(valid_response({request_id:'enum',ok:true,view:{...view,mode,rate}})).toBe(true);
+    for(const [key,value] of [['mode',['research']],['mode',['command']],['rate','1'],['rate',[1]],['rate',true]]){
+      const damaged=structuredClone(view);Reflect.set(damaged,key as string,value);
+      expect(valid_response({request_id:'enum',ok:true,view:damaged})).toBe(false);
+    }
+  }finally{await store.delete();}
+});
 
 test.each([engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,mission])('B23 E36 keeps legacy schema$schema identities and recovery branches beside a new intelligence run',async definition=>{
   const store=new Persistence('b23-owned-t04-legacy-'+definition.schema);

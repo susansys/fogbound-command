@@ -4,7 +4,7 @@ test('B23 a player issues one field phase through Worker and sees only received 
   await page.goto('/');await page.getByLabel('演练任务').selectOption('B23-INTELLIGENCE-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
   const move=page.getByRole('button',{name:'下达R前往A',exact:true});await expect(move).toBeVisible();await move.press('Enter');
   await expect(page.getByTestId('intelligence-field')).toContainText('已签发，等待接令回报');
-  const advance=async(time:string)=>{await page.getByLabel('推进到时刻（秒）').fill(time);await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'推进到该时刻',exact:true})).toBeEnabled();};
+  const advance=async(time:string)=>{await page.getByLabel('推进到时刻（秒）').fill(time);await expect(page.getByRole('button',{name:'推进到该时刻',exact:true})).toBeEnabled();await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'推进到该时刻',exact:true})).toBeEnabled();};
   await advance('32');await expect(page.getByTestId('intelligence-field')).toContainText('完成回报已收到');
   await page.getByRole('button',{name:'下达A处记录',exact:true}).press('Enter');await expect(page.getByTestId('intelligence-artifacts')).toContainText('等待成果回报');
   await advance('78');await expect(page.locator('.clock strong')).toHaveText('01:18');await expect(page.getByTestId('intelligence-artifacts')).toContainText('等待成果回报');await expect(page.getByTestId('intelligence-artifacts')).not.toContainText('回报称现场已生成');

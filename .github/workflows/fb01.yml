@@ -50,7 +50,7 @@ jobs:
           echo '55672d1f392fd3e7b7a08621b6e804e6bcb39d40cf155504abb74b3a021ea8ea  /tmp/fb01-chrome.zip' | sha256sum --check
           unzip -q /tmp/fb01-chrome.zip -d /tmp/fb01-chrome
       - name: Install the window manager required for native focus transitions
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y openbox
+        run: sudo apt-get install --no-install-recommends -y openbox
       - name: Build the tested static image
         run: docker build --label org.fogbound.ci-run="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --iidfile image-id.txt -t "fogbound-fb01:ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" .
       - name: Serve the same image
@@ -58,7 +58,7 @@ jobs:
       - name: Record public build fingerprint
         run: node verification/fingerprint.mjs
       - name: Run browser contracts with virtual display focus changes
-        run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; npm run browser'
+        run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; node verification/browser-contract.mjs'
         env:
           FB01_HEADED: '1'
       - name: Remove the exact owned test container and unused image

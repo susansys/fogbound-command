@@ -23,7 +23,7 @@ export async function observeGame(page:Page){
 export async function trace(page:Page):Promise<GameTrace>{return page.evaluate(()=>(window as unknown as {mapGameTrace:GameTrace}).mapGameTrace);}
 export async function start(page:Page,definition='ENG-PRESTART-REPLACE',mode:'research'|'command'='research'){
   await page.goto('/');await page.getByLabel('演练任务').selectOption(definition);await page.getByLabel('时间方式').selectOption(mode);
-  await page.getByRole('button',{name:'开始演练',exact:true}).click();await expect(page.locator('.map canvas')).toHaveCount(1);
+  const begin=page.getByRole('button',{name:'开始演练',exact:true});await expect(begin).toBeVisible();await expect(begin).toBeEnabled();await begin.press('Enter');await expect(page.locator('.map canvas')).toHaveCount(1);
 }
 export async function enableSynthetic(page:Page){
   await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('checkbox',{name:'合成验证底图',exact:true}).check();

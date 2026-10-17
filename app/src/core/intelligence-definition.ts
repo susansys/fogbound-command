@@ -23,7 +23,7 @@ export async function load_intelligence_definition(input:unknown,owned:readonly 
   // neither the Worker nor the UI can register variants.
   const ownedFixture=owned.some(d=>d.definition_hash===input.definition_hash),e14Source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E14';
   const lowProcessing=ownedFixture&&input.profile.parameters.processing_energy===1,lowSource=ownedFixture&&input.profile.parameters.source_energy===1;
-  const receiptDelay=ownedFixture&&[10000,10001].includes(Number(input.profile.parameters.link_ms)),e43Source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E43';
+  const receiptDelay=ownedFixture&&typeof input.profile.parameters.link_ms==='number'&&[10000,10001].includes(input.profile.parameters.link_ms),e43Source='B23-INTELLIGENCE-DESIGN-1.0.0/acceptance.md:E43';
   for(const required of registered.profile.resolved_registry){
     const entries=input.profile.resolved_registry.filter(e=>record(e)&&e.id===required.id),entry=entries[0];
     if(!entries.length||!record(entry)||!Object.hasOwn(entry,'type_unit')||!Object.hasOwn(entry,'value'))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');

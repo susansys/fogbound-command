@@ -4,7 +4,7 @@ import type {IntelligenceRef} from './intelligence-contracts';
 import type {SaveIntelligencePlan,IntelligencePreparationRequest} from './intelligence-contracts';
 export function parse_intelligence_activity(input:unknown):import('./intelligence-contracts').IntelligenceActivityRequest{
   if(!record(input)||!fields(input,['run_id','operation_id','expected_revision','intent'])||!valid_id(input.run_id)||!valid_id(input.operation_id)||!Number.isSafeInteger(input.expected_revision)||Number(input.expected_revision)<1||!record(input.intent)||!fields(input.intent,['kind','actor_ref','activity_ref','authority_ref','basis_delivery_refs'])||input.intent.kind!=='issue_activity'||!Array.isArray(input.intent.basis_delivery_refs))throw new GameError('INVALID_REQUEST');
-  const validRef=(value:unknown,kinds:string[])=>record(value)&&fields(value,['run_id','kind','id','version'])&&value.run_id===input.run_id&&kinds.includes(String(value.kind))&&valid_id(value.id)&&value.version===1;
+  const validRef=(value:unknown,kinds:string[])=>record(value)&&fields(value,['run_id','kind','id','version'])&&value.run_id===input.run_id&&typeof value.kind==='string'&&kinds.includes(value.kind)&&valid_id(value.id)&&value.version===1;
   if(!validRef(input.intent.actor_ref,['actor'])||!validRef(input.intent.activity_ref,['activity'])||!validRef(input.intent.authority_ref,['authority'])||!input.intent.basis_delivery_refs.every(r=>validRef(r,['product_delivery','field_delivery']))||new Set(input.intent.basis_delivery_refs.map(r=>r.id)).size!==input.intent.basis_delivery_refs.length)throw new GameError('INVALID_REQUEST');
   return structuredClone(input) as import('./intelligence-contracts').IntelligenceActivityRequest;
 }

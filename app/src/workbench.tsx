@@ -411,7 +411,7 @@ export function Workbench() {
             {definitionRef==='B23-INTELLIGENCE-01'?'目标：组织R取得A、B两处记录，等待总部收到合法成果回报。原文、核实判断、准备批准与维修回报分别确认；本批不包含返程、交接或整局结局。':definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':definitionRef==='ENG-PRESTART-REPLACE'?'目标：先安排R前往近联络点N；可请求一次改到远点T。只有联络组尚未开始移动时能接受替代；总部以收到的回报判断情况。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
           </p>
           <p>
-            本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。
+            {definitionRef==='B23-INTELLIGENCE-01'?'本次演练可指挥R、W两支编组，逐阶段下达指令，以总部已收到的回报确认结果。':'本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。'}
           </p>
           <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option><option value="B23-INTELLIGENCE-01">情报与协作</option></select></label>
           {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
