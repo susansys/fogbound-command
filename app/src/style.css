@@ -1053,3 +1053,10 @@ dialog > header > button {
 .intelligence-app .world-overlay .unit-marker{min-height:38px}
 .intelligence-app .world-overlay .unit-marker .mil-symbol{width:auto;height:auto;max-width:58px}
 .intelligence-app .world-overlay .unit-marker.selected{outline-offset:8px}
+.outcome-panel{padding:16px;border:1px solid var(--line,#38444b);border-radius:4px;background:rgba(20,31,37,.68)}
+.outcome-panel article{padding:10px 0;border-bottom:1px solid var(--line,#38444b)}
+.outcome-panel h2,.outcome-panel h3{margin:0 0 8px}.outcome-panel p{line-height:1.65}
+.outcome-dialog-backdrop{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:24px;background:rgba(5,12,16,.78)}
+.outcome-dialog{width:min(520px,100%);max-height:90vh;overflow:auto;padding:26px;background:#17252c;color:#e3e8e5;border:1px solid #60747c;box-shadow:0 20px 80px #0008}
+.outcome-dialog button{margin:10px 12px 0 0}.outcome-pending{border-left:3px solid #d8b56b;padding:10px}
+.outcome-dialog label{display:block;margin:14px 0 6px}.outcome-dialog textarea{display:block;box-sizing:border-box;width:100%;min-height:72px;max-height:160px;resize:vertical;padding:8px;font:inherit;color:inherit;background:#101c22;border:1px solid #60747c}

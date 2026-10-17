@@ -10,10 +10,11 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
   read_only?:boolean;
 };
 export type Request =
+  |{kind:'operate_outcome';envelope:import('./outcome-contracts').OutcomeEnvelope}
   |{kind:'request_source_validation';envelope:unknown}
   |{kind:'request_preparation';envelope:unknown}
   |{kind:'issue_activity';envelope:unknown}

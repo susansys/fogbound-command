@@ -16,6 +16,8 @@ import {PlayWorkbench} from './play-workbench';
 import {is_legacy_plan} from './route-contracts';
 import type {MissionPlayerView} from './mission-contracts';
 import {MissionWorkbench} from './mission-workbench';
+import {OutcomeWorkbench} from './outcome-workbench';
+import type {OutcomePlayerView} from './outcome-contracts';
 import {IntelligenceWorkbench} from './intelligence-workbench';
 import type {IntelligencePlayerView} from './intelligence-contracts';
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:25,fillColor:'#9ac1cd'}).asSVG();
@@ -70,9 +72,11 @@ export function Workbench() {
     [busy, setBusy] = useState(false);
   const [playView,setPlayView]=useState<PlayPlayerView|null>(null);
   const [missionView,setMissionView]=useState<MissionPlayerView|null>(null);
+  const [outcomeView,setOutcomeView]=useState<OutcomePlayerView|null>(null);
   const [intelligenceView,setIntelligenceView]=useState<IntelligencePlayerView|null>(null);
-  const shownRun=useRef<string|null>(null);shownRun.current=intelligenceView?.run_id??missionView?.run_id??playView?.run_id??view?.run_id??null;
+  const shownRun=useRef<string|null>(null);shownRun.current=outcomeView?.run_id??intelligenceView?.run_id??missionView?.run_id??playView?.run_id??view?.run_id??null;
   function setView(next:GamePlayerView|null){
+    if(next?.scenario_kind==='play_outcome'){if(!historyActive.current)liveView.current=next;setOutcomeView(next);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setOutcomeView(null);
     if(next?.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(next);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
     setIntelligenceView(null);
     if(next?.scenario_kind==='play_mission'){setMissionView(next);setPlayView(null);setLegacyView(null);return;}
@@ -80,7 +84,7 @@ export function Workbench() {
     if(next?.scenario_kind==='play_corridor'){setPlayView(next);setLegacyView(null);}
     else{setPlayView(null);setLegacyView(next);}
   }
-  function adoptNewPlayRun(next:PlayPlayerView|MissionPlayerView|IntelligencePlayerView){
+  function adoptNewPlayRun(next:PlayPlayerView|MissionPlayerView|IntelligencePlayerView|OutcomePlayerView){
     const run=next.run_id;
     displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});
     setDisplayStatus('地图关联正在核验');setView(next);liveView.current=next;
@@ -88,6 +92,7 @@ export function Workbench() {
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:GamePlayerView){
+    if(next.scenario_kind==='play_outcome'){if(!historyActive.current)liveView.current=next;setOutcomeView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setOutcomeView(null);
     if(next.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
     setIntelligenceView(null);
     if(next.scenario_kind==='play_mission'){setMissionView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setPlayView(null);setLegacyView(null);return;}
@@ -243,7 +248,7 @@ export function Workbench() {
       if(view.mode==='command'&&(!isCurrent()||!response.ok&&response.code==='STALE_REVISION')){
         const fresh=await transport.request({kind:'view',run_id:context.run_id});
         if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
-        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'||fresh.view.scenario_kind==='play_mission'||fresh.view.scenario_kind==='play_intelligence'){if(!fresh.ok)setError(fresh.code);return;}
+        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'||fresh.view.scenario_kind==='play_mission'||fresh.view.scenario_kind==='play_intelligence'||fresh.view.scenario_kind==='play_outcome'){if(!fresh.ok)setError(fresh.code);return;}
         if(fresh.view.revision>=currentView.current.revision){currentView.current=fresh.view;adoptView(fresh.view);}
         context.revision=currentView.current.revision;continue;
       }
@@ -357,6 +362,7 @@ export function Workbench() {
     } else setError(response.code);
     }catch{setError('CHANNEL_UNCERTAIN');}
   }
+  if(outcomeView)return <OutcomeWorkbench key={outcomeView.run_id} view={outcomeView} transport={transport} adopt={setView} history={history} onNewRun={adoptNewPlayRun} liveRunId={liveView.current?.run_id??null} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);liveView.current=null;createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   if(intelligenceView)return <IntelligenceWorkbench key={intelligenceView.run_id} view={intelligenceView} transport={transport} adopt={setView} history={history} onNewRun={adoptNewPlayRun} liveRunId={liveView.current?.run_id??null} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);liveView.current=null;createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   if(missionView)return <MissionWorkbench key={history?liveView.current?.run_id??missionView.run_id:missionView.run_id} view={missionView} transport={transport} adopt={setView} onNewRun={adoptNewPlayRun} history={history} onHistory={value=>{historyActive.current=value;setHistory(value);}} displaySession={displaySession.current??undefined} channelError={error} storageFault={storageFault} onStorageRecovered={()=>{setStorageFault(false);setError('');}} onLeave={async()=>{const r=await transport.request({kind:'list'});if(r.ok){setRuns(r.runs??[]);setListReady(true);setView(null);createOperation.current=crypto.randomUUID();historyActive.current=false;setHistory(false);}else setError(r.code);}}/>;
   const prestart=view?.scenario_kind==='prestart_move';
@@ -372,7 +378,7 @@ export function Workbench() {
           <strong>玄枢行动</strong>
           <span className="brand-sub">联合任务指挥部</span>
         </span>
-        <span className="demo-badge">{definitionRef==='B23-INTELLIGENCE-01'?'情报协作':(view?.scenario_kind==="record"||!view&&definitionRef==="FB02-ENG-RECORD")?"记录演练":"联络演练"}</span>
+        <span className="demo-badge">{definitionRef==='B24-OUTCOME-01'?'返回交付':definitionRef==='B23-INTELLIGENCE-01'?'情报协作':(view?.scenario_kind==="record"||!view&&definitionRef==="FB02-ENG-RECORD")?"记录演练":"联络演练"}</span>
         <div className="clock">
           <span>
             {(view?.mode ?? mode) === "command" ? "指挥模式" : "演练模式"}
@@ -405,15 +411,15 @@ export function Workbench() {
       )}
       {!view ? (
         <main className="start">
-          <span className="outline-tag">{definitionRef==='B23-INTELLIGENCE-01'?'情报与协作 / 两处记录 / 分别确认':definitionRef==='FB02-ENG-RECORD'?'记录演练 / 固定工位 / 一项任务':definitionRef==='ENG-PRESTART-REPLACE'?'替代演练 / 固定通道 / 一次准备期替代':'联络演练 / 固定通道 / 一项任务'}</span>
-          <h2>{definitionRef==='B23-INTELLIGENCE-01'?'核对原始情报，组织两处记录':definitionRef==='FB02-ENG-RECORD'?'记录档案，等待编组完成回报':definitionRef==='ENG-PRESTART-REPLACE'?'先派往近点 N，准备期内可请求改到 T':'下达命令，等待编组抵达回报'}</h2>
+          <span className="outline-tag">{definitionRef==='B24-OUTCOME-01'?'两处记录 / 分批交接 / 独立核验':definitionRef==='B23-INTELLIGENCE-01'?'情报与协作 / 两处记录 / 分别确认':definitionRef==='FB02-ENG-RECORD'?'记录演练 / 固定工位 / 一项任务':definitionRef==='ENG-PRESTART-REPLACE'?'替代演练 / 固定通道 / 一次准备期替代':'联络演练 / 固定通道 / 一项任务'}</span>
+          <h2>{definitionRef==='B24-OUTCOME-01'?'取得记录，组织人员与成果返回交付':definitionRef==='B23-INTELLIGENCE-01'?'核对原始情报，组织两处记录':definitionRef==='FB02-ENG-RECORD'?'记录档案，等待编组完成回报':definitionRef==='ENG-PRESTART-REPLACE'?'先派往近点 N，准备期内可请求改到 T':'下达命令，等待编组抵达回报'}</h2>
           <p>
-            {definitionRef==='B23-INTELLIGENCE-01'?'目标：组织R取得A、B两处记录，等待总部收到合法成果回报。原文、核实判断、准备批准与维修回报分别确认；本批不包含返程、交接或整局结局。':definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':definitionRef==='ENG-PRESTART-REPLACE'?'目标：先安排R前往近联络点N；可请求一次改到远点T。只有联络组尚未开始移动时能接受替代；总部以收到的回报判断情况。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
+            {definitionRef==='B24-OUTCOME-01'?'目标：取得A、B两处记录，组织两组返回总部，分别完成交接和核验。命令、当地完成与总部确认分开判断。':definitionRef==='B23-INTELLIGENCE-01'?'目标：组织R取得A、B两处记录，等待总部收到合法成果回报。原文、核实判断、准备批准与维修回报分别确认；本批不包含返程、交接或整局结局。':definitionRef==='FB02-ENG-RECORD'?'目标：指派R在工位H记录档案A，等待总部收到完成回报。图标显示最后确认的位置。':definitionRef==='ENG-PRESTART-REPLACE'?'目标：先安排R前往近联络点N；可请求一次改到远点T。只有联络组尚未开始移动时能接受替代；总部以收到的回报判断情况。':'目标：向R签发H→T移动命令，等待总部收到完成回执。图标显示最后收到的位置。'}
           </p>
           <p>
-            {definitionRef==='B23-INTELLIGENCE-01'?'本次演练可指挥R、W两支编组，逐阶段下达指令，以总部已收到的回报确认结果。':'本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。'}
+            {(definitionRef==='B23-INTELLIGENCE-01'||definitionRef==='B24-OUTCOME-01')?'本次演练可指挥R、W两支编组，逐阶段下达指令，以总部已收到的回报确认结果。':'本次演练只指挥一支编组，执行一项任务。总部依据收到的报告掌握情况。'}
           </p>
-          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option><option value="B23-INTELLIGENCE-01">情报与协作</option></select></label>
+          <label>演练任务 <select aria-label="演练任务" value={definitionRef} disabled={busy} onChange={event=>{setDefinitionRef(event.target.value as DefinitionRef);setCaseRef('normal');}}><option value="FB02-ENG-RECORD">工位记录</option><option value="FB01-ENG-MOVE">走廊移动</option><option value="ENG-PRESTART-REPLACE">准备期替代</option><option value="B21-CORRIDOR-01">连续走廊</option><option value="B22-MISSION-01">结构化任务</option><option value="B23-INTELLIGENCE-01">情报与协作</option><option value="B24-OUTCOME-01">返回与交付</option></select></label>
           {definitionRef==='ENG-PRESTART-REPLACE'&&<label>消息条件 <select aria-label="消息条件" value={caseRef} disabled={busy} onChange={event=>{setCaseRef(event.target.value as PrestartCaseRef);}}>{prestart_case_refs.map(ref=><option key={ref} value={ref}>{message_condition_copy[ref]}</option>)}</select></label>}
           <label>
             时间方式{" "}
@@ -442,7 +448,7 @@ export function Workbench() {
           {listReady&&runs.length>0&&<p>下面列出每项演练最近一局的最新进度，可能晚于手动保存的时刻。接手后保持暂停。</p>}
           {listReady&&runs.map((run) => (
             <p key={run.run_id}>
-              已保存的演练记录 · {run.scenario_kind==='play_intelligence'?'情报与协作':run.scenario_kind==='record'?'工位记录':run.scenario_kind==='prestart_move'?'准备期替代':'走廊移动'} · {clock(run.sim_time)}
+              已保存的演练记录 · {run.scenario_kind==='play_outcome'?'返回与交付':run.scenario_kind==='play_intelligence'?'情报与协作':run.scenario_kind==='record'?'工位记录':run.scenario_kind==='prestart_move'?'准备期替代':'走廊移动'} · {clock(run.sim_time)}
               {!run.read_only&&<button disabled={busy} onClick={()=>void takeover(run.run_id)}>接手这场演练</button>}
               <button disabled={busy} onClick={()=>void readRetained(run)}>查看记录</button>
             </p>

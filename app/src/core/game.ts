@@ -1,3 +1,9 @@
+import {initial_outcome_state} from './outcome-state';
+import {project_outcome_view} from './outcome-knowledge';
+import {apply_outcome_control} from './outcome-game';
+import {parse_return_and_deliver,parse_outcome_envelope} from '../outcome-protocol';
+import {outcome_definition_for_package,is_outcome_definition,type OutcomeDefinition} from './outcome-definition';
+import type {ReturnAndDeliver,OutcomePlayerView,OutcomeEnvelope} from '../outcome-contracts';
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {
   Mode,
@@ -41,7 +47,7 @@ import {preview_corridor} from './play-preview';
 import type {RouteDraft,RoutePlan,PreviewPlan} from '../route-contracts';
 import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
 import {prestart_parameters,prestart_case} from './scenario';
-function project_player_view(state:StoredState,registered:readonly import("./scenario").PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[]):PlayerView{return state.schema===9?project_intelligence_view(state,intelligence):state.schema===8?project_mission_view(state,missions):state.schema===7?project_play_view(state,registered):project_legacy_view(state);}
+function project_player_view(state:StoredState,registered:readonly import("./scenario").PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[]):PlayerView{return state.schema===10?project_outcome_view(state,outcomes):state.schema===9?project_intelligence_view(state,intelligence):state.schema===8?project_mission_view(state,missions):state.schema===7?project_play_view(state,registered):project_legacy_view(state);}
 export class Game {
   private epoch: number | null = null;
   private faulted=false;
@@ -53,19 +59,19 @@ export class Game {
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
   }
   private async validate_package(state:StoredState|undefined){
-    if(state?.schema!==7&&state?.schema!==9){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);return;}
+    if(state?.schema!==7&&state?.schema!==9){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);return;}
     try{
       if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
-      await load_definition(state.schema===9?intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions):play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+      await load_definition(state.schema===9?intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions):play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
       if(!this.verified_replay_states.has(state.integrity)){
-        await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+        await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
         this.remember_replay_state(state.integrity);
       }
     }catch{throw new GameError('INVALID_SAVE');}
   }
   private async validate_stored_state(state:StoredState){
     await this.validate_package(state);
-    if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9)return;
+    if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9&&state.schema!==10)return;
     const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined}));
     const seen=new Set<string>();let current=state;
     while(true){
@@ -76,8 +82,8 @@ export class Game {
       if(current.source_run===null)return;
       const parent=await this.store.read_committed(current.source_run);
       await this.validate_package(parent);
-      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||((current.schema===7||current.schema===8||current.schema===9)&&parent.mode!==current.mode)||(current.schema===6&&(parent.schema!==6||parent.prestart?.case_ref!==current.prestart?.case_ref))||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
-      if(parent.schema!==6&&parent.schema!==7&&parent.schema!==8&&parent.schema!==9)throw new GameError('INVALID_SAVE');current=parent;
+      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||((current.schema===7||current.schema===8||current.schema===9||current.schema===10)&&parent.mode!==current.mode)||(current.schema===6&&(parent.schema!==6||parent.prestart?.case_ref!==current.prestart?.case_ref))||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
+      if(parent.schema!==6&&parent.schema!==7&&parent.schema!==8&&parent.schema!==9&&parent.schema!==10)throw new GameError('INVALID_SAVE');current=parent;
     }
   }
   private assert_current(){if(this.history)throw new GameError('HISTORY_READ_ONLY');}
@@ -85,13 +91,13 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(source);
-    return this.create(source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
+    return this.create(source.schema===10?outcome_definition_for_package(source.definition_hash,this.store.outcome_definitions):source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
     const latest=await this.store.read_committed(run),initial=await this.store.snapshot(run,1);
     if(!latest||!initial)throw new GameError('RUN_NOT_FOUND');
-    await this.validate_stored_state(latest);await validate_state(initial,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+    await this.validate_stored_state(latest);await validate_state(initial,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     if(to>latest.sim_time)throw new GameError('INVALID_INPUT');
     const context=new Game(this.store);
     if((latest.schema===8||latest.schema===9)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
@@ -111,8 +117,8 @@ export class Game {
         if(node?.sim_time===to){context.history=node;return context;}
       }
     }
-    if(initial.schema===8||initial.schema===9)throw new GameError('INVALID_INPUT');
-    if(latest.schema===8||latest.schema===9)throw new GameError('INVALID_SAVE');
+    if(initial.schema===8||initial.schema===9||initial.schema===10)throw new GameError('INVALID_INPUT');
+    if(latest.schema===8||latest.schema===9||latest.schema===10)throw new GameError('INVALID_SAVE');
     context.history=initial.schema===7?replay_play_state(initial,latest.inputs,to,this.store.play_definitions):replay_state(initial,latest.inputs,to);return context;
   }
   private async writer() {
@@ -142,7 +148,7 @@ export class Game {
   }
   private async create(input:unknown,mode:Mode,operation:string,source:StoredState|null=null,case_ref='normal'):Promise<PlayerView>{
     this.assert_current();
-    const definition = await load_definition(input,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+    const definition = await load_definition(input,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},case_ref);
     else if(case_ref!=='normal')throw new GameError('INVALID_INPUT');
     if (!["command", "research"].includes(mode) || !valid_id(operation))
@@ -157,17 +163,18 @@ export class Game {
         previous.revision,
       );
       if (!snapshot) throw new GameError("STORAGE_UNCONFIRMED");
-      await validate_state(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+      await validate_state(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
       const legacyFingerprint=source?`clone:${source.run_id}:${mode}`:`create:${mode}`;
       if(snapshot.definition_hash!==definition.definition_hash||snapshot.mode!==mode||snapshot.source_run!==(source?.run_id??null)||
         previous.fingerprint!==creationFingerprint&&!(snapshot.schema===4&&previous.fingerprint===legacyFingerprint))
         throw new GameError('OPERATION_CONFLICT');
-      return project_player_view(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+      return project_player_view(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     }
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
+    if(is_outcome_definition(definition)){const state=initial_outcome_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_outcome_view(state,this.store.outcome_definitions);}
     if(is_intelligence_definition(definition)){
       const state=initial_intelligence_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);
       await this.commit(state,null,operation,creationFingerprint);return project_intelligence_view(state,this.store.intelligence_definitions);
@@ -317,14 +324,14 @@ export class Game {
       operation,
       creationFingerprint,
     );
-    return project_player_view(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+    return project_player_view(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
   }
   async get_view(run: string): Promise<PlayerView> {
-    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=project_player_view(this.history,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);return this.history.schema>=5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
+    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=project_player_view(this.history,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);return this.history.schema>=5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await this.validate_stored_state(state);
-    const view=project_player_view(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+    const view=project_player_view(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     if(await this.store.is_read_only(run)){view.can_issue=false;view.next_action='查看保留的行动记录';view.gap='这场行动已保留为只读记录';}
     return view;
   }
@@ -332,12 +339,25 @@ export class Game {
     if(!valid_id(run)||!valid_id(actor))throw new GameError('INVALID_INPUT');
     const state=this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if(!state)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(state);
+    if(state.schema===10){
+      if(actor==='INTEL')return {run_id:run,actor:'INTEL',sim_time:state.sim_time,work:structuredClone(state.prefix.processing.items),verification_batches:structuredClone(state.verification_batches),received_manifests:structuredClone(state.reception_manifests.filter(m=>state.reception_deliveries.some(d=>d.target==='INTEL'&&d.received<=state.sim_time&&state.reception_reports.some(r=>r.ref.id===d.report_ref.id&&r.phase==='completed'&&r.batch_ref.id===m.batch_ref.id)))),resources:{energy:state.prefix.processing.energy,energy_reserved:state.prefix.processing.energy_reserved},known_reports:structuredClone(state.reception_deliveries.filter(d=>d.target==='INTEL'&&d.received<=state.sim_time).map(delivery=>({delivery,report:state.reception_reports.find(r=>r.ref.id===delivery.report_ref.id)!}))),published_reports:structuredClone(state.verification_reports)};
+      const sourceActor=outcome_definition_for_package(state.definition_hash,this.store.outcome_definitions).catalogs.source.actor;
+      if(actor===sourceActor)return {run_id:run,actor,sim_time:state.sim_time,work:structuredClone(state.prefix.source.work),resources:structuredClone(state.prefix.source.resources),published_reports:structuredClone(state.prefix.reports.filter(r=>r.id===state.prefix.source.published_report_ref))};
+      if(actor==='H'){
+return {run_id:run,actor:'H',sim_time:state.sim_time,reception:{reserved_personnel:state.reception_batches.filter(b=>b.status==='running').reduce((n,b)=>n+b.people_ids.length,0),received_personnel:state.person_receipts.length,batches:structuredClone(state.reception_batches)},published_reports:structuredClone(state.reception_reports),handover_confirmations:structuredClone(state.handover_confirmations),person_receipts:structuredClone(state.person_receipts),custody_events:structuredClone(state.custody_events)};}const local=state.prefix.field.actors.find(a=>a.actor===actor);if(!local)throw new GameError('UNSUPPORTED');return {run_id:run,sim_time:state.sim_time,...structuredClone(local),position_scope:local.position.site,activities:structuredClone(state.prefix.field.orders.filter(o=>o.payload.actor_ref.id===actor&&o.arrives_at<=state.sim_time)),artifacts:structuredClone(state.prefix.field.artifacts.filter(a=>a.custody_holder===actor&&!state.custody_events.some(e=>e.artifact_ref.id===a.ref.id))),record_materials:structuredClone(state.prefix.field.materials.filter(m=>state.prefix.field.artifacts.some(a=>a.custody_holder===actor&&a.material_refs.some(ref=>ref.id===m.ref.id)))),known_reports:[],message_facts:structuredClone(state.prefix.field.messages.filter(m=>m.actor===actor)),published_reports:structuredClone(state.prefix.field.reports.filter(r=>r.actor===actor))};}
     if(state.schema!==9)throw new GameError('INVALID_REQUEST');
     const definition=intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions);
     const local=definition.catalogs.actors.find(candidate=>candidate.id===actor);
     if(local){const own=state.field.actors.find(a=>a.actor===actor)!;return {run_id:run,sim_time:state.sim_time,...structuredClone(own),position_scope:own.position.site,activities:structuredClone(state.field.orders.filter(o=>o.payload.actor_ref.id===actor&&o.arrives_at<=state.sim_time)),artifacts:structuredClone(state.field.artifacts.filter(a=>a.custody_holder===actor)),record_materials:structuredClone(state.field.materials.filter(m=>state.field.artifacts.some(a=>a.custody_holder===actor&&a.material_refs.some(ref=>ref.id===m.ref.id)))),known_reports:[],message_facts:structuredClone(state.field.messages.filter(m=>m.actor===actor)),published_reports:structuredClone(state.field.reports.filter(r=>r.actor===actor))};}
     if(actor!==definition.catalogs.source.actor)throw new GameError('UNSUPPORTED');
     return {run_id:run,actor,sim_time:state.sim_time,work:structuredClone(state.source.work),resources:structuredClone(state.source.resources),published_reports:structuredClone(state.reports.filter(r=>r.id===state.source.published_report_ref))};
+  }
+  async apply_outcome_intent(input:unknown,clock_to?:number):Promise<{receipt:Receipt;view:OutcomePlayerView}>{return this.commit_outcome_request(parse_outcome_envelope(input),clock_to);}
+  async return_and_deliver(input:unknown):Promise<{receipt:Receipt;view:OutcomePlayerView}>{return this.commit_outcome_request(parse_return_and_deliver(input));}
+  private async commit_outcome_request(request:OutcomeEnvelope,clock_to?:number):Promise<{receipt:Receipt;view:OutcomePlayerView}>{
+    this.assert_current();await this.assert_writable(request.run_id);const state=await this.store.read_committed(request.run_id);if(!state)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(state);if(state.schema!==10)throw new GameError('INVALID_REQUEST');
+    const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return {receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:request.intent.kind},view:project_outcome_view(state,this.store.outcome_definitions)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');const candidate=await apply_outcome_control(state,request,clock_to,this.store.outcome_definitions);await this.commit(candidate,state.revision,request.operation_id,fingerprint);return {receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:request.intent.kind,...(request.intent.kind==='restore'?{snapshot_revision:request.intent.snapshot_revision}:{})},view:project_outcome_view(candidate,this.store.outcome_definitions)};
   }
   private async commit_intelligence_request(request:SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest):Promise<{receipt:Receipt;view:IntelligencePlayerView}>{
     await this.assert_writable(request.run_id);
@@ -365,7 +385,7 @@ export class Game {
     const state=await this.store.read_committed(run);
     if(!state)throw new GameError('RUN_NOT_FOUND');
     const snapshot=await this.store.snapshot(run,state.revision);
-    await this.validate_stored_state(state);await validate_state(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions);
+    await this.validate_stored_state(state);await validate_state(snapshot,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
     if(snapshot?.integrity!==state.integrity)throw new GameError('INVALID_SAVE');
     const prior=await this.store.receipt(run,operation_id);
     if(prior){const snapshot=await this.store.snapshot(run,prior.revision);const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
@@ -446,7 +466,7 @@ export class Game {
     const state = this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await this.validate_stored_state(state);
-    if(state.schema===9)throw new GameError('INVALID_REQUEST');
+    if(state.schema===9||state.schema===10)throw new GameError('INVALID_REQUEST');
     if(state.schema===8){
       if(revision!==state.revision)throw new GameError('STALE_REVISION');
       return preview_mission(state,editing_seq,route_draft,this.store.mission_definitions);
@@ -557,6 +577,7 @@ export class Game {
     await this.assert_writable(envelope.run_id);
     const state = await this.store.read_committed(envelope.run_id);
     if(!state)throw new GameError('RUN_NOT_FOUND');
+    if(state.schema===10)return this.commit_outcome_request(envelope,clock_to);
     if(state.schema===9){
       await this.validate_stored_state(state);
       const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(state.run_id,envelope.operation_id);

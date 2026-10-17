@@ -35,9 +35,11 @@ export class Persistence {
   readonly play_definitions:readonly PlayDefinition[];
   readonly mission_definitions:readonly MissionDefinition[];
   readonly intelligence_definitions:readonly IntelligenceDefinition[];
-  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[],registeredMissionDefinitions:readonly MissionDefinition[]=[],registeredIntelligenceDefinitions:readonly IntelligenceDefinition[]=[]) {
+  readonly outcome_definitions:readonly import('./outcome-definition').OutcomeDefinition[];
+  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[],registeredMissionDefinitions:readonly MissionDefinition[]=[],registeredIntelligenceDefinitions:readonly IntelligenceDefinition[]=[],registeredOutcomeDefinitions:readonly import('./outcome-definition').OutcomeDefinition[]=[]) {
     // Constructor injection is the owned registration seam. Worker uses defaults;
     // no request or production import endpoint can supply these definitions.
+    this.outcome_definitions=structuredClone(registeredOutcomeDefinitions);
     this.play_definitions=structuredClone(registeredPlayDefinitions);
     this.mission_definitions=structuredClone(registeredMissionDefinitions);
     this.intelligence_definitions=structuredClone(registeredIntelligenceDefinitions);
@@ -123,7 +125,7 @@ export class Persistence {
   }
   async list_runs() {
     const entries=await this.db.runs.toArray();
-    for(const state of entries)await validate_state(state,this.play_definitions,this.mission_definitions,this.intelligence_definitions);
+    for(const state of entries)await validate_state(state,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions);
     const ranked=await Promise.all(entries.map(async state=>({state,created:(await this.db.metadata.get(`created:${state.run_id}`))?.value??0,read_only:await this.is_read_only(state.run_id)})));
     ranked.sort((a,b)=>b.created-a.created||Number(a.read_only)-Number(b.read_only)||b.state.revision-a.state.revision);
     const latest=new Map<string,(typeof ranked)[number]>();
@@ -134,7 +136,7 @@ export class Persistence {
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
-      scenario_kind: x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
+      scenario_kind: x.schema===10?'play_outcome' as const:x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
       read_only,
     }));
   }
