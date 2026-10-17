@@ -58,8 +58,17 @@ if (args[0] === 'container' && args[1] === 'ls') {
   }
   finish(91);
 }
+if (args[0] === 'image' && args[1] === 'ls') {
+  const failure = state.imagePresent ? state.imagePresenceQueryExit : state.imageAbsenceQueryExit;
+  if (failure) finish(failure);
+  finish(0, state.imagePresent ? state.image : '');
+}
 if (args[0] === 'image' && args[1] === 'inspect') {
   if (args.at(-1) !== state.image) finish(92);
+  if (args[2] !== '--format') {
+    const failure = state.imagePresent ? state.imagePresenceQueryExit : state.imageAbsenceQueryExit;
+    if (failure) finish(failure);
+  }
   if (!state.imagePresent) finish(1);
   finish(0, args[2] === '--format' ? (state.imageOwner || state.owner) : '[]');
 }
@@ -145,7 +154,7 @@ test('a container that never disappears fails within the finite recheck allowanc
   assert.equal(result.state.containerPresent, true);
   assert.equal(result.state.imagePresent, true);
   const queries = result.state.calls.filter(args => args.at(-1) === `id=${container}`).length;
-  assert.ok(queries > 1 && queries <= 41);
+  assert.equal(queries, 42); // Initial presence, 40 rechecks, final absence.
   assert.ok(!result.stdout.includes('Owned test container absent:'));
 });
 
@@ -189,5 +198,18 @@ test('a failed image-usage query cannot authorize image deletion', () => {
   const result = runCleanup({imageQueryExit: 29});
   assert.equal(result.status, 29);
   assert.equal(result.state.imagePresent, true);
+  assert.ok(!result.stdout.includes('Owned unused image removed:'));
+});
+
+test('an initial image-presence query failure cannot become absent-as-success', () => {
+  const result = runCleanup({imagePresenceQueryExit: 31});
+  assert.equal(result.status, 31);
+  assert.equal(result.state.imagePresent, true);
+  assert.ok(!result.stdout.includes('Owned unused image removed:'));
+});
+
+test('a final image-absence query failure cannot produce a removal receipt', () => {
+  const result = runCleanup({imageAbsenceQueryExit: 37});
+  assert.equal(result.status, 37);
   assert.ok(!result.stdout.includes('Owned unused image removed:'));
 });

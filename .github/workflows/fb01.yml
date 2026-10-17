@@ -73,7 +73,8 @@ jobs:
           if [ -f "$RUNNER_TEMP/fb01-container-id.txt" ]; then
             container_id="$(cat "$RUNNER_TEMP/fb01-container-id.txt")"
             [[ "$container_id" =~ ^[0-9a-f]{64}$ ]]
-            if docker container inspect "$container_id" >/dev/null 2>&1; then
+            remaining_container="$(docker container ls --all --quiet --no-trunc --filter "id=$container_id")"
+            if [ -n "$remaining_container" ]; then
               test "$(docker container inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$container_id")" = "$owner"
               test "$(docker container inspect --format '{{.Image}}' "$container_id")" = "$(cat image-id.txt)"
               docker stop "$container_id"
@@ -90,12 +91,14 @@ jobs:
           if [ -f image-id.txt ]; then
             image_id="$(cat image-id.txt)"
             [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
-            if docker image inspect "$image_id" >/dev/null 2>&1; then
+            image_ids="$(docker image ls --quiet --no-trunc)"
+            if grep -Fxq -- "$image_id" <<< "$image_ids"; then
               test "$(docker image inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$image_id")" = "$owner"
               image_users="$(docker container ls --all --quiet --filter "ancestor=$image_id")"
               if [ -z "$image_users" ]; then
                 docker image rm "$image_id"
-                if docker image inspect "$image_id" >/dev/null 2>&1; then exit 1; fi
+                image_ids="$(docker image ls --quiet --no-trunc)"
+                if grep -Fxq -- "$image_id" <<< "$image_ids"; then exit 1; fi
                 echo "Owned unused image removed: $image_id"
               else
                 echo "Owned image retained because another container depends on it: $image_id"
