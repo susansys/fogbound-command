@@ -72,6 +72,41 @@ test('B24 E06/E57 W alone returns continuously with its real initial load8 and H
   }finally{await store.delete();}
 });
 
+test('B24 E60 an earlier manifest reserves its energy before later source jobs and cannot deadlock the shared processing queue',async()=>{
+ const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-shared-energy-admission',[],[],[],[definition]);
+ try{
+  const game=new Game(store),initial=await game.create_run(definition,'research','create');let view=initial;
+  const ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:initial.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+  const source=async(id:string)=>game.apply_outcome_intent({run_id:initial.run_id,operation_id:id,expected_revision:view.revision,intent:{kind:'request_source_validation',basis_delivery_refs:[ref('report_delivery','D-R3')]}});
+  await advance(1000);view=(await game.return_and_deliver({run_id:initial.run_id,operation_id:'return-W',expected_revision:view.revision,intent:{kind:'return_and_deliver',actor_ref:ref('actor','W'),return_route_ref:ref('return_route','W-B-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-W'),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:0,to:900000}}})).view;
+  await advance(86000);view=(await source('first-source')).view;await advance(87000);expect(Reflect.get(view,'verification_feedback')??[]).toEqual([]);await advance(88000);expect(Reflect.get(view,'verification_feedback')).toMatchObject([{report:{phase:'queued',subject_actor:'W',reason:'处理席位占用，等待核验'},delivery:{received:88000}}]);
+  for(let i=0;i<8;i++)view=(await source('later-source-'+i)).view;
+  const before=view;let refusal:string|null=null;try{await source('unfunded-ninth-source');}catch(error){refusal=error instanceof Error?error.message:String(error);}
+  expect(refusal).toBe('CONSTRAINT_DENIED');expect(await game.get_view(initial.run_id)).toEqual(before);
+  await advance(106000);expect(await game.get_actor_view(initial.run_id,'INTEL')).toMatchObject({verification_batches:[{status:'running',started_at:106000,reserved_energy:2}],resources:{energy:18,energy_reserved:18}});
+  await advance(107000);expect(Reflect.get(view,'verification_feedback')).toMatchObject([{report:{phase:'queued'}},{report:{phase:'accepted',reason:null},delivery:{received:107000}}]);expect(valid_response({request_id:'received-verification-status',ok:true,view})).toBe(true);
+  await advance(127000);expect(Reflect.get(view,'verification_reports')).toMatchObject([{delivery:{received:127000}}]);
+  await advance(286000);expect(await game.get_actor_view(initial.run_id,'INTEL')).toMatchObject({verification_batches:[{status:'completed',completed_at:126000,consumed_energy:2}],resources:{energy:0,energy_reserved:0}});
+  expect(valid_response({request_id:'shared-energy-admission',ok:true,view})).toBe(true);
+ }finally{await store.delete();}
+});
+
+test('B24 an unfunded manifest stops waiting at the entity deadline without inventing work, charges or personnel verification',async()=>{
+ const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-unfunded-manifest-cutoff',[],[],[],[definition]);
+ try{
+  const game=new Game(store),initial=await game.create_run(definition,'research','create');let view=initial;
+  const ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:initial.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+  await advance(1000);view=(await game.return_and_deliver({run_id:initial.run_id,operation_id:'return-W',expected_revision:view.revision,intent:{kind:'return_and_deliver',actor_ref:ref('actor','W'),return_route_ref:ref('return_route','W-B-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-W'),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:0,to:900000}}})).view;
+  await advance(86000);for(let i=0;i<10;i++)view=(await game.apply_outcome_intent({run_id:initial.run_id,operation_id:'earlier-source-'+i,expected_revision:view.revision,intent:{kind:'request_source_validation',basis_delivery_refs:[ref('report_delivery','D-R3')]}})).view;
+  await advance(286000);expect(await game.get_actor_view(initial.run_id,'INTEL')).toMatchObject({verification_batches:[{status:'queued',started_at:null,reserved_energy:0}],resources:{energy:0,energy_reserved:0}});
+  await advance(900000);expect(await game.get_actor_view(initial.run_id,'INTEL')).toMatchObject({verification_batches:[{status:'cutoff',started_at:null,completed_at:900000,work_done_ms:0,consumed_energy:0,settled:true}],resources:{energy:0,energy_reserved:0}});
+  expect(Reflect.get(view,'verification_reports')).toEqual([]);expect(Reflect.get(view,'handover')).toMatchObject({received_personnel:3});
+  expect(Reflect.get(view,'verification_feedback')).toMatchObject([{report:{phase:'hold',reason:'处理能源不足，等待核验条件'},delivery:{received:88000}}]);await advance(901000);expect(Reflect.get(view,'verification_feedback')).toMatchObject([{report:{phase:'hold'}},{report:{phase:'cutoff'},delivery:{received:901000}}]);expect(valid_response({request_id:'verification-cutoff',ok:true,view})).toBe(true);
+ }finally{await store.delete();}
+});
+
 test('B24 E01/E02/E04/E08 path B keeps the public five-stage prefix and confirms two independent manifests by368000 with processing8',async()=>{
   const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-normal-B',[],[],[],[definition]);
   try{
@@ -143,6 +178,24 @@ test('B24 E06 a single A artifact can return directly with actual100metre cost a
     expect(confirmations).toMatchObject([{actor:'R',at:136000},{actor:'H',at:136000}]);if(!Array.isArray(confirmations))throw Error('Missing actual bilateral confirmations');const confirmationRefs=confirmations.map((c:{ref:unknown})=>c.ref);
     const receipts=Reflect.get(receiver,'person_receipts');expect(receipts).toHaveLength(3);if(!Array.isArray(receipts))throw Error('Missing actual person receipts');for(const receipt of receipts)expect(receipt.confirmation_refs).toEqual(confirmationRefs);expect(Reflect.get(receiver,'custody_events')).toMatchObject([{from:'R',to:'H',confirmation_refs:confirmationRefs}]);
   }finally{await store.delete();}
+});
+
+test('B24 E03 R portable cutoff delivery has the same terminal status in the public view and Worker response contract',async()=>{
+ const definition=await outcomeDefinition(),store=new Persistence('b24-owned-t01-R-cutoff-dto',[],[],[],[definition]);
+ try{
+  const game=new Game(store),initial=await game.create_run(definition,'research','create');let view=initial;
+  const ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:initial.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+  for(const [id,to]of [['R-to-A',32000],['A-record',80000]] as const){view=(await game.apply_outcome_intent({run_id:initial.run_id,operation_id:id,expected_revision:view.revision,intent:{kind:'issue_activity',actor_ref:ref('actor','R'),activity_ref:ref('activity',id),authority_ref:ref('authority','HQ-field-authority'),basis_delivery_refs:[]}})).view;await advance(to);}
+  await advance(880000);
+  view=(await game.return_and_deliver({run_id:initial.run_id,operation_id:'late-return-R',expected_revision:view.revision,intent:{kind:'return_and_deliver',actor_ref:ref('actor','R'),return_route_ref:ref('return_route','R-A-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-R'),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:0,to:900000}}})).view;
+  await advance(900000);expect(Reflect.get(view,'return_plans')).toMatchObject([{actor:'R',status:'returning'}]);
+  await advance(901000);
+  expect(Reflect.get(view,'return_reports')).toMatchObject([{report:{phase:'accepted'}},{report:{phase:'cutoff'},delivery:{received:901000}}]);
+  expect(Reflect.get(view,'return_plans')).toMatchObject([{actor:'R',status:'cutoff'}]);
+  expect(valid_response({request_id:'R-cutoff',ok:true,view})).toBe(true);
+  expect(await game.get_view(initial.run_id)).toEqual(view);
+ }finally{await store.delete();}
 });
 
 test('B24 E60 simultaneous arrivals keep real FIFO across decimal ID boundaries and H reception runs beside independent INTEL work',async()=>{

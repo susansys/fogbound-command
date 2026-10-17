@@ -1,6 +1,20 @@
-import {test,expect} from 'vitest';import {Game} from '../src/core/game';import {Persistence} from '../src/core/persistence';import {outcome_definition_for_package} from '../src/core/outcome-definition';import registered from '../src/core/outcome-definition.json';
+import {test,expect} from 'vitest';import {Game} from '../src/core/game';import {Persistence} from '../src/core/persistence';import {outcome_definition_for_package} from '../src/core/outcome-definition';import registered from '../src/core/outcome-definition.json';import {state_hash} from '../src/core/snapshot';
 async function runningW(name:string){const store=new Persistence(name),game=new Game(store),initial=await game.create_run(outcome_definition_for_package(registered.definition_hash),'command','create'),ref=(kind:string,id:string)=>({run_id:initial.run_id,kind,id,version:1});
  const issued=await game.return_and_deliver({run_id:initial.run_id,operation_id:'return-W',expected_revision:initial.revision,intent:{kind:'return_and_deliver',actor_ref:ref('actor','W'),return_route_ref:ref('return_route','W-B-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-W'),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:0,to:900000}}});return{store,game,initial,issued};}
+
+test.each(['command','research'] as const)('B24 cold recovery rejects a self-hashed array alias for %s mode through the owned Persistence fault seam',async mode=>{
+ const store=new Persistence('b24-owned-t01-mode-alias-'+mode);
+ try{
+  const game=new Game(store),initial=await game.create_run(outcome_definition_for_package(registered.definition_hash),mode,'create');
+  const realRead=store.read_committed.bind(store),committed=await realRead(initial.run_id);
+  if(!committed||committed.schema!==10)throw Error('Owned outcome run absent');
+  const forged=structuredClone(committed);Reflect.set(forged,'mode',[mode]);Reflect.set(forged.prefix,'mode',[mode]);forged.paused=false;forged.prefix.paused=false;forged.integrity=await state_hash(forged);
+  store.read_committed=async run=>run===initial.run_id?structuredClone(forged):realRead(run);
+  const realSnapshot=store.snapshot.bind(store);store.snapshot=async(run,revision)=>run===initial.run_id&&revision===1?structuredClone(forged):realSnapshot(run,revision);
+  await expect(new Game(store).get_view(initial.run_id)).rejects.toThrow('INVALID_SAVE');
+  expect(await realRead(initial.run_id)).toEqual(committed);
+ }finally{await store.delete();}
+});
 
 test('B24 E11 core same-run takeover pauses a partially running reception and explicit continue completes only its remaining work',async()=>{
  const{store,game,initial}=await runningW('b24-owned-t01-core-reception-restore');
