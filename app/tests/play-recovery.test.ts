@@ -120,7 +120,7 @@ test('PG16 same-time committed nodes remain distinct and every history write lea
   try{
     const issued=await run.game.get_view(run.run);await run.game.save({run_id:run.run,operation_id:'same-time-save',expected_revision:issued.revision,intent:{kind:'save'}});const before=await run.store.read_committed(run.run);
     const selected=await run.game.get_replay(run.run,0),latest=await selected.get_view(run.run);expect(latest.revision).toBe(3);expect(latest.sim_time).toBe(0);
-    const initial=await (await run.game.get_replay(run.run,0,1)).get_view(run.run),issueNode=await (await run.game.get_replay(run.run,0,2)).get_view(run.run);expect(initial.issued_orders).toHaveLength(0);expect(issueNode.issued_orders).toHaveLength(1);expect(issueNode.revision).toBe(2);
+    const initial=await (await run.game.get_replay(run.run,0,1)).get_view(run.run),issueNode=await (await run.game.get_replay(run.run,0,2)).get_view(run.run);expect(Reflect.get(initial,'issued_orders')).toHaveLength(0);expect(Reflect.get(issueNode,'issued_orders')).toHaveLength(1);expect(issueNode.revision).toBe(2);
     for(const intent of [{kind:'save' as const},{kind:'continue' as const},{kind:'advance' as const,to:31500},{kind:'issue' as const,command_id:'history-command',plan:run.plan}]){
       const envelope={run_id:run.run,operation_id:'history-'+intent.kind,expected_revision:latest.revision,intent};
       await expect(intent.kind==='save'?selected.save(envelope):intent.kind==='issue'?selected.issue_order(envelope):selected.control_clock(envelope)).rejects.toThrow('HISTORY_READ_ONLY');

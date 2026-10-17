@@ -14,7 +14,7 @@ test('B22 T01 restoring the committed mission keeps the same version and run whi
     const second=new Persistence(name),fresh=new Game(second);
     const restored=await fresh.restore(view.run_id,'restore');
     expect(restored.view).toMatchObject({scenario_kind:'play_mission',run_id:view.run_id,paused:true,sim_time:0,plans:saved.view.plans,mission:saved.view.mission,issued_orders:[]});
-    expect(restored.view.resources).toEqual(saved.view.resources);
+    expect(Reflect.get(restored.view,'resources')).toEqual(Reflect.get(saved.view,'resources'));
     await expect(fresh.tick(view.run_id,1000,'hidden-tick')).rejects.toThrow('CLOCK_PAUSED');
     const resumed=await fresh.control_clock({run_id:view.run_id,operation_id:'continue',expected_revision:restored.view.revision,intent:{kind:'continue'}});
     expect(resumed.view.paused).toBe(false);
@@ -51,7 +51,7 @@ test('B22 T01 viewing a retained advancing mission uses its latest committed pla
     await game.save_plan({run_id:view.run_id,operation_id:'save-plan',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft:mission_draft(view.run_id)}});
     const advanced=await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:2,intent:{kind:'advance',to:1000}});
     const history=await game.get_replay(view.run_id,1000),retained=await history.get_view(view.run_id);
-    expect(retained).toMatchObject({sim_time:1000,scenario_kind:'play_mission',plans:[{version:1}],resources:advanced.view.resources});
+    expect(retained).toMatchObject({sim_time:1000,scenario_kind:'play_mission',plans:[{version:1}],resources:Reflect.get(advanced.view,'resources')});
     await expect(history.save_plan({run_id:view.run_id,operation_id:'forbidden',expected_revision:3,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft:mission_draft(view.run_id)}})).rejects.toThrow('HISTORY_READ_ONLY');
     expect(await game.get_view(view.run_id)).toEqual(advanced.view);
   }finally{await store.delete();}
@@ -78,7 +78,7 @@ test.each([engineeringDefinition,recordEngineeringDefinition,prestartEngineering
     const game=new Game(store),legacy=await game.create_run(registered,'research','original-create'),before=await store.read_committed(legacy.run_id);
     const mission=await game.create_run(definition,'research','new-mission');expect(mission.run_id).not.toBe(legacy.run_id);expect(await store.read_committed(legacy.run_id)).toEqual(before);
     const recovered=await new Game(store).restore(legacy.run_id,'original-restore'),after=await store.read_committed(legacy.run_id);
-    expect(recovered.view).toMatchObject({run_id:legacy.run_id,sim_time:legacy.sim_time,paused:true});expect(after!.schema).toBe(registered.schema);expect(after!.definition_hash).toBe(registered.definition_hash);expect(after!.hashes).toEqual(before!.hashes);expect(after!.world).toEqual(before!.world);expect(after!.rng).toEqual(before!.rng);
+    expect(recovered.view).toMatchObject({run_id:legacy.run_id,sim_time:legacy.sim_time,paused:true});expect(after!.schema).toBe(registered.schema);expect(after!.definition_hash).toBe(registered.definition_hash);expect(after!.hashes).toEqual(before!.hashes);expect(Reflect.get(after!,'world')).toEqual(Reflect.get(before!,'world'));expect(after!.rng).toEqual(before!.rng);
     const listed=await store.list_runs();
     if(registered.schema===8){expect(listed).toHaveLength(1);expect([legacy.run_id,mission.run_id]).toContain(listed[0].run_id);expect(listed[0].scenario_kind).toBe('play_mission');}
     else expect(listed.map(r=>r.run_id).sort()).toEqual([legacy.run_id,mission.run_id].sort());

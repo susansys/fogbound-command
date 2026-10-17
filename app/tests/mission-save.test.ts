@@ -113,9 +113,9 @@ test('B22 PG01 preview and saving two phases persist an immutable draft without 
     expect(result.view).toMatchObject({revision:2,sim_time:0,mission:{object_revision:1,status:'draft'},plans:[{version:1,draft}],issued_orders:[]});
     expect(await game.get_view(view.run_id)).toEqual(result.view);
     const after=await store.read_committed(view.run_id);
-    expect(after?.world).toEqual(before?.world);
+    expect(after===undefined?undefined:Reflect.get(after,'world')).toEqual(before===undefined?undefined:Reflect.get(before,'world'));
     expect(after?.rng).toEqual(before?.rng);
-    expect(result.view.resources).toEqual(view.resources);
+    expect(Reflect.get(result.view,'resources')).toEqual(Reflect.get(view,'resources'));
     expect(result.receipt).toMatchObject({kind:'save_plan',revision:2,result:'committed'});
   }finally{await store.delete();}
 });
@@ -128,7 +128,7 @@ test('B22 PG06/07 a nonexecutable route and literal note can be saved without an
     const preview=await game.preview_plan(view.run_id,1,0,draft);expect(preview.phases[0].estimated_move_ms).toBeNull();expect(preview.phases[0].gap).not.toBe('');
     const saved=await game.save_plan({run_id:view.run_id,operation_id:'save',expected_revision:1,intent:{kind:'save_plan',base_plan_ref:null,expected_object_revision:0,draft}});
     expect(saved.view.plans[0].draft.note).toBe('自动维修／尽快执行');expect(saved.view.plans[0].draft.phases.every(p=>p.activity.kind==='move')).toBe(true);expect(saved.view.issued_orders).toEqual([]);
-    const after=await store.read_committed(view.run_id);expect(after?.world).toEqual(before?.world);expect(after?.rng).toEqual(before?.rng);
+    const after=await store.read_committed(view.run_id);expect(after===undefined?undefined:Reflect.get(after,'world')).toEqual(before===undefined?undefined:Reflect.get(before,'world'));expect(after?.rng).toEqual(before?.rng);
   }finally{await store.delete();}
 });
 

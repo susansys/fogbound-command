@@ -41,7 +41,7 @@ export async function operation(page,kind,activate){
   for(let i=0;i<3;i++){
     const start=(await trace(page)).requests.length;await activate();
     let pair;
-    await expect.poll(async()=>{const t=await trace(page),request=t.requests.slice(start).find(r=>kind==='restore'?r.kind==='takeover':r.kind==='operate'&&r.envelope.intent.kind===kind);const response=t.responses.find(r=>r.message.request_id===request?.request_id);if(request&&response)pair={request,response};return !!pair;},{timeout:30000,intervals:[100]}).toBe(true);
+    await expect.poll(async()=>{const t=await trace(page),request=t.requests.slice(start).find(r=>kind==='restore'?r.kind==='takeover':['operate','operate_intelligence'].includes(r.kind)&&r.envelope.intent.kind===kind);const response=t.responses.find(r=>r.message.request_id===request?.request_id);if(request&&response)pair={request,response};return !!pair;},{timeout:30000,intervals:[100]}).toBe(true);
     attempts.push(pair);const reply=pair.response.message;
     if(reply.ok){const operation_id=kind==='restore'?pair.request.operation_id:pair.request.envelope.operation_id;expect(reply.receipt).toMatchObject({kind,operation_id,result:'committed'});return{...pair,attempts};}
     // A new UI request is allowed only after definitive stale rejection and newer real view.

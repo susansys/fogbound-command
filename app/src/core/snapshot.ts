@@ -11,6 +11,7 @@ import {initial_prestart_data} from './prestart-move';
 import type {StoredState} from './state';
 import {validate_play_state} from './play-snapshot';
 import {validate_mission_state} from './mission-snapshot';
+import {validate_intelligence_state} from './intelligence-snapshot';
 import type {MissionDefinition} from './mission-definition';
 export function canonical(value:unknown):unknown{
   if(Array.isArray(value))return value.map(canonical);
@@ -160,8 +161,9 @@ function prestart_history_matches(state:State,definition:ReturnType<typeof defin
   initial.schedule=[];initial.log=[{id:'initial-report',at:0,kind:'report',text:'原始工位报告已递交；R最后确认在H。',evidence:c.delivery.id}];
   return equal(replay_committed_state(initial,state.inputs),state);
 }
-export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[]):Promise<StoredState>{
+export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[]):Promise<StoredState>{
   try{
+    if(record(value)&&value.schema===9){if(!json_data(value))throw Error('invalid');return await validate_intelligence_state(value,intelligence);}
     if(record(value)&&value.schema===8){if(!json_data(value))throw Error('invalid');return await validate_mission_state(value,missions);}
     if(record(value)&&value.schema===7){if(!json_data(value))throw Error('invalid');return await validate_play_state(value,registered);}
     if(!record(value)||!json_data(value)||![4,5,6].includes(Number(value.schema))||typeof value.schema!=='number'||value.contract!=='0.5.1'||value.phase!=='committed'||!valid_id(value.run_id))throw Error('invalid');

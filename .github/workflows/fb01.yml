@@ -50,17 +50,48 @@ jobs:
           echo '55672d1f392fd3e7b7a08621b6e804e6bcb39d40cf155504abb74b3a021ea8ea  /tmp/fb01-chrome.zip' | sha256sum --check
           unzip -q /tmp/fb01-chrome.zip -d /tmp/fb01-chrome
       - name: Install the window manager required for native focus transitions
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y openbox
+        run: sudo apt-get install --no-install-recommends -y openbox
       - name: Build the tested static image
-        run: docker build --iidfile image-id.txt -t fogbound-fb01:ci .
+        run: docker build --label org.fogbound.ci-run="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --iidfile image-id.txt -t "fogbound-fb01:ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" .
       - name: Serve the same image
-        run: docker run -d --name fb01-ci -p 127.0.0.1:4175:80 fogbound-fb01:ci
+        run: docker run -d --rm --cidfile "$RUNNER_TEMP/fb01-container-id.txt" --label org.fogbound.ci-run="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --name fb01-ci -p 127.0.0.1:4175:80 "$(cat image-id.txt)"
       - name: Record public build fingerprint
         run: node verification/fingerprint.mjs
       - name: Run browser contracts with virtual display focus changes
-        run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; npm run browser'
+        run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; node verification/browser-contract.mjs'
         env:
           FB01_HEADED: '1'
+      - name: Remove the exact owned test container and unused image
+        if: always()
+        run: |
+          set -euo pipefail
+          docker info >/dev/null
+          owner="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if [ -f "$RUNNER_TEMP/fb01-container-id.txt" ]; then
+            container_id="$(cat "$RUNNER_TEMP/fb01-container-id.txt")"
+            [[ "$container_id" =~ ^[0-9a-f]{64}$ ]]
+            if docker container inspect "$container_id" >/dev/null 2>&1; then
+              test "$(docker container inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$container_id")" = "$owner"
+              test "$(docker container inspect --format '{{.Image}}' "$container_id")" = "$(cat image-id.txt)"
+              docker stop "$container_id"
+            fi
+            test -z "$(docker container ls --all --quiet --no-trunc --filter "id=$container_id")"
+            echo "Owned test container absent: $container_id"
+          fi
+          if [ -f image-id.txt ]; then
+            image_id="$(cat image-id.txt)"
+            [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+            if docker image inspect "$image_id" >/dev/null 2>&1; then
+              test "$(docker image inspect --format '{{ index .Config.Labels "org.fogbound.ci-run" }}' "$image_id")" = "$owner"
+              if [ -z "$(docker container ls --all --quiet --filter "ancestor=$image_id")" ]; then
+                docker image rm "$image_id"
+                if docker image inspect "$image_id" >/dev/null 2>&1; then exit 1; fi
+                echo "Owned unused image removed: $image_id"
+              else
+                echo "Owned image retained because another container depends on it: $image_id"
+              fi
+            fi
+          fi
       - name: Failure evidence only
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

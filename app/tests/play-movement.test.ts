@@ -21,7 +21,7 @@ test('PG10 issuing the main100m route only registers a task message and does not
     const plan=await game.preview_plan(initial.run_id,initial.revision,1,{actor:'R',map_id,map_version,crs_id,geometry_version,path:[[50,150],[150,150]]});
     const result=await game.issue_order({run_id:initial.run_id,operation_id:'issue-main-route',expected_revision:initial.revision,intent:{kind:'issue',command_id:'main-route',plan}});
     expect(result.view).toMatchObject({status:'queued',sim_time:0,can_issue:false,issued_orders:[{command_id:'main-route',issued:0,plan}]});
-    expect(result.view.resources).toEqual(initial.resources);
+    expect(Reflect.get(result.view,'resources')).toEqual(Reflect.get(initial,'resources'));
     if(result.view.scenario_kind!=='play_corridor')throw Error('Expected corridor result');
     expect(result.view.position_knowledge).toEqual(initial.position_knowledge);
     const state=await store.read_committed(initial.run_id);

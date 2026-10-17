@@ -3,6 +3,14 @@ import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {observeGame,trace,start} from './map-a-helpers';
 
+async function navigate(page:Page,name:string){
+  // Navigation is keyboard-driven; the independent map pointer actions and
+  // full-DPR pixel/control-point checks below retain their original coverage.
+  const button=page.getByRole('button',{name,exact:true});
+  await expect(button).toBeVisible();await expect(button).toBeEnabled();
+  await button.press('Enter');
+}
+
 async function coordinates(page:Page,points:readonly(readonly[number,number])[]){
   const map=page.locator('.map'),box=(await map.boundingBox())!,[ox,oy,s]=(await map.getAttribute('data-camera'))!.split(',').map(Number);
   const rows=[];
@@ -56,8 +64,8 @@ for(const width of [1366,1920])for(const dpr of [1,2])for(const definition of ['
   try{
   await observeGame(page);await start(page,definition);
   await expect(page.locator('.map')).toHaveAttribute('data-region-state','ready');
-  await page.getByRole('button',{name:'任务调度',exact:true}).click();await page.getByRole('button',{name:definition==='FB02-ENG-RECORD'?'查看记录预案':'查看通行预案',exact:true}).click();
-  await page.getByRole('button',{name:'态势地图',exact:true}).click();
+  await navigate(page,'任务调度');await navigate(page,definition==='FB02-ENG-RECORD'?'查看记录预案':'查看通行预案');
+  await navigate(page,'态势地图');
   const map=page.locator('.map');await expect(map).toHaveAttribute('data-region-state','ready');const before=await trace(page);
   const actualDpr=await page.evaluate(()=>devicePixelRatio);expect(Math.abs(actualDpr-dpr)).toBeLessThanOrEqual(.000001);
   info.annotations.push({type:'native-density',description:JSON.stringify({definition,width,requested:dpr,actual:actualDpr})});
@@ -76,7 +84,7 @@ for(const width of [1366,1920])for(const dpr of [1,2])for(const definition of ['
   },definition);
   expect(Math.max(...errors)).toBeLessThanOrEqual(1);
   const gamePoints=await coordinates(page,[[0,0],[400,0],[0,300],[400,300],[200,150]]);
-  await page.getByRole('button',{name:'地图图层',exact:true}).click();await page.getByRole('button',{name:'区域全景（仅背景阅读）',exact:true}).click();await page.getByRole('button',{name:'地图图层',exact:true}).click();
+  await navigate(page,'地图图层');await navigate(page,'区域全景（仅背景阅读）');await navigate(page,'地图图层');
   // Linux fallback fonts make the fixed caption cover the north-west control.
   // Use the player's real camera pan to expose it; no overlay or point is hidden.
   const panoramaY=Number((await map.getAttribute('data-camera'))!.split(',')[1]);

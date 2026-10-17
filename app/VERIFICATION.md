@@ -387,3 +387,282 @@ All original244AT remain not_run. HTTP/SQLite/file backup, full PLAY/Outcome, fo
 The fixed first T04 candidate bcaf06e failed its complete native Chrome run:198expected/5unexpected/0skipped/0flaky, all five waits at blank entry before gameplay. Local diagnostics captured net::ERR_ADDRESS_IN_USE on preloaded JavaScript, including when the exact same59 served files were mirrored by an owned native server. No Worker or pageerror occurred at those failures; this does not establish general product correctness or Windows port exhaustion. A process-only Windows comparison preserves every locked Playwright default disabled feature and additionally disables TcpPortRandomizationWin. The merged setting passed100 serial fresh-context entries, while the default comparison failed. Local browser/native runners explicitly record that environment and the exact dependency switch hash; it is not default Windows network acceptance. Product Playwright/CI configuration and OS/global network/browser/user settings remain unchanged. The native verification harness accepts and records this optional Windows-only test argument; absent that explicit input its launch behavior is unchanged. Ordinary final Linux CI remains required.
 
 Review repairs bind decision evaluation caches to complete run/kind/id/version, initialize only schema8 cloned command runs paused, and preserve genuinely selected received evidence at the original decision time. Registered initial/authority/movement evidence is checked against public catalogs. Selected Report/Delivery pairs are captured from actual received HQ records, with same-run/source/target/time/selection bounds; superseded selected position reports retain their real public source and Delivery, with closed DTO linkage checks. Evaluation never borrows later material or treats arbitrary selected strings as evidence. Historical first-choice fixtures carry an empty selected-receipt list. Actual RED/GREEN checks cover static references, previously delivered acceptance/Delivery, type-spoof rejection, original-profile restore and historical reevaluation. This is a repaired local candidate; latest fixed-head review, complete browser/native/visual and final remote/main gates require separate current receipts. Original244AT and formal experience remain unaccepted.
+## B23 T01 implementation candidate — acceptance pending
+
+This candidate follows `B23-INTELLIGENCE-DESIGN-1.0.0`, manifest
+`3942addb02c20ab944d2e425b2b95e3b8cff46f6a5eccf725b17d8c36b156d27`,
+and the independently verified Stage2 release. SPEC #58 / T01 #59 remain open.
+T02–T04 have not started; no final B23 CI, PR, merge or batch acceptance is claimed.
+
+Schema9 is independent of retained schema4–8 definitions. T01 covers initial
+HQ/local knowledge, original reports versus received deliveries, explicit lineage
+and unknown independence, real source collection and its separate4/3/1 recipe,
+current save/recovery, UI source expansion and committed-node history. Processing
+requests and field activities intentionally return unsupported until T02/T03.
+The new resolved profile explicitly carries101 inherited and21 PLAY registry
+entries. Configuration declarations for other systems do not implement those
+systems, enable external calls or sign their original acceptance cases.
+
+Checks run through the owned exact-lock Windows runtime and immutable source
+mirrors. Every result records the actual command, source file hashes, Git identity,
+dirty state, exit and source preservation. Browser/native final checks additionally
+require `B23_REQUIRE_SERVED_MATCH=1`: all current runtime source inputs must match
+the served build. Native profiles and origin4196 are task-owned, never user data.
+
+Retained failures include missing schema9 dispatch, missing lineage handling,
+incorrect original publication time under delayed forwarding, incomplete resolved
+configuration/W initial position, self-hashed invalid lineage, absent/collapsed UI,
+and manual pause rejected after a delayed stale revision. Their focused regressions
+were fixed without removing assertions. Native driver setup failures and earlier
+build identities remain separate from product failures and current evidence.
+
+The old B22 32-version test hit its unchanged5000ms timeout in two default-pool
+full runs. Its isolated file passed25 tests. An identical full suite with one file
+worker passed507 tests at that earlier source; subsequent tests/changes require
+new final checks. This is resource isolation, not a claimed performance fix or a
+default-pool pass. No timeout or old oracle was relaxed; final remote CI remains
+mandatory. Old schemas/definitions and original244AT stay separate; original244AT
+are all `not_run`. T01 fixed-SHA independent Spec/Standards and final current-build
+native recovery are still required before integrating/closing the ticket.
+
+T01 initial independent review on14a0b34 found zero Standards blockers and two
+Spec P2 findings: schema9 latest-commit history was unreachable through retained
+records after reload, and the public initial B-repair requirement was absent.
+The original findings are retained. Game-seam REDs reproduced both omissions;
+the history correction also has a real-browser RED/GREEN covering live-history
+return, reloaded read-only entry and explicit takeover. Initial repair-condition
+UI RED failed with the actual DTO available; the interface now displays its
+registered initial confirmation separately from still-unverified access.
+Current repair verification and independent fixed-commit rereview remain pending;
+earlier14a0b34 native four-launch recovery passed but cannot sign this new source.
+
+T01 exit was subsequently verified atb18b2ab:521 core tests, types/boundaries,
+27 actual Windows browser regressions, and four default Chrome/Edge native
+launches passed. Both fixed-commit review axes had no remaining blockers. The
+integration branch was safely fast-forwarded and pushed; issue59 closed with its
+approved body unchanged. This was a ticket exit, not final B23 CI/main delivery.
+
+T02 is an unaccepted implementation candidate. Public Game/Worker/DTO/UI now
+distinguish versioned draft saving, explicit processing requests, queued/running
+work, completed products and received products. Preparation reserves only six
+processing energy at submission; after six work its approval and headquarters'
+two-pack commitment commit together. Headquarters sees that commitment only
+after delivery; W-local packs are not consumed. Processing energy ends at12 after
+validation plus preparation. A competing lawful plan can receive a not-approved
+result rather than duplicate the same two-pack commitment.
+
+Focused checks cover frozen order timings, independent processing/REC energy,
+version references and budget32, same-operation receipts, partial-work restore and
+Dexie/fake-indexeddb transaction abort at the storage boundary. This is core
+evidence, not native-browser transaction-fault acceptance. E14 low-energy
+definitions exist only through the owned synthetic Persistence registry, with
+matching complete registry/hash/source references; Worker has no import route.
+The normal registered definition, selected4/3/1 recipe and old schemas are intact.
+
+Retained T02 failures include absent interfaces, rejected new DTO fields, missing
+request/approval UI, stale public verification copy, key-order-dependent reference
+comparison, unregistered version-limit error, and an overly broad T01 substring
+oracle that mistook legal headquarters processing reservations for private source
+balances. That oracle now excludes only the legal own desk and still rejects
+source energy/pack reservation fields everywhere else. An ambiguous test selector
+and a missing committed-clock precondition were harness failures, preserved and
+corrected without changing expected behavior or timeouts. Current complete
+checks, fixed-SHA independent reviews and actual native T02 recovery remain
+pending. Original244AT and formal experience are not accepted.
+
+The subsequent dirty T02 runtime candidate passed four actual default Windows
+Chrome/Edge launches in98.865s: same-profile/origin full-process close and paused
+restore preserved partial preparation/validation work and reservations; reading
+and unsaved editing kept the command clock running; actual trusted native blur
+caused Game-confirmed pause and required explicit continue. Completion consumed
+processing energy once (14 for preparation alone,18 for validation alone), with
+one product/Delivery, headquarters pack commitment only for preparation and W
+packs still2. Source collection retained16/97/0 once. Both browsers recorded zero
+page errors and failed requests. These are owned synthetic profiles, not user
+data. Final fixed-source review and complete current checks still precede T02
+exit; final B23 same-SHA CI/main/default-browser/full visual gates remain open.
+
+## B23 T03 field activity review candidate (2026-10-17)
+
+The new schema9 branch accepts one versioned move/record/repair intention at a
+time through Game, Worker and Transport. Headquarters issuance, local acceptance,
+local completion and received field ReportDelivery remain distinct. Registered
+geometry and current carried load produce29500ms/29000ms R movement; record and
+repair use45000ms/65000ms including5000ms setup. Actual work reserves the complete
+recipe, charges wear at first positive work and settles energy/items once.
+Record work creates immutable collected artifacts referencing generated synthetic
+record materials held by R; receipt at headquarters is neither handover nor final
+verification. Fixed communication has authorization/location checks and an actual
+1000ms Delivery, with no fixed-terminal energy/wear account. Unsendable facts
+remain local rather than producing a Delivery.
+
+Owned public-interface traces check normal five-action resource totals, missing
+qualification/equipment, REC3 with one pack, loadout17/13 rejection and16/12 with
+insufficient repair supplies, overlap, partial restore, boundary stepping and an
+actual Dexie/fake-indexeddb transaction abort. The latter is core transaction
+evidence, not native-browser fault acceptance. An explicitly scoped Knowledge
+projection pair changes private balances/artifact/pending report only; neither
+tampered candidate is written to or accepted by Game. The actual W200m movement
+used for fixed-terminal communication checks exists only in the owned E30
+registered carrier, not in the default five-phase scenario or Worker import.
+
+Retained failures include unrelated private qualification data in movement
+reports, absent fixed-terminal authorization checks, one-energy hardcoding for a
+two-energy controlled path, mutable current draft consultation after an already
+issued repair, an unchanged initial map marker, incomplete Report metadata and
+artifact references to an order rather than generated material. Each behavioral
+repair retains its real RED/GREEN. An invalid tick call in a new test, legacy
+untyped unknown-actor fixtures and a native-driver generator syntax error were
+harness/interface-binding errors, not product acceptance failures. Old history
+tests now explicitly require can_issue=false; unsupported actors/activities still
+use real typed refs and preserve exact zero-effect checks.
+
+Earlier T03 candidates passed556 core tests, types/import checks and32 actual
+Windows browser tests. The first native sample passed four default Chrome/Edge
+launches in40.119s, preserving partial field work and a completed-but-undelivered
+artifact across full recorded-process close and same-profile/origin paused
+restore; command mode required explicit continue and actual trusted blur caused
+Game pause. Subsequent map/Report/material changes require current-source checks;
+those earlier receipts are not relabeled as a final-SHA native run. This section
+is a review-candidate scope record. Fresh fixed-source gates and independent
+Spec/Standards must precede T03 exit. T04, final batch CI/PR/main and formal
+experience remain open; original244AT are all not_run.
+
+T03 fixed-candidate review293d34f found two Spec P2s and one overlapping
+Standards P2: a LocalActorView included an issued order before its actual
+delivery, and concurrent R/W reports depended on advancement chunking. New
+public Game regressions retain real failing and passing runs. Local activities
+now require actual arrival; persisted field reports, deliveries and message
+facts use chronological ordering with immutable reference tie breaks. The
+nonblocking duplicate schema9 write protocol was consolidated in one private
+Game method during review, retaining typed public parsers and receipt/fault
+semantics. Focused recovery/gates/work/source tests and types passed after this
+refactor. Fresh full core, browser/native evidence and independent fixed-SHA
+rereviews remain required before ticket exit; previous runs are not relabeled.
+
+## B23 T04 work-in-progress review candidate
+
+The two public Game paths reach B-report receipt at284000/261000 with the frozen
+23000ms difference and full resource oracles. Real keyboard/Worker paths passed.
+New RED/GREENs cover schema9 restart dispatch, command-child paused start,
+unstarted queue cutoff release, the received milestone hidden by transient UI
+notices, public deadline/time-gap copy, and a real frontend rejection beyond the
+legacy610000ms wire bound. The latter now uses a closed operate_intelligence
+request with strict scenario matching; old request limits remain unchanged.
+The E43 constructor-only owned delayed-channel carrier has explicit registry
+source and10000/10001 delays; default1000ms and work recipes stay unchanged.
+
+Actual default Windows native checks passed six launches for both full paths
+and899999 cutoff save/reopen, plus four launches for command partial work,
+research terminal-pending receipt, trusted blur and explicit continue. They ran
+the recorded dirty candidate bytes; further runtime changes require fresh
+matching checks. Worker reply-loss query and unknown restart retry preserve the
+original operation. Legacy schemas4—8 restore beside schema9; self-hashed forged
+handover/resources/input-clock packages are rejected without altering bad data.
+
+E39's new120-input bounded functional diagnostic initially inherited Vitest's
+5000ms default and timed out; only that new diagnostic now has an explicit90s
+budget, with all original timeouts unchanged. The matching file baseline was
+6.29s test time; extending the existing64-entry verified-transition cache from
+schema7 to9 reduced it to2.23s. Every actual body is still hashed, definitions
+validated, unknown/cold packages fully replayed and parent lineage checked;
+only successful private Game commits seed it. This is no speed guarantee or
+2000-input claim. The default-Windows120/600/2000 by0/1/3-parent matrix remains
+pending under the frozen10min/2GiB/six-launch diagnostic budget.
+
+The paired visual collection captured both resolutions and DPR1/2, new sources,
+queue, approval/reservation, pending/received artifacts, actual map controls and
+page scale. First comparable brand pixels and header geometry are identical.
+The visual gate is still open: comparing controls' different positioned parents
+produced an anchor discrepancy, and the pre-existing MAP-B compact marker is
+36x36 versus locked0.2.1's text-bearing53.4375x38. Original frames/failures are
+retained. No reference/CSS edits or tolerance widening has been made to force a
+pass; comparator scope needs independent review and fresh evidence. Final T04,
+whole-batch reviews/CI/PR/main/artifact/safe sync/retro are not complete. All
+original244AT remain not_run; no formal player-pressure or reality claim.
+
+T04 review a32a6be identified two Spec P2s and one Standards P2. New public
+Game tests expose preparation/validation +1ms estimates and FIFO waiting; the
+HQ view now publishes those estimates with explicit continuous-work assumptions.
+Both UI submission sites show the public gap without denying an otherwise legal
+pre-deadline attempt. An actual command restart reply-drop followed by native
+trusted blur reproduced loss of the retained operation. A synchronous pending
+reference plus same-run response guards now keep it locked until its original
+restart is confirmed. Research and command reply-loss regressions exercise the
+same operation id. Historical maps no longer receive the live run's persistence
+session; settled child/history/return map association is checked separately.
+
+The original E39 nine-cell attempt stopped at550318ms with cleanup and retained
+owned profiles; parents0/1 reached2000 but parents3 did not. Its120/600 historical
+reads were warm after a2000 cold restore, despite erroneous cold labels in that
+original script. Those labels are not accepted evidence. The corrected driver
+uses the contract's three suggested pairs120/0,600/1,2000/3, each full process
+closure and same-profile UI restore, within the original six-launch/10min/2GiB
+budget. Cold list/restore composites and first screen are separate from warm
+get_view/history. Native IDB clone/read/validation phases are not individually
+instrumented and are not assigned invented durations. A10s transport uncertainty
+may only retry the retained UI restore after the original real reply is observed.
+
+Visual correction keeps the original one-CSS-pixel and zero-brand-pixel limits.
+Controls now use the common map-canvas viewport instead of different offset
+parents. B23 alone uses the approved size33 natural military symbol, restoring
+the locked demo marker dimensions; other scenarios retain size30/compact CSS.
+Original failures and frames remain. These are review corrections, not final
+visual, native, whole-batch, CI or delivery signoff. Fresh fixed-source evidence
+and independent rereviews remain required; original244AT are all not_run.
+
+Whole-batch review2f4e0e7..44c69e4 found another Spec P2: automatic clock-fault
+reached Workbench but was not passed into IntelligenceWorkbench. Two actual
+native-IDB automatic tick-abort browser REDs reproduced a silently stopped clock
+still labelled running. B23 now receives channel/storage fault state, displays
+unconfirmed progress, locks new writes and retains edited text. Recovery keeps
+its operation id across uncertainty and supports actual receipt query/retry;
+successful restore is same-run and paused, and never automatically continues an
+older uncertain control. That older operation remains for explicit query/retry.
+The9-case focused browser run passed, including dropped restore reply followed
+by original receipt query, native blur after unknown restart, deadline copy and
+symbol size. Fresh final-source runs and whole-batch rereview are still required.
+The earlier229-case full browser run at44c69e4 was deliberately stopped after112
+passes to fix the new review blocker; it is retained as cancelled, not green.
+
+The public CI fingerprint now verifies the schema9 definition/component hashes
+against the actual served Worker and emits only its public scenario/geometry/
+rules identity, following the existing schema7/8 disclosure boundary. Private
+definition/source hashes and owned diagnostic catalogs are not published. No
+new dependency, tool permission or workflow timeout was introduced.
+
+Final whole-batch review also found schema9 cold validation coercing an array
+mode into a valid string, and response DTOs coercing mode/rate enum values.
+Two actual compatibility REDs accepted malformed self-hashed mode and response
+values. The cold boundary now requires exact mode literals; B23 response enum
+membership uses original values without String/Number coercion. The focused
+compatibility GREEN retains legal mode/rate values and the owned original save.
+Another actual browser RED found the B23 entry still claiming one actor/task;
+the entry now identifies R/W and stage-by-stage orders. Its browser GREEN checks
+the accurate entry and the existing deadline behavior. These are corrections
+within the original44 engineering cases, not additional product acceptance.
+Their changed runtime assets require fresh identity and affected verification;
+older local evidence remains labelled with its actual tested SHA. Final remote
+CI, merge/main, documentation sync and batch closure are still pending.
+The same review then found coerced activity reference kinds at the request
+boundary. An actual Game RED committed an array actor kind; the strict string
+check now rejects array actor/activity/authority kinds without changing state or
+creating a receipt. This remains part of E06/E36, not a new engineering case.
+The constructor-owned E43 delay seam also now requires numeric10000/10001;
+actual RED accepted a string alias and produced concatenated estimated times.
+String/array aliases are rejected before run creation, while existing numeric
+E43 boundary checks remain. The Worker still cannot register such variants.
+
+The owner retained the original aggregate20 browser runner minutes. The local
+two-job40-minute proposal was rejected and is not the delivery workflow. One
+browser job keeps its20-minute timeout, headed CFT155/SwiftShader, worker1 and
+retries0. The complete231-test discovery/actual-passed-ID check rejects skipped,
+retried, missing or unfinished contracts. The existing quality job stays15min.
+Projection navigation and the shared map start helper use visible/enabled
+buttons through Enter; all map mouse moves/drags, DPR screenshots, control
+points, numeric bounds and original assertions remain. A bounded one-case local
+headed SwiftShader diagnostic passed before/after; its17.0/14.7s observations do
+not prove Linux CI capacity. The affected49 defaultWindows cases passed with
+the exact driver changes; actual final-SHA CI duration is still required.
+The window-manager install reuses apt indexes already refreshed by the pinned
+Playwright install-deps step. No new dependency, renderer or timeout is added.
