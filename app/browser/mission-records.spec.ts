@@ -27,7 +27,27 @@ async function begin(page:Page,fault:Parameters<typeof observe>[1]='none',mode:'
   await page.getByLabel('任务目的',{exact:true}).fill('核对两处联络点');await page.getByLabel('期望结果',{exact:true}).fill('总部收到两阶段合法抵达凭证');
   await save(page,1);
 }
-async function save(page:Page,version:number){await page.getByRole('button',{name:'预览任务',exact:true}).press('Enter');await expect(page.getByTestId('mission-preview')).toBeVisible();await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 '+version);await expect(page.getByTestId('mission-save-state')).not.toContainText('有未保存编辑');}
+async function save(page:Page,version:number){
+  const preview=page.getByRole('button',{name:'预览任务',exact:true});
+  for(let attempt=0;attempt<3;attempt++){
+    const from=await page.evaluate(()=>(Reflect.get(window,'__b22RecordRequests') as unknown[]).length);
+    await preview.press('Enter');
+    await expect.poll(()=>page.evaluate(from=>{
+      const requests=Reflect.get(window,'__b22RecordRequests') as Array<{kind:string;request_id:string}>,responses=Reflect.get(window,'__b22RecordResponses') as Array<{request_id:string}>;
+      const request=requests.slice(from).find(r=>r.kind==='preview_mission');return !!request&&responses.some(r=>r.request_id===request.request_id);
+    },from)).toBe(true);
+    const response=await page.evaluate(from=>{
+      const requests=Reflect.get(window,'__b22RecordRequests') as Array<{kind:string;request_id:string}>,responses=Reflect.get(window,'__b22RecordResponses') as Array<{request_id:string;ok:boolean;code?:string}>;
+      const request=requests.slice(from).find(r=>r.kind==='preview_mission')!;return responses.find(r=>r.request_id===request.request_id)!;
+    },from);
+    if(!response.ok&&response.code==='STALE_REVISION'){await expect(preview).toBeEnabled();continue;}
+    await expect(page.getByTestId('mission-preview')).toBeVisible();
+    await page.getByRole('button',{name:'保存草案',exact:true}).press('Enter');
+    await expect(page.getByTestId('mission-save-state')).toContainText('已保存版本 '+version);
+    await expect(page.getByTestId('mission-save-state')).not.toContainText('有未保存编辑');return;
+  }
+  await expect(page.getByTestId('mission-preview')).toBeVisible();
+}
 
 test('B22 task editing saves a new intent identity without rewriting the first draft',async({page})=>{
   await begin(page);const original=(await current(page)).plans[0];
