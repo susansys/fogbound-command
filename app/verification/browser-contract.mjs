@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
-// Fixed once from actual discovery, with all original231 files byte-matched to main.
+// Fixed from actual discovery. All231 original contracts remain; MB13's
+// dynamic Worker bootstrap has one reviewed FIFO correction and updated hash.
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
 const frozen={
   "baseline_sha": "cab208ebd360a55f8fcf55e150e5b7a033f02f59",
@@ -91,7 +92,7 @@ const frozen={
     },
     {
       "file": "map-b-outcomes.spec.ts",
-      "sha256": "e0e06e5b357354c182061991e1db1a6b06c04a1d42f22b6b7064b8459c44b96f"
+      "sha256": "5730d749d294d1501d67adf66e92a120826fc1d008d7b777308ed5b51dc82d96"
     },
     {
       "file": "map-b-projection.spec.ts",

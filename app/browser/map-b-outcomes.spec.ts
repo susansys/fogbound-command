@@ -10,7 +10,8 @@ async function observeCommittedGame(page:Page){
     window.Worker=new Proxy(Native,{construct(Target,args){
       const url=String(args[0]);if(!url.includes('/assets/worker-'))return Reflect.construct(Target,args);
       const script=`let next=4096;Object.defineProperty(crypto,'randomUUID',{value:()=> '00000000-0000-4000-8000-'+(next++).toString(16).padStart(12,'0')});
-const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,...rest){const request=Reflect.apply(put,this,[value,...rest]);if(this.name==='runs'){const proof=structuredClone(value);this.transaction.addEventListener('complete',()=>self.postMessage({ownedCommittedGameProof:proof}),{once:true});}return request;};await import(${JSON.stringify(url)});`;
+const early=[];const hold=event=>{event.stopImmediatePropagation();early.push(event.data);};self.addEventListener("message",hold);
+const put=IDBObjectStore.prototype.put;IDBObjectStore.prototype.put=function(value,...rest){const request=Reflect.apply(put,this,[value,...rest]);if(this.name==='runs'){const proof=structuredClone(value);this.transaction.addEventListener('complete',()=>self.postMessage({ownedCommittedGameProof:proof}),{once:true});}return request;};await import(${JSON.stringify(url)});self.removeEventListener("message",hold);for(const data of early)self.dispatchEvent(new MessageEvent("message",{data}));`;
       const worker=Reflect.construct(Target,[URL.createObjectURL(new Blob([script],{type:'text/javascript'})),{type:'module'}]) as Worker;
       worker.addEventListener('message',event=>{if(event.data?.ownedCommittedGameProof){event.stopImmediatePropagation();committed.push(event.data.ownedCommittedGameProof);}});
       return worker;

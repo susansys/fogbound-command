@@ -690,6 +690,18 @@ exact owned-resource cleanup remain. Final candidate CI, PR review/merge, main C
 and artifact receipts must each be read from their actual SHA before closure.
 This batch does not sign the original244AT or formal PLAY experience acceptance.
 
+PR73 first run39120088763 passed781 core tests in71 files; browser execution
+stopped at legacy MB13 record startup after63 passes. The old test-owned Worker
+dynamically imports the real module before installing its message handler.
+A single controlled100ms import delay reproduced lost startup messages with
+the original canvas assertion. Buffering early inputs and delivering the same
+data FIFO after import passed that controlled record test. This establishes the
+mechanism, not the sole historical CI cause. The actual corrected four MB13
+contracts then passed without diagnostic delay. Product runtime, State, replies,
+assertions, counts and timeouts stay unchanged. Only the reviewed fixture hash
+was updated explicitly; all231 original contracts and292/278 discovery counts
+remain. The failed CI and exact cleanup are retained; corrected-head CI is required.
+
 The owner retained the original aggregate20 browser runner minutes. The local
 two-job40-minute proposal was rejected and is not the delivery workflow. One
 browser job keeps its20-minute timeout, headed CFT155/SwiftShader, worker1 and
