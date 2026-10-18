@@ -5,7 +5,7 @@ import {validate_public_map} from './spatial';
 import {valid_route_plan} from './route-validation';
 import {mission_player_view,mission_preview} from './mission-dto';
 import {mission_decision_evaluation} from './mission-record-dto';
-import {outcome_player_view} from './outcome-dto';
+import {outcome_participant_receipt,outcome_inference_receipt,outcome_decision_evaluation,outcome_player_view,outcome_debrief_session,outcome_truth_payload,outcome_truth_confirmation,outcome_fairness,outcome_debrief_answer,outcome_evidence_resolution} from './outcome-dto';
 import {intelligence_player_view} from './intelligence-dto';
 type Check=(value:unknown)=>boolean;
 const text:Check=v=>typeof v==='string'&&v.length<=2000;
@@ -93,6 +93,16 @@ const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:one
 const codes=['UNSUPPORTED','AUTHORITY_DENIED','EVIDENCE_REQUIRED','CONSTRAINT_HOLD','CONSTRAINT_DENIED','CAPACITY_CONFLICT','STATE_CONFIRMATION_REQUIRED','WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','OPERATION_CONFLICT','OBJECT_VERSION_CONFLICT','OPERATION_ID_REUSED','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
+  if(Object.hasOwn(value,'debrief_participants'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_participants:outcome_participant_receipt});
+  if(Object.hasOwn(value,'debrief_inference'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_inference:outcome_inference_receipt});
+  if(value.ok===false&&['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'].includes(String(value.code)))return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'])});
+  if(Object.hasOwn(value,'debrief'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief:outcome_debrief_session});
+  if(Object.hasOwn(value,'outcome_truth'))return shape(value,{request_id:valid_id,ok:oneOf([true]),outcome_truth:outcome_truth_payload});
+  if(Object.hasOwn(value,'truth_confirmation'))return shape(value,{request_id:valid_id,ok:oneOf([true]),truth_confirmation:outcome_truth_confirmation});
+  if(Object.hasOwn(value,'outcome_fairness'))return shape(value,{request_id:valid_id,ok:oneOf([true]),outcome_fairness});
+  if(Object.hasOwn(value,'decision_evaluation'))return shape(value,{request_id:valid_id,ok:oneOf([true]),decision_evaluation:outcome_decision_evaluation});
+  if(Object.hasOwn(value,'debrief_answer'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_answer:outcome_debrief_answer});
+  if(Object.hasOwn(value,'evidence_resolution'))return shape(value,{request_id:valid_id,ok:oneOf([true]),evidence_resolution:outcome_evidence_resolution});
   if(value.ok===false)return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(codes)},{field_path:path=>['INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH'].includes(String(value.code))&&valid_public_field_path(path),mission_view:view=>value.code==='STALE_REVISION'&&mission_player_view(view)});
   if(!shape(value,{request_id:valid_id,ok:oneOf([true])},{view:player_view,plan,mission_preview,mission_evaluation:mission_decision_evaluation,receipt,runs:list(run)}))return false;
   const keys=Object.keys(value).filter(key=>key!=='request_id'&&key!=='ok').sort().join(',');

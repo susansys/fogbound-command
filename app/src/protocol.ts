@@ -1,4 +1,4 @@
-import {parse_outcome_envelope} from './outcome-protocol';
+import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_outcome_envelope,parse_outcome_truth_request,parse_outcome_debrief_query,parse_outcome_evidence_request} from './outcome-protocol';
 import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
 import {prestart_case_refs} from './contracts';
@@ -28,6 +28,13 @@ export function valid_request(
   value: unknown,
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
+  if(value.kind==='get_outcome_participants'){if(!fields(value,['kind','request_id','query']))return false;try{parse_outcome_participant_query(value.query);return true;}catch{return false;}}
+  if(value.kind==='append_outcome_inference'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_inference_request(value.envelope);return true;}catch{return false;}}
+  if(value.kind==='transition_outcome_debrief'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_debrief_transition(value.envelope);return true;}catch{return false;}}
+  if(value.kind==='evaluate_outcome_decision'){if(!fields(value,['kind','request_id','query']))return false;try{parse_outcome_decision_query(value.query);return true;}catch{return false;}}
+  if(value.kind==='query_outcome_debrief'||value.kind==='resolve_outcome_evidence'){if(!fields(value,['kind','request_id','query']))return false;try{if(value.kind==='query_outcome_debrief')parse_outcome_debrief_query(value.query);else parse_outcome_evidence_request(value.query);return true;}catch{return false;}}
+  if(value.kind==='open_outcome_debrief'||value.kind==='get_outcome_fairness')return fields(value,['kind','request_id','run_id'])&&valid_id(value.run_id);
+  if(value.kind==='request_outcome_truth'||value.kind==='confirm_outcome_truth'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_truth_request(value.envelope,value.kind==='confirm_outcome_truth');return true;}catch{return false;}}
   if(value.kind==='operate_outcome'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_envelope(value.envelope);return true;}catch{return false;}}
   if(value.kind==='request_source_validation'||value.kind==='request_preparation'||value.kind==='issue_activity')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['manual','focus_lost','application_hidden'].includes(value.reason);

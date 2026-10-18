@@ -6067,7 +6067,152 @@
           "source_type": "design_assumption",
           "calibration_status": "uncalibrated"
         }
-      ]
+      ],
+      "decision_evaluation": {
+        "id": "B24-DQ-01",
+        "version": 1,
+        "source_ref": "B24-OUTCOME-DESIGN-1.0.0/debrief-contract/decision-quality",
+        "rules": [
+          {
+            "id": "DQ-E",
+            "version": 1,
+            "checks": [
+              "E1",
+              "E2"
+            ]
+          },
+          {
+            "id": "DQ-A",
+            "version": 1,
+            "checks": [
+              "A1",
+              "A2"
+            ]
+          },
+          {
+            "id": "DQ-C",
+            "version": 1,
+            "checks": [
+              "C1",
+              "C2"
+            ]
+          },
+          {
+            "id": "DQ-V",
+            "version": 1,
+            "checks": [
+              "V1",
+              "V2"
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "operation": "issue_activity",
+            "activity_id": "R-to-A",
+            "required": [],
+            "auxiliary": [],
+            "authority": "HQ-field-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "issue_activity",
+            "activity_id": "A-record",
+            "required": [
+              "arrived_A"
+            ],
+            "auxiliary": [],
+            "authority": "HQ-field-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "issue_activity",
+            "activity_id": "R-to-B",
+            "required": [
+              "completed_A_record"
+            ],
+            "auxiliary": [],
+            "authority": "HQ-field-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "issue_activity",
+            "activity_id": "W-repair",
+            "required": [
+              "preparation_approved"
+            ],
+            "auxiliary": [
+              "source_assessment"
+            ],
+            "authority": "HQ-field-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "issue_activity",
+            "activity_id": "B-record",
+            "required": [
+              "arrived_B",
+              "access_green",
+              "repair_B"
+            ],
+            "auxiliary": [
+              "preparation_approved"
+            ],
+            "authority": "HQ-field-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "return_and_deliver",
+            "activity_id": null,
+            "required": [
+              "own_registered_or_received_position",
+              "batch_3_seats"
+            ],
+            "auxiliary": [
+              "own_artifact"
+            ],
+            "authority": "HQ-outcome-authority",
+            "confirmation": "remote"
+          },
+          {
+            "operation": "request_source_validation",
+            "activity_id": null,
+            "required": [
+              "selected_raw_report"
+            ],
+            "auxiliary": [],
+            "authority": "HQ-processing",
+            "confirmation": "local"
+          },
+          {
+            "operation": "request_preparation",
+            "activity_id": null,
+            "required": [],
+            "auxiliary": [
+              "source_report",
+              "source_assessment"
+            ],
+            "authority": "HQ-processing",
+            "confirmation": "local"
+          },
+          {
+            "operation": "abort_outcome",
+            "activity_id": null,
+            "required": [],
+            "auxiliary": [],
+            "authority": "HQ-outcome-management",
+            "confirmation": "management"
+          },
+          {
+            "operation": "save_plan",
+            "activity_id": null,
+            "required": [],
+            "auxiliary": [],
+            "authority": "HQ-plan",
+            "confirmation": "none"
+          }
+        ]
+      }
     }
   },
   "capabilities": [
@@ -6814,11 +6959,11 @@
     ]
   },
   "hashes": {
-    "profile": "98cda1d9f8608015708ba9912c23651f1dfab35fa4a8826422b95f7bd717eb20",
+    "profile": "6c56109ba40302cbd37284f0e747d0b8f45e12ed5851997c48e48c606e133304",
     "capabilities": "304d6f24cf56a3d331e254a35f8d45bc4398980aac38733f2c4e9a9024e37621",
     "rules": "f289ea4631fee456b402d9aa4c5cabcb2c3df6576c8c1f8c84a9716be9594300",
     "catalogs": "c9a8b4b5105a29720402401693dcdc26f27ee46d1c89eb4cd83643835baf523d",
     "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "definition_hash": "56f1644af745d263adb1973616e9cd29e3fc7f3f8114879d5f37e3585b7c0e36"
+  "definition_hash": "29a9f213be8cb17ef6487e568bcf7cf320130854f57bce677121df9ec903a13e"
 }

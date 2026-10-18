@@ -1,6 +1,7 @@
 import {record,fields,valid_id} from './protocol';import {dense_array} from './spatial';import {intelligence_player_view} from './intelligence-dto';import {parse_outcome_envelope} from './outcome-protocol';
 import type {OutcomePlayerView} from './outcome-contracts';
 import {public_cleanup_complete} from './outcome-contracts';
+import {parse_outcome_evidence_ref,parse_outcome_inference_request} from './outcome-protocol';
 const integer=(v:unknown):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0;
 const one=(v:unknown,...values:unknown[])=>values.includes(v);
 const digest=(v:unknown)=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -9,6 +10,102 @@ const observed=(v:unknown,at:number)=>record(v)&&fields(v,['kind','value','evide
 const unknown=(v:unknown)=>record(v)&&fields(v,['kind'])&&v.kind==='unknown';
 const extra=['decision_records','continuation_records','return_reports','reception_reports','verification_reports','verification_feedback','return_candidates','return_plans','handover','termination','outcome','hard_boundary','verification_receipt_delay','public_obligations','progress','abort_reports'];
 const equal=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+async function json_source_digest(value:unknown):Promise<string>{
+ const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)));
+ return Array.from(new Uint8Array(bytes),n=>n.toString(16).padStart(2,'0')).join('');
+}
+export function outcome_participant_receipt(v:unknown):boolean{
+ if(!record(v)||!fields(v,['template','source_digest'])||!digest(v.source_digest)||!record(v.template))return false;
+ const t=v.template,actors=['HQ','INTEL','R','W','ArchiveSource','H'];
+ if(!fields(t,['run_id','run_digest','finished_seq','template_version','agenda','branch_comparison','participants'])||!valid_id(t.run_id)||!digest(t.run_digest)||!integer(t.finished_seq)||t.finished_seq<1||t.template_version!=='B24-DEBRIEF-1'||!equal(t.agenda,['task_outcome','timeline','participants','coordination','questions'])||t.branch_comparison!=='not_provided'||!dense_array(t.participants)||t.participants.length!==actors.length)return false;
+ return t.participants.every((p,index)=>{
+  if(!record(p)||!fields(p,['actor','participation','declaration','claims','missing'])||p.actor!==actors[index]||!one(p.participation,'participated','not_participated')||!one(p.declaration,'recorded','not_recorded','record_missing')||!dense_array(p.claims)||p.claims.length>1||!dense_array(p.missing)||p.missing.length>4||!p.missing.every(s=>typeof s==='string'&&s.length>0&&s.length<=600))return false;
+  if(p.participation==='not_participated'&&(p.claims.length!==0||p.declaration!=='not_recorded')||p.declaration==='record_missing'&&(p.claims.length!==0||p.missing.length===0)||p.participation==='participated'&&p.claims.length===0&&p.declaration!=='record_missing'||p.declaration==='recorded'&&p.actor!=='HQ')return false;
+  return p.claims.every(c=>{
+   if(!record(c)||!fields(c,['id','speaker_mode','layer','actor_scope','text','evidence_refs'])||c.id!=='TEMPLATE-'+p.actor||c.speaker_mode!=='template'||c.layer!=='known_then'||c.actor_scope!==p.actor||typeof c.text!=='string'||!c.text.length||c.text.length>600||!dense_array(c.evidence_refs)||c.evidence_refs.length<1||c.evidence_refs.length>3)return false;
+   return c.evidence_refs.every(ref=>{try{const r=parse_outcome_evidence_ref(ref);return r.run_id===t.run_id&&r.actor_scope===p.actor&&r.layer==='known_then';}catch{return false;}});
+  });
+ });
+}
+export async function verify_outcome_participant_receipt(v:unknown):Promise<boolean>{
+ if(!outcome_participant_receipt(v))return false;
+ const receipt=v as import('./outcome-contracts').OutcomeParticipantReceipt;
+ return await json_source_digest(receipt.template)===receipt.source_digest;
+}
+export function outcome_inference_receipt(v:unknown):boolean{
+ if(!record(v)||!fields(v,['note','source_digest'])||!digest(v.source_digest)||!record(v.note))return false;
+ const n=v.note;
+ if(!fields(n,['run_id','run_digest','finished_seq','operation_id','target','basis_refs','text','id','version','created_sequence','created_time','speaker_mode','layer'])||typeof n.id!=='string'||!/^NOTE-[a-f0-9]{64}$/.test(n.id)||!integer(n.version)||n.version<1||!integer(n.created_sequence)||n.created_sequence<n.version||typeof n.created_time!=='string'||!Number.isFinite(Date.parse(n.created_time))||new Date(n.created_time).toISOString()!==n.created_time||n.speaker_mode!=='user'||n.layer!=='retrospective_inference')return false;
+ const {id,version,created_sequence,created_time,speaker_mode,layer,...body}=n;void id;void created_sequence;void created_time;void speaker_mode;void layer;
+ try{parse_outcome_inference_request({...body,expected_version:Number(version)-1});return true;}catch{return false;}
+}
+export async function verify_outcome_inference_receipt(v:unknown):Promise<boolean>{
+ if(!outcome_inference_receipt(v))return false;
+ const receipt=v as import('./outcome-contracts').OutcomeInferenceReceipt;
+ return await json_source_digest(receipt.note)===receipt.source_digest;
+}
+export function outcome_truth_payload(v:unknown):boolean{
+ if(!record(v)||!fields(v,['run_id','run_digest','finished_seq','layer','grant','facts'])||!valid_id(v.run_id)||!digest(v.run_digest)||!integer(v.finished_seq)||v.finished_seq<1||v.layer!=='engine_event'||!record(v.grant)||!fields(v.grant,['operation_id','metadata_revision','payload_digest'])||!valid_id(v.grant.operation_id)||!integer(v.grant.metadata_revision)||v.grant.metadata_revision<2||!digest(v.grant.payload_digest)||!record(v.facts)||!fields(v.facts,['source','reports','events','ledgers','custody','verification','outcome'])||!record(v.facts.source)||!fields(v.facts.source,['resources'])||!evidence_record(v.facts))return false;
+ const r=v.facts.source.resources;if(!record(r)||!fields(r,['energy','durability','packs','energy_reserved','packs_reserved'])||!Object.values(r).every(integer)||!record(v.facts.outcome))return false;
+ const groups:Record<string,string[]>={reports:['source','field','returns','receptions','abort'],events:['continuations','return_notifications','abort_notifications'],ledgers:['processing_reservations','verification_batches','field_orders'],custody:['reception_batches','manifests','person_receipts','custody_events'],verification:['reports','deliveries','status_reports','status_deliveries']};
+ for(const [name,keys] of Object.entries(groups)){const group=v.facts[name];if(!record(group)||!fields(group,keys)||!Object.values(group).every(items=>dense_array(items)&&items.every(item=>record(item)&&(!record(item.ref)||item.ref.run_id===v.run_id)&&(!Object.hasOwn(item,'run_id')||item.run_id===v.run_id))))return false;}
+ return true;
+}
+function evidence_record(v:unknown,seen=new WeakSet<object>()):boolean{
+ if(v===null||typeof v==='string'||typeof v==='boolean')return true;if(typeof v==='number')return Number.isFinite(v);
+ if(typeof v!=='object'||seen.has(v))return false;seen.add(v);
+ const valid=Array.isArray(v)?dense_array(v)&&v.every(item=>evidence_record(item,seen)):Object.getPrototypeOf(v)===Object.prototype&&Reflect.ownKeys(v).every(key=>typeof key==='string'&&Object.getOwnPropertyDescriptor(v,key)?.enumerable===true&&evidence_record(Reflect.get(v,key),seen));
+ seen.delete(v);return valid;
+}
+function debrief_entry(v:unknown):boolean{
+ if(!record(v)||!fields(v,['ref','record'])||!record(v.record)||!evidence_record(v.record))return false;
+ try{parse_outcome_evidence_ref(v.ref);return true;}catch{return false;}
+}
+export function outcome_debrief_answer(v:unknown):boolean{
+ if(!record(v)||!fields(v,['run_id','run_digest','finished_seq','topic','notes','status','actor','layer','as_of_revision','entries','missing'])||!valid_id(v.run_id)||!digest(v.run_digest)||!integer(v.finished_seq)||v.finished_seq<1||typeof v.topic!=='string'||!v.topic.length||v.topic.length>80||!dense_array(v.notes)||!v.notes.every(s=>typeof s==='string'&&s.length<=2000)||!one(v.status,'answered','insufficient_record','unsupported','rejected')||!one(v.actor,'HQ','R','W','INTEL','H','ArchiveSource')||!one(v.layer,'known_then','engine_event','declared_reason','retrospective_inference')||!integer(v.as_of_revision)||v.as_of_revision<1||!dense_array(v.entries)||!dense_array(v.missing)||!v.missing.every(s=>typeof s==='string'&&s.length<=2000))return false;
+ if(v.status!=='answered'&&v.entries.length!==0||v.status==='answered'&&v.entries.length===0)return false;
+ return v.entries.every(e=>debrief_entry(e)&&record(e)&&record(e.ref)&&e.ref.run_id===v.run_id&&e.ref.actor_scope===v.actor&&e.ref.layer===v.layer);
+}
+export function outcome_evidence_resolution(v:unknown):boolean{
+ if(!record(v))return false;
+ if(v.status==='rejected')return fields(v,['status','missing'])&&dense_array(v.missing)&&v.missing.every(s=>typeof s==='string'&&s.length<=2000);
+ if(v.status!=='answered'||!fields(v,['status','entry','history'])||!debrief_entry(v.entry)||!record(v.entry)||!record(v.entry.ref)||!record(v.history))return false;
+ const h=v.history,r=v.entry.ref;return fields(h,['run_id','revision','at','actor','layer','read_only'])&&h.run_id===r.run_id&&integer(h.revision)&&h.revision>=1&&integer(h.at)&&h.actor===r.actor_scope&&h.layer===r.layer&&h.read_only===true;
+}
+export async function verify_outcome_debrief_digest(value:unknown):Promise<boolean>{
+ if(!outcome_debrief_answer(value)&&!outcome_evidence_resolution(value))return false;
+ const payload=value as import('./outcome-contracts').OutcomeDebriefAnswer|import('./outcome-contracts').OutcomeEvidenceResolution;
+ const entries='entries' in payload?payload.entries:payload.status==='answered'?[payload.entry]:[];
+ for(const entry of entries)if(await json_source_digest(entry.record)!==entry.ref.source_digest)return false;
+ return true;
+}
+export async function verify_outcome_truth_digest(value:unknown):Promise<boolean>{
+ if(!outcome_truth_payload(value))return false;
+ const payload=value as import('./outcome-contracts').OutcomeTruthPayload;
+ return await json_source_digest(payload.facts)===payload.grant.payload_digest;
+}
+export function outcome_truth_confirmation(v:unknown):boolean{
+ return record(v)&&fields(v,['run_id','run_digest','finished_seq','operation_id','payload_digest','truth_exposure','metadata_revision'])&&valid_id(v.run_id)&&digest(v.run_digest)&&integer(v.finished_seq)&&v.finished_seq>=1&&valid_id(v.operation_id)&&digest(v.payload_digest)&&v.truth_exposure===true&&integer(v.metadata_revision)&&v.metadata_revision>=3;
+}
+export function outcome_fairness(v:unknown):boolean{
+ if(!record(v)||!fields(v,['run_id','definition_hash','truth_exposure','sources'])||!valid_id(v.run_id)||!digest(v.definition_hash)||typeof v.truth_exposure!=='boolean'||!dense_array(v.sources)||v.truth_exposure!==(v.sources.length>0))return false;
+ const identities=new Set<string>();
+ return v.sources.every(source=>{
+  if(!record(source)||!fields(source,['run_id','run_digest','finished_seq','operation_id','payload_digest','ack_revision'])||!valid_id(source.run_id)||!digest(source.run_digest)||!integer(source.finished_seq)||source.finished_seq<1||!valid_id(source.operation_id)||!digest(source.payload_digest)||!integer(source.ack_revision)||source.ack_revision<3)return false;
+  const key=source.run_id+':'+source.operation_id;if(identities.has(key))return false;identities.add(key);return true;
+ });
+}
+export function outcome_debrief_session(v:unknown):boolean{
+ if(!record(v)||!fields(v,['run_id','run_digest','finished_seq','template_version','status','lifecycle_revision','default_layer','actor','metadata_revision','truth_exposure','summary'])||!valid_id(v.run_id)||!digest(v.run_digest)||!integer(v.finished_seq)||v.finished_seq<1||v.template_version!=='B24-DEBRIEF-1'||!one(v.status,'ready','viewing','archived')||!integer(v.lifecycle_revision)||v.lifecycle_revision<1||v.default_layer!=='known_then'||v.actor!=='HQ'||!integer(v.metadata_revision)||v.metadata_revision<1||typeof v.truth_exposure!=='boolean')return false;
+ const summary=v.summary;if(!record(summary)||!fields(summary,['result','missing_people','key_decisions'])||!one(summary.result,'success','partial','aborted','failure')||!dense_array(summary.missing_people)||summary.missing_people.length>6||summary.missing_people.some(p=>typeof p!=='string'||!/^([RW])-person-[123]$/.test(p))||new Set(summary.missing_people).size!==summary.missing_people.length||!dense_array(summary.key_decisions)||summary.key_decisions.length>3)return false;
+ const ids=new Set<string>();
+ for(const d of summary.key_decisions){
+  if(!record(d)||!fields(d,['ref','at','operation_id','reason','knowledge_digest','action'])||!ref(d.ref,'decision_record',v.run_id)||!record(d.ref)||ids.has(String(d.ref.id))||!integer(d.at)||!valid_id(d.operation_id)||!digest(d.knowledge_digest)||!one(d.action,'save_plan','request_source_validation','request_preparation','issue_activity','return_and_deliver','abort_outcome'))return false;
+  const reason=d.reason;if(!record(reason)||!(fields(reason,['kind'])&&reason.kind==='not_recorded'||fields(reason,['kind','text'])&&reason.kind==='recorded'&&typeof reason.text==='string'&&reason.text.length>0&&reason.text.length<=600))return false;
+  ids.add(String(d.ref.id));
+ }
+ return true;
+}
 // Run only after the individual public reports and deliveries have been checked.
 // A self-consistent result vector is not evidence that its stages occurred.
 function outcomeEvidence(view:OutcomePlayerView):boolean{
@@ -83,8 +180,11 @@ export function outcome_player_view(value:unknown):boolean{
  const decisions=v.decision_records as unknown[],continuations=v.continuation_records as unknown[],plans=v.return_plans as unknown[],returns=v.return_reports as unknown[],receptions=v.reception_reports as unknown[],verifications=v.verification_reports as unknown[];
  const decisionIds=new Set<string>(),operationIds=new Set<string>();
  for(const d of decisions){
-  if(!record(d)||!fields(d,['ref','operation_id','at','actor','intent','knowledge','knowledge_digest','policy_ref','reason'])||!ref(d.ref,'decision_record',run)||!record(d.ref)||decisionIds.has(String(d.ref.id))||!valid_id(d.operation_id)||operationIds.has(d.operation_id)||!integer(d.at)||d.at>at||d.actor!=='HQ'||d.policy_ref!=='B24-OUTCOME-DESIGN-1.0.0'||!record(d.reason)||!(d.reason.kind==='not_recorded'&&fields(d.reason,['kind'])||d.reason.kind==='recorded'&&fields(d.reason,['kind','text'])&&typeof d.reason.text==='string'&&d.reason.text.trim().length>0&&d.reason.text.length<=600)||!digest(d.knowledge_digest)||!knowledge(d.knowledge,base,d.at))return false;
-  try{parse_outcome_envelope({run_id:run,operation_id:d.operation_id,expected_revision:1,intent:d.intent});}catch{return false;}decisionIds.add(String(d.ref.id));operationIds.add(d.operation_id);
+  if(!record(d)||!fields(d,['ref','operation_id','at','actor','intent','knowledge_revision','operation_seq','basis_refs','known_then_refs','selected_versions','administrative_receipt_ref','knowledge','knowledge_digest','policy_ref','reason'])||!ref(d.ref,'decision_record',run)||!record(d.ref)||decisionIds.has(String(d.ref.id))||!valid_id(d.operation_id)||operationIds.has(d.operation_id)||!integer(d.at)||d.at>at||d.actor!=='HQ'||d.policy_ref!=='B24-OUTCOME-DESIGN-1.0.0'||!record(d.reason)||!(d.reason.kind==='not_recorded'&&fields(d.reason,['kind'])||d.reason.kind==='recorded'&&fields(d.reason,['kind','text'])&&typeof d.reason.text==='string'&&d.reason.text.trim().length>0&&d.reason.text.length<=600)||!digest(d.knowledge_digest)||!knowledge(d.knowledge,base,d.at)||!integer(d.knowledge_revision)||d.knowledge_revision<1||d.knowledge_revision>=Number(v.revision)||d.operation_seq!==d.knowledge_revision||d.ref.id!=='DEC-'+d.knowledge_revision||!record(d.selected_versions)||!fields(d.selected_versions,['plan_ref','activity_ref','authority_ref'])||!ref(d.administrative_receipt_ref,'administrative_receipt',run)||!record(d.administrative_receipt_ref)||d.administrative_receipt_ref.id!==d.operation_id||!dense_array(d.known_then_refs))return false;
+  for(const value of d.known_then_refs){try{const original=parse_outcome_evidence_ref(value);if(original.run_id!==run||original.actor_scope!=='HQ'||original.layer!=='known_then'||original.received_at.kind==='known'&&original.received_at.value>d.at)return false;}catch{return false;}}
+  try{parse_outcome_envelope({run_id:run,operation_id:d.operation_id,expected_revision:d.knowledge_revision,intent:d.intent});}catch{return false;}
+  if(!record(d.intent)||!equal(d.basis_refs,d.intent.basis_delivery_refs??[])||!equal(d.selected_versions.plan_ref,d.intent.plan_ref??(d.intent.kind==='save_plan'?d.intent.base_plan_ref:null))||!equal(d.selected_versions.activity_ref,d.intent.activity_ref??null)||!equal(d.selected_versions.authority_ref,d.intent.authority_ref??null))return false;
+  decisionIds.add(String(d.ref.id));operationIds.add(d.operation_id);
  }
 
  const abortDecisions=decisions.filter(d=>record(d)&&record(d.intent)&&d.intent.kind==='abort_outcome');
@@ -148,4 +248,17 @@ export function outcome_player_view(value:unknown):boolean{
   if(o.result!==expected||o.scoring_cutoff!==cutoff)return false;
  }
  return outcomeEvidence(v as unknown as OutcomePlayerView);
+}
+
+export function outcome_decision_evaluation(v:unknown):boolean{
+ if(!record(v)||!fields(v,['run_id','run_digest','finished_seq','decision_ref','profile_ref','knowledge_revision','at','reason_status','dimensions'])||!valid_id(v.run_id)||!digest(v.run_digest)||!integer(v.finished_seq)||v.finished_seq<1||!integer(v.knowledge_revision)||v.knowledge_revision<1||v.knowledge_revision>=v.finished_seq||!integer(v.at)||!one(v.reason_status,'recorded','not_recorded')||!dense_array(v.dimensions)||v.dimensions.length!==4)return false;
+ const ordinary=(r:unknown)=>record(r)&&fields(r,['run_id','kind','id','version'])&&r.run_id===v.run_id&&valid_id(r.kind)&&valid_id(r.id)&&integer(r.version)&&r.version>=1;
+ if(!ordinary(v.decision_ref)||!record(v.decision_ref)||!one(v.decision_ref.kind,'decision_record','rejected_decision'))return false;
+ if(v.profile_ref!==null&&(!record(v.profile_ref)||!fields(v.profile_ref,['id','version','definition_hash'])||v.profile_ref.id!=='B24-DQ-01'||v.profile_ref.version!==1||!digest(v.profile_ref.definition_hash)))return false;
+ const rules=['DQ-E','DQ-A','DQ-C','DQ-V'];return v.dimensions.every((d,index)=>{
+  if(!record(d)||!fields(d,['rule_ref','result','necessary_refs','known_then_refs','matched_conditions','missing'])||!record(d.rule_ref)||!fields(d.rule_ref,['id','version'])||d.rule_ref.id!==rules[index]||d.rule_ref.version!==1||!one(d.result,0,1,2,'not_evaluable')||v.profile_ref===null&&d.result!=='not_evaluable'||!dense_array(d.necessary_refs)||d.necessary_refs.length<1||!d.necessary_refs.every(ordinary)||!dense_array(d.known_then_refs)||!dense_array(d.matched_conditions)||!d.matched_conditions.every(s=>typeof s==='string'&&s.length<=2000)||!dense_array(d.missing)||!d.missing.every(s=>typeof s==='string'&&s.length<=2000))return false;
+  const prefix=['E','A','C','V'][index],conditions=d.matched_conditions as string[];
+  if(conditions.some(condition=>!new RegExp('^'+prefix+'[12](?::violated)?$').test(condition))||d.result!==0&&conditions.some(condition=>condition.endsWith(':violated'))||d.result===0&&!conditions.some(condition=>condition.endsWith(':violated'))||v.profile_ref===null&&conditions.length>0)return false;
+  return d.known_then_refs.every(r=>{try{const value=parse_outcome_evidence_ref(r);return value.run_id===v.run_id&&value.actor_scope==='HQ'&&value.layer==='known_then'&&(value.recorded_at.kind==='unknown'||value.recorded_at.value<=Number(v.at))&&(value.received_at.kind==='unknown'||value.received_at.value<=Number(v.at));}catch{return false;}});
+ });
 }

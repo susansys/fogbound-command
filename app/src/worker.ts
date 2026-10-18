@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
-import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,load_definition,prestart_case } from "./core/scenario";
+import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,load_definition,prestart_case,hash } from "./core/scenario";
 import { GameError,is_task_intent } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import type { Request, Response } from "./transport";
@@ -103,6 +103,43 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
           ok: true,
           runs: await store.list_runs(),
         };
+      else if(input.kind==='evaluate_outcome_decision'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response={request_id,ok:true,decision_evaluation:await (history??game).evaluate_outcome_decision(input.query)};
+      }
+      else if(input.kind==='query_outcome_debrief'||input.kind==='resolve_outcome_evidence'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
+        if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response=input.kind==='query_outcome_debrief'?{request_id,ok:true,debrief_answer:await (history??game).query_outcome_debrief(input.query)}:{request_id,ok:true,evidence_resolution:await (history??game).resolve_outcome_evidence(input.query)};
+      }
+      else if(input.kind==='get_outcome_fairness'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
+        response={request_id,ok:true,outcome_fairness:await (history??game).get_outcome_fairness(input.run_id)};
+      }
+      else if(input.kind==='get_outcome_participants'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        const template=await (history??game).get_outcome_participants(input.query);
+        response={request_id,ok:true,debrief_participants:{template,source_digest:await hash(template)}};
+      }
+      else if(input.kind==='append_outcome_inference'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        const note=await (history??game).append_outcome_inference(input.envelope);
+        response={request_id,ok:true,debrief_inference:{note,source_digest:await hash(note)}};
+      }
+      else if(input.kind==='transition_outcome_debrief'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response={request_id,ok:true,debrief:await (history??game).transition_outcome_debrief(input.envelope)};
+      }
+      else if(input.kind==='open_outcome_debrief'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
+        if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response={request_id,ok:true,debrief:await (history??game).open_outcome_debrief(input.run_id)};
+      }
+      else if(input.kind==='request_outcome_truth'||input.kind==='confirm_outcome_truth'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
+        if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response=input.kind==='request_outcome_truth'?{request_id,ok:true,outcome_truth:await (history??game).request_outcome_truth(input.envelope)}:{request_id,ok:true,truth_confirmation:await (history??game).confirm_outcome_truth(input.envelope)};
+      }
       else if (
         input.kind === "create"
       ) {
