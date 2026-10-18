@@ -736,3 +736,22 @@ says the job exceeded20m0s. This is an incomplete run, not an assertion failure
 or a pass. Its owned container/image cleanup succeeded. The captured cancelled
 step has no final browser-result marker, so no executed-test count is invented.
 The next actual candidate CI and independent merged-main CI are still required.
+
+Main39127401772 at92484266 passed781 core tests, then stopped with276 browser
+passes, one failure and one unrun case in the legacy uncertain-pause fixture.
+It was not a timeout. The log retains four inputs: two distinct revision1
+operations followed by one revision2 operation twice; exact CI cleanup passed.
+An actual clock-view reply held100ms FIFO reproduced the old total-length
+assertion failure. All six preceding requests in that controlled trace had
+real STALE_REVISION replies; the last two had the same operation and actual
+pause receipts. This proves the mechanism, not the sole historical CI cause.
+The fixture now binds uncertainty to the first actual committed pause reply's
+request_id. Every preceding input must have its real definitive STALE reply;
+all later pause inputs remain in the strict exactly-two/identical-envelope
+assertion. Pending/not-yet-paused UI checks and actual retry confirmation stay.
+Controlled190 RED/GREEN and both actual undelayed transport cases191 passed
+at the expected stages. The second test's2474 bytes are unchanged. Only the
+explicit legacy fixture hash is updated; original231,292/278 discovery,
+product runtime, worker1/retries0 and browser30/quality15 budgets remain.
+The incomplete initial helper setup188/selector189 attempts are retained and
+are not counted as software RED. New repair-PR and main CI remain mandatory.
