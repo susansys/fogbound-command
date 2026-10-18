@@ -1,16 +1,23 @@
 import {test,expect} from '@playwright/test';
 test('an unconfirmed pause retains its pending label and retries the identical original control before claiming paused',async({page})=>{
   await page.addInitScript(()=>{
-    let dropped=false;const inputs:unknown[]=[];(window as unknown as {controls:unknown[]}).controls=inputs;
+    let dropped=false;const inputs:unknown[]=[],requests:{request_id:string;envelope:unknown}[]=[],replies:{request_id:string;ok:boolean;code?:string;receipt?:{kind:string}}[]=[];
+    const witness={requests,replies,uncertainStart:-1};Object.assign(window,{controls:inputs,pauseWitness:witness});
     const Native=window.Worker;window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args) as Worker;
-      return new Proxy(worker,{get(target,key){const value=Reflect.get(target,key,target);if(key==='postMessage')return(input:{kind?:string;envelope?:{intent?:{kind?:string}}})=>{if(input.envelope?.intent?.kind==='pause')inputs.push(structuredClone(input.envelope));target.postMessage(input);};return typeof value==='function'?value.bind(target):value;},set(target,key,value){if(key==='onmessage'){target.onmessage=(event:MessageEvent)=>{if(!dropped&&event.data.receipt?.kind==='pause'){dropped=true;value(new MessageEvent('message',{data:{request_id:event.data.request_id,ok:false,code:'CHANNEL_UNCERTAIN'}}));}else value(event);};return true;}return Reflect.set(target,key,value,target);}});
+      return new Proxy(worker,{get(target,key){const value=Reflect.get(target,key,target);if(key==='postMessage')return(input:{request_id:string;kind?:string;envelope?:{intent?:{kind?:string}}})=>{if(input.envelope?.intent?.kind==='pause'){inputs.push(structuredClone(input.envelope));requests.push({request_id:input.request_id,envelope:structuredClone(input.envelope)});}target.postMessage(input);};return typeof value==='function'?value.bind(target):value;},set(target,key,value){if(key==='onmessage'){target.onmessage=(event:MessageEvent)=>{replies.push(structuredClone(event.data));if(!dropped&&event.data.ok&&event.data.receipt?.kind==='pause'){dropped=true;witness.uncertainStart=requests.findIndex(request=>request.request_id===event.data.request_id);if(witness.uncertainStart<0)throw Error('Committed pause has no observed request');value(new MessageEvent('message',{data:{request_id:event.data.request_id,ok:false,code:'CHANNEL_UNCERTAIN'}}));}else value(event);};return true;}return Reflect.set(target,key,value,target);}});
     }});
   });
   await page.goto('/');await page.getByLabel('演练任务').selectOption('FB01-ENG-MOVE');await page.getByRole('button',{name:'开始演练',exact:true}).click();await page.getByRole('button',{name:'暂停',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('暂未收到确认');await expect(page.getByRole('button',{name:'暂停待确认',exact:true})).toBeVisible();
   expect(await page.locator('.clock').innerText()).not.toContain('已暂停');
   await page.getByRole('button',{name:'重试原控制',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
-  const inputs=await page.evaluate(()=>(window as unknown as {controls:unknown[]}).controls);expect(inputs).toHaveLength(2);expect(inputs[1]).toEqual(inputs[0]);
+  const {controls,witness}=await page.evaluate(()=>({controls:Reflect.get(window,'controls') as unknown[],witness:Reflect.get(window,'pauseWitness') as {requests:{request_id:string;envelope:unknown}[];replies:{request_id:string;ok:boolean;code?:string;receipt?:{kind:string}}[];uncertainStart:number}}));
+  expect(witness.uncertainStart).toBeGreaterThanOrEqual(0);
+  // A definitive clock-race rejection precedes uncertainty. Every such input
+  // needs its actual rejection; no request inside the uncertain window is cut.
+  for(const request of witness.requests.slice(0,witness.uncertainStart))expect(witness.replies.find(reply=>reply.request_id===request.request_id)).toMatchObject({ok:false,code:'STALE_REVISION'});
+  const inputs=controls.slice(witness.uncertainStart);expect(inputs).toHaveLength(2);expect(inputs[1]).toEqual(inputs[0]);
+  expect(witness.replies.find(reply=>reply.request_id===witness.requests.at(-1)!.request_id)).toMatchObject({ok:true,receipt:{kind:'pause'}});
 });
 test('a nested private field in a transport response is rejected, preserving the safe view until a legal query',async({page})=>{
   await page.addInitScript(()=>{
