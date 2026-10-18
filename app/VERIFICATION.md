@@ -801,3 +801,68 @@ fixture harness attempt failed TypeScript setup and is not a product failure.
 Spec and Standards independently reported zero remaining static blockers.
 These are bounded local maintenance results, not a new278-game browser run
 or evidence that this workflow has already executed on a remote runner.
+
+## 2026-10-19 B25: retain a definitive rejection during its view refresh
+
+The existing B24 outcome screen could receive a real `STALE_REVISION` refusal
+and immediately erase its error when it refreshed the current legal view.
+The minimal change keeps that refusal visible through the associated refresh;
+the refreshed view is still adopted. It adds no retry, automatic pause, Game
+policy, schema, layout or gameplay change. A later actual successful user
+operation retains the normal error-clear behavior.
+
+The new single browser contract holds the original UI save envelope until an
+actual clock revision advances, then sends that unchanged envelope to the real
+Worker. RED received the real refusal and a successful current-view refresh,
+but failed only the expected visible-alert assertion. The identical test then
+passed GREEN: one save request, no successful save, retained draft and no
+automatic preparation application or management pause. Discovery adds exactly
+one reviewed key: 293 full / 279 portable, preserving all 231 legacy source
+hashes and keys and the existing 14 Windows obligations. Types, import boundary,
+build and all seven wrapper/workflow contracts passed locally. Independent
+readonly Spec and Standards checked the fixed four-file WIP and found no
+actionable issues; final committed-content review remains a separate step.
+
+The same-content follow-up used a fresh owned Windows Chrome profile and
+origin, default command mode and explicit existing speed/pause/continue UI.
+Forty-eight raw observations covered preparation, A/B collection, separate
+once-per-group return commitments, reception, verification, actual result and
+HQ-first short debrief. The actual result was 11:29.124, six confirmed people
+and two qualified artifacts. A natural preparation refusal remained visible
+while reading, then a deliberately rechecked new request succeeded. Further
+live revision refusals and the unchanged deep/narrow inspector were retained
+as limitations; the operator chose explicit management pauses for later
+instructions. This does not claim that repeated-submission burden disappeared.
+
+Actual full browser closure removed all seven observed PID/creation identities.
+Reopening the same profile/origin restored paused 03:47.368 and identical public
+field, plan and artifact text; closed wall-clock time did not advance work.
+History showed only its original HQ knowledge with inspected write controls
+disabled; returning current remained paused until explicit continue. An unsaved
+supplemental draft survived a real clock/view update without silently saving a
+new plan. Representative 1366x768 and 1920x1080 keyboard, scroll, dialog and
+public-reference checks found no horizontal page overflow or obstruction of the
+measured decision buttons. The HQ reference resolved the original D1/R1 delivery;
+truth reveal and private-role views were not selected.
+
+This dated entry freezes bounded local evidence before final publication.
+Native Windows obligation binding, applicable hidden-pair/uncertainty/readonly
+technical regression, actual final-SHA CI/PR/main/artifacts and safe synchronization
+are recorded separately by their real delivery receipts, never inferred from
+this entry. Current hidden/blur was not newly certified, and the old raw-CDP
+limitation remains. Original failures, learning effects, tool errors and owned
+profiles are retained; temporary browsers/services were precisely closed.
+No human experience or formal PLAY acceptance is asserted; original 244AT
+remain `not_run`.
+
+### 2026-10-19 B25 final integration: legacy command-preview setup correction
+
+The first PR81 CI run39151352610 at candidate6f2e2c1 passed784 core tests in72 files,7 browser-wrapper contracts and16 cleanup checks, but its browser result was278 passed/1 failed, with no cancellation or unexecuted portable case. The new B25 refusal regression passed. The sole failure was the unchanged B22 command restart `none` case, before its restart assertions: setup clicked preview once and waited for `mission-preview`. The retained screenshot shows the original stale/recheck message and retained draft. The original case did not capture request-level timing, so this record does not reconstruct that run's exact clock interleaving. Its failed artifacts and exact owned CI cleanup are preserved.
+
+A separate controlled Windows/installed-Chrome probe retained the original command preview request until a real same-run clock view had a higher revision, then sent that original unchanged request to the real Worker. Its correlated response was `STALE_REVISION`; the original helper reproduced the same missing-preview failure. With the fixed helper, both original `none` and `drop_restart` cases passed their unchanged assertions, including one paused child, retained original restart operation and advancement only after explicit continue. The diagnostic is controlled timing evidence, not a new natural walkthrough or a synthetic rejection.
+
+Only the test save helper changes: correlate the actual preview request/reply and, only on a definite stale response, wait for the original UI to be ready and explicitly preview the same draft again, at most three times. Other errors still fail the original visible-preview expectation. Saving and restarting are not automatically resubmitted; individual timeouts, retries, product revision rules, core and runtime behavior are unchanged. The fixed test SHA256 is `8fc92999224de8749e11375545e69f9feee61fa9f8dbc1d919373885816ff729` (previous `2e0d89288b801180ea5165b8ddb033b791673533836b748db32d36f7006eeb62`). The browser contract updates only that exact registered legacy source hash. This intentional fixture repair supersedes the earlier checkpoint's all-legacy-source-unchanged statement only for this one file; all original case identities remain.
+
+The exact uninstrumented local candidate passed typecheck, import-boundary lint and all7 wrapper contracts. Full discovery confirms293 total/279 portable/231 legacy/14 Windows and unchanged full key digest `0057e33c1e60902ed168b3c981f4e52f493effba67b3862f3b65d87c3afac8b5`. An initial discovery-only invocation omitted the required headed marker and stopped at the strict guard; that tool log is retained, and the corrected discovery alone passed without rerunning the successful checks. It did not execute browser tests.
+
+All153 runtime inputs and the tested58-asset build remain byte-identical to the earlier native/natural candidate. The actual14 Windows obligation evidence remains two executions (8 passed plus only6 setup-failed cases recollected successfully), with original failed reports retained. Precise unchanged-source reuse is required at the eventual final commit; this entry does not claim another14-case run. Final revised-candidate independent review, new effective-SHA CI, PR merge, actual main CI, remote artifact/source comparison, safe synchronization, issue closure and final delivery remain pending actual receipts. Original244AT remain not_run; formal PLAY and human acceptance remain unknown.
