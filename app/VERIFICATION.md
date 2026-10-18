@@ -722,3 +722,17 @@ PR候选0128dc3的首次CI38990434016实际通过593核心及完整231浏览器�
 原例从运行中的开局发送阻塞只读探针，未排除探针之前已有tick提交、界面仍旧的状态。私有诊断延迟真实clock回复1000ms并保留其内容，复现原“期望1次pause、实际2次”的失败：probe读revision2，首pause以revision1被明确STALE_REVISION拒绝，随后合法重试。它证明这一失败机制，历史Linux main未保存完整trace，不能倒推其唯一原因。
 
 本次仅修改测试前置：先真实暂停确认，再在显式continue之后立即发送合法只读probe；只在真实continue发布后启用原800ms只读IDB延迟。原350ms后暂停、延迟至少750ms、pause先于read回复、窗口中恰一pause、实际paused及SimTime增长断言全部保留；新增probe revision等于continue成功revision。setup之外的窗口保留全部请求，不过滤窗口内重试。诊断初版阻塞了continue自身而失败，保留后修正；受控诊断及默认Windows相关4浏览器通过。产品时钟、Worker、响应值、231清单、headed、单worker、零重试和单browser job20分钟上限不变。修复候选的最终PR/main CI仍待实际执行。
+
+## B24 browser time allowance amendment, 2026-10-18
+
+The owner explicitly requested relaxing elapsed time ("耗时不管他了，放宽吧。",
+then clarified "耗时"). The browser job now permits30 minutes. All278 portable
+contracts,231 legacy contracts,14 separate Windows obligations, strict hashes
+and assertions, headed CFT155/SwiftShader, one worker and zero retries remain.
+The quality job stays15 minutes. Earlier20-minute statements above are historical.
+
+Run39123347338 at7a905ac was cancelled after20m17s; its actual check annotation
+says the job exceeded20m0s. This is an incomplete run, not an assertion failure
+or a pass. Its owned container/image cleanup succeeded. The captured cancelled
+step has no final browser-result marker, so no executed-test count is invented.
+The next actual candidate CI and independent merged-main CI are still required.
