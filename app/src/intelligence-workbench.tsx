@@ -20,10 +20,10 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
   const restartPendingRef=useRef<typeof restartPending>(null);
   const current=useRef(view),pending=useRef<Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest|null>(null),inFlight=useRef(false),nodes=useRef(view.replay_nodes);current.current=view;
   if(!history)nodes.current=view.replay_nodes;
-  async function request(input:Request){
+  async function request(input:Request,clearError=true){
     const routed:Request=current.current.scenario_kind==='play_outcome'&&'envelope' in input&&['save_plan','request_source_validation','request_preparation','issue_activity','operate_intelligence'].includes(input.kind)?{kind:'operate_outcome',envelope:parse_outcome_envelope(input.envelope)}:input;
     const response=await transport.request(routed);
-    if(response.ok&&response.view){adopt(response.view);setError('');}
+    if(response.ok&&response.view){adopt(response.view);if(clearError)setError('');}
     else if(!response.ok){setError(response.code);if(['STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code))setStorageUnconfirmed(true);}
     return response;
   }
@@ -32,7 +32,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
     try{
       const result=envelope.intent.kind==='issue_activity'?await request({kind:'issue_activity',envelope}):envelope.intent.kind==='save_plan'?await request({kind:'save_plan',envelope}):envelope.intent.kind==='request_source_validation'?await request({kind:'request_source_validation',envelope}):envelope.intent.kind==='request_preparation'?await request({kind:'request_preparation',envelope}):await request({kind:'operate_intelligence',envelope:envelope as Envelope});
       if(result.ok){pending.current=null;setNotice('已提交 · '+clock(result.view?.sim_time??view.sim_time));}
-      else if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(result.code)){pending.current=null;if(result.code==='STALE_REVISION')await request({kind:'view',run_id:view.run_id});}
+      else if(!['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED'].includes(result.code)){pending.current=null;if(result.code==='STALE_REVISION')await request({kind:'view',run_id:view.run_id},false);}
     }catch{setError('CHANNEL_UNCERTAIN');}finally{inFlight.current=false;setBusy(false);}
   }
   async function savePlan(){
