@@ -653,6 +653,43 @@ actual RED accepted a string alias and produced concatenated estimated times.
 String/array aliases are rejected before run creation, while existing numeric
 E43 boundary checks remain. The Worker still cannot register such variants.
 
+## B24 outcome delivery candidate — 2026-10-18
+
+B24 adds finite return/handover, bounded endings and an evidence-bound debrief
+on its own schema10 package. Old schema4–9 identities and restore branches stay
+intact. T04 preserves the required management-pause reason through the B23
+prefix, and reuses a completed replay proof only for an identical validated
+integrity hash; a cold Game still validates the whole package. The received log
+uses delivered PlayerView records. The map scale cannot shrink inside flex
+layout, and its expanded legend keeps native bounded scrolling.
+
+The owner shortened the remaining acceptance on 2026-10-18: pixel alignment,
+zero-difference screenshot matrices and precise performance slots are no longer
+delivery requirements. Existing successful captures are retained without replay;
+historical failures are superseded requirements, not retroactive passes. The
+remaining UI checks cover readability, operable controls and actual map meaning.
+Representative real pause/restore, state integrity and the original CI budgets
+remain. No focus/visibility simulation is used to sign a native observation.
+
+Local candidate evidence: affected core/compatibility 28 tests, typecheck,
+boundary check and production build passed. Four final default-installed Windows
+Chrome/Edge A/B paths completed through the evidence debrief and full-process
+same-profile recovery. Their runtime inputs match the served build byte for byte.
+Native samples162/166 observed actual blur/hidden, Game-confirmed pause, stable
+paused restoration and explicit continuation on that unchanged product runtime.
+Later raw-CDP carrier samples167/176/177/180 did not reliably reproduce visibility
+restoration or hidden state; their failures remain, and that strict carrier is
+not certified. Foreground-window metadata alone never signs document visibility.
+Under the owner's shortened acceptance this tool limitation is disclosed, not
+an invented product pass or a reason to keep extending the verifier.
+
+The complete browser inventory keeps all231 old contracts plus47 portable B24
+contracts and14 separate Windows obligations:292 discovered,278 portable in CI.
+Single worker, zero retries, original20-minute browser/15-minute quality jobs and
+exact owned-resource cleanup remain. Final candidate CI, PR review/merge, main CI
+and artifact receipts must each be read from their actual SHA before closure.
+This batch does not sign the original244AT or formal PLAY experience acceptance.
+
 The owner retained the original aggregate20 browser runner minutes. The local
 two-job40-minute proposal was rejected and is not the delivery workflow. One
 browser job keeps its20-minute timeout, headed CFT155/SwiftShader, worker1 and

@@ -63,7 +63,8 @@ export async function apply_outcome_control(state:OutcomeState,envelope:OutcomeE
   // The B24 declaration belongs to its original decision/input. The preserved
   // B23 engine receives its unchanged contract, never a retroactive reason.
   const {reason:ignoredReason,...prefixIntent}=intent as typeof intent&{reason?:string};void ignoredReason;
-  const inner={...envelope,expected_revision:next.prefix.revision,intent:intent.kind==='restore'?{kind:'restore',snapshot_revision:next.prefix.revision}:prefixIntent} as import('./intelligence-state').IntelligenceState['inputs'][number]['envelope'];
+  // Management pause has a required control reason, not an optional declaration.
+  const inner={...envelope,expected_revision:next.prefix.revision,intent:intent.kind==='restore'?{kind:'restore',snapshot_revision:next.prefix.revision}:intent.kind==='pause'?intent:prefixIntent} as import('./intelligence-state').IntelligenceState['inputs'][number]['envelope'];
   if(inner.intent.kind==='request_source_validation'||inner.intent.kind==='request_preparation'){
    if(inner.intent.kind==='request_source_validation')request_source_work(next.prefix,inner as import('../intelligence-protocol').IntelligenceSourceRequest,d.prefix_definition,processingAdmission());else request_preparation_work(next.prefix,inner as import('../intelligence-contracts').IntelligencePreparationRequest,d.prefix_definition,processingAdmission());
    next.prefix.revision++;next.prefix.inputs.push({envelope:inner,at:next.prefix.sim_time,revision:next.prefix.revision});

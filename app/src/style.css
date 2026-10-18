@@ -1054,6 +1054,35 @@ dialog > header > button {
 .intelligence-app .world-overlay .unit-marker .mil-symbol{width:auto;height:auto;max-width:58px}
 .intelligence-app .world-overlay .unit-marker.selected{outline-offset:8px}
 .outcome-panel{padding:16px;border:1px solid var(--line,#38444b);border-radius:4px;background:rgba(20,31,37,.68)}
+.outcome-app .map-wrapper{background:#1c2929}
+.outcome-app .map-canvas{background:transparent}
+.outcome-app .map-tools.map-controls{min-width:0}
+.outcome-app .map-tools.map-controls button{width:auto}
+.outcome-app .scale{display:flex;align-items:center;gap:7px;width:max-content;flex-shrink:0}
+.outcome-app .scale i{flex-shrink:0;border-top:2px solid #acbfb4}
+.outcome-app .map-legend{left:16px;bottom:16px;padding:0;border:0;background:transparent;display:flex;flex-direction:column-reverse;align-items:flex-start;gap:8px}
+.outcome-app .map-legend:has(>button[aria-expanded="false"]){overflow:visible}
+.outcome-app .map-legend>button{background:#142629ed;border-color:#3e5454}
+.outcome-app .report-detail{height:100%;align-self:stretch;max-width:1000px;margin:0 auto;background:transparent}
+.outcome-app .report-detail .intelligence-source{padding:0;border:0}
+.outcome-app .report-row>span{display:block;font-size:11px;margin-top:9px}
+.outcome-app .intelligence-sources{width:344px;background:#19262e;padding:17px 22px 20px}
+@media (min-width:1700px){.outcome-app .intelligence-sources{width:370px;padding-left:28px;padding-right:28px}}
+.outcome-app .intelligence-sources>*{flex-shrink:0}
+.outcome-app .intelligence-sources .operation-status{padding:0 0 10px;background:transparent;border:0}
+.outcome-app .intelligence-sources .mission-footer{padding:8px 0 14px;border:0;gap:8px;overflow-wrap:anywhere}
+.outcome-app .intelligence-sources .mission-footer label{flex-wrap:wrap;max-width:100%}
+.outcome-app .intelligence-sources .mission-footer select{max-width:100%}
+.outcome-app .outcome-received-log .log-lines{height:calc(100% - 40px);overflow:auto}
+.outcome-app .outcome-received-log details{font-size:12px}
+.outcome-app .outcome-received-log summary{display:flex;align-items:center;gap:17px;min-height:26px;cursor:pointer}
+.outcome-app .outcome-received-log summary:before{content:'▸';width:8px;flex-shrink:0}
+.outcome-app .outcome-received-log details[open]>summary:before{content:'▾'}
+.outcome-app .outcome-received-log summary>time{width:43px;flex-shrink:0}
+.outcome-app .outcome-received-log summary>span:first-of-type{width:90px;flex-shrink:0}
+.outcome-app .outcome-received-log .received-excerpt{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.outcome-app .outcome-received-log details>p{white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0}
+.outcome-app .outcome-received-log summary>small{width:60px;flex-shrink:0;text-align:right}
 .outcome-panel article{padding:10px 0;border-bottom:1px solid var(--line,#38444b)}
 .outcome-panel h2,.outcome-panel h3{margin:0 0 8px}.outcome-panel p{line-height:1.65}
 .outcome-dialog-backdrop{position:fixed;inset:0;z-index:2000;display:grid;place-items:center;padding:24px;background:rgba(5,12,16,.78)}

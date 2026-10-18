@@ -59,6 +59,15 @@ for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.strin
 if(sha(JSON.stringify([]))!==intelligenceDefinition.hashes.media||intelligenceDefinition.schema!==9||intelligenceDefinition.scenario_kind!=='play_intelligence')throw Error('intelligence release identity differs');
 const intelligenceGeometry=intelligenceDefinition.catalogs.map;
 const intelligence={id:intelligenceDefinition.id,schema:intelligenceDefinition.schema,contract:intelligenceDefinition.contract,version:intelligenceDefinition.version,geometry:{map_id:intelligenceGeometry.map_id,map_version:intelligenceGeometry.map_version,crs_id:intelligenceGeometry.crs_id,geometry_version:intelligenceGeometry.geometry_version},rules_hash:intelligenceDefinition.hashes.rules,scope:'Public intelligence identity; private package/source hashes and owned mechanism catalogs omitted'};
+// Validate schema10 against the actually served Worker as well. The public
+// artifact keeps its public identity; sealed catalogs and source hashes stay
+// inside this check, as for the existing schema7-9 packages.
+const outcomeDefinition=JSON.parse(await fs.readFile('src/core/outcome-definition.json')),{definition_hash:outcomePrivateHash,...outcomePayload}=outcomeDefinition;
+if(sha(JSON.stringify(outcomePayload))!==outcomePrivateHash||!worker.bytes.includes(Buffer.from(outcomePrivateHash)))throw Error('outcome package does not match served worker');
+for(const key of ['profile','capabilities','rules','catalogs'])if(sha(JSON.stringify(outcomeDefinition[key]))!==outcomeDefinition.hashes[key])throw Error('outcome package component mismatch');
+if(sha(JSON.stringify([]))!==outcomeDefinition.hashes.media||outcomeDefinition.schema!==10||outcomeDefinition.scenario_kind!=='play_outcome'||outcomeDefinition.contract!=='0.5.1'||outcomeDefinition.prefix_definition.definition_hash!==intelligencePrivateHash)throw Error('outcome release identity differs');
+const outcomeGeometry=outcomeDefinition.catalogs.map;
+const outcome={id:outcomeDefinition.id,schema:outcomeDefinition.schema,contract:outcomeDefinition.contract,version:outcomeDefinition.version,geometry:{map_id:outcomeGeometry.map_id,map_version:outcomeGeometry.map_version,crs_id:outcomeGeometry.crs_id,geometry_version:outcomeGeometry.geometry_version},rules_hash:outcomeDefinition.hashes.rules,scope:'Public outcome identity; private package/source hashes and sealed catalogs omitted'};
 for(const match of html.matchAll(/href="([^"]+\.css)"/g)){const item=await asset(match[1]);styles.push({path:item.path,sha256:item.sha256});}
 const browser=await chromium.launch({headless:true,...(process.env.FB01_BROWSER?{executablePath:process.env.FB01_BROWSER}:{})});
 let browserVersion;try{browserVersion=browser.version();}finally{await browser.close();}
@@ -69,5 +78,6 @@ fingerprint.mapping=mapping;
 fingerprint.corridor=corridor;
 fingerprint.mission=mission;
 fingerprint.intelligence=intelligence;
+fingerprint.outcome=outcome;
 await fs.mkdir('verification-output',{recursive:true});await fs.writeFile('verification-output/fingerprint.json',JSON.stringify(fingerprint,null,2));
 console.log(JSON.stringify(fingerprint,null,2));

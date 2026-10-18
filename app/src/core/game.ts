@@ -64,10 +64,10 @@ export class Game {
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
   }
   private async validate_package(state:StoredState|undefined){
-    if(state?.schema!==7&&state?.schema!==9){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);return;}
+    if(state?.schema!==7&&state?.schema!==9&&state?.schema!==10){await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);return;}
     try{
       if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
-      await load_definition(state.schema===9?intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions):play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
+      await load_definition(state.schema===10?outcome_definition_for_package(state.definition_hash,this.store.outcome_definitions):state.schema===9?intelligence_definition_for_package(state.definition_hash,this.store.intelligence_definitions):play_definition_for_package(state.definition_hash,this.store.play_definitions),this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
       if(!this.verified_replay_states.has(state.integrity)){
         await validate_state(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions);
         this.remember_replay_state(state.integrity);

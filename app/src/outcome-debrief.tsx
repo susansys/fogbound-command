@@ -101,7 +101,7 @@ export function OutcomeDebrief({run_id,finished,transport,onHistory}:{run_id:str
       {truth&&<section data-testid='outcome-truth-facts' aria-label='终局事实对照'>
         <h3>终局事实对照</h3><p>以下是任务结束后的实际账目，不代表总部当时已经知道。</p>
         <p>实际能源 {truth.facts.source.resources.energy} · 实际耐久 {truth.facts.source.resources.durability} · 实际用品 {truth.facts.source.resources.packs}</p>
-        <details><summary>查看实际事件、资源账与交接核验原记录</summary><pre>{JSON.stringify({events:truth.facts.events,ledgers:truth.facts.ledgers,custody:truth.facts.custody,verification:truth.facts.verification,reports:truth.facts.reports},null,2)}</pre></details>
+        <details><summary>查看实际事件、资源账与交接核验原记录</summary><pre className='original-record'>{JSON.stringify({events:truth.facts.events,ledgers:truth.facts.ledgers,custody:truth.facts.custody,verification:truth.facts.verification,reports:truth.facts.reports},null,2)}</pre></details>
         <p role='status'>{acknowledgement==='confirmed'?'已记录本次事实查看。':acknowledgement==='pending'?'正在保存本次事实查看记录。':'事实已经显示，查看记录的保存结果尚未确认。'}</p>
         {acknowledgement==='uncertain'&&<button onClick={()=>void acknowledge(truth,generation.current)}>重试保存查看记录</button>}
       </section>}
@@ -159,7 +159,7 @@ function OutcomeEvidencePanel({session,transport,onHistory,drafts,initialTopic='
 function OriginalOutcomeRecord({source,session,transport,onHistory,drafts,busy}:{source:Extract<OutcomeEvidenceResolution,{status:'answered'}>;session:OutcomeDebriefSession;transport:Pick<Transport,'request'>;onHistory:(node:HistoryNode)=>Promise<void>;drafts:InferenceDrafts;busy:boolean}){
  const heading=useRef<HTMLHeadingElement|null>(null);useEffect(()=>{heading.current?.focus();},[source]);
  const time=(value:DebriefEvidenceRef['recorded_at'])=>value.kind==='known'?clock(value.value):'时间未知',layers:Record<string,string>={known_then:'当时认知',declared_reason:'当时声明',retrospective_inference:'事后说明',engine_event:'终局事实'};
- return <section data-testid='debrief-original-record'><h3 ref={heading} tabIndex={-1}>只读原始记录</h3><p>{source.history.actor} · {layers[source.history.layer]} · 提交时刻 {clock(source.history.at)}</p><p>原始收到时刻：{time(source.entry.ref.received_at)}</p><details><summary>查看原记录内容</summary><pre>{JSON.stringify(source.entry.record,null,2)}</pre></details><button disabled={busy} onClick={()=>void onHistory(source.history)}>转到该时点总部记录</button>{source.entry.ref.layer!=='retrospective_inference'&&<OutcomeInferenceEditor key={JSON.stringify(source.entry.ref)} session={session} source={source} transport={transport} drafts={drafts}/>}</section>;
+ return <section data-testid='debrief-original-record'><h3 ref={heading} tabIndex={-1}>只读原始记录</h3><p>{source.history.actor} · {layers[source.history.layer]} · 提交时刻 {clock(source.history.at)}</p><p>原始收到时刻：{time(source.entry.ref.received_at)}</p><details><summary>查看原记录内容</summary><pre className='original-record'>{JSON.stringify(source.entry.record,null,2)}</pre></details><button disabled={busy} onClick={()=>void onHistory(source.history)}>转到该时点总部记录</button>{source.entry.ref.layer!=='retrospective_inference'&&<OutcomeInferenceEditor key={JSON.stringify(source.entry.ref)} session={session} source={source} transport={transport} drafts={drafts}/>}</section>;
 }
 
 function OutcomeParticipantPanel({session,transport,onHistory,drafts}:{session:OutcomeDebriefSession;transport:Pick<Transport,'request'>;onHistory:(node:HistoryNode)=>Promise<void>;drafts:InferenceDrafts}){
