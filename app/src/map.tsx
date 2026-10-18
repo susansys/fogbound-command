@@ -31,8 +31,8 @@ const unitSymbol = (size:number) => new ms.Symbol("SFGPU-----*****", {
 }).asSVG();
 const symbol=unitSymbol(30),intelligenceSymbol=unitSymbol(33);
 export function MapView({ view, selected, onSelect, planned,plannedTarget='T',displaySession,routeDraft,onRoutePoint,onRouteCancel }: Props) {
-  const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?view:null;
-  const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||view.scenario_kind==='play_intelligence'?null:view;
+  const play=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||(view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome')?view:null;
+  const legacy=view.scenario_kind==='play_corridor'||view.scenario_kind==='play_mission'||(view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome')?null:view;
   const recording=view.scenario_kind==='record';
   const sites=legacy?(recording?(['H'] as const):legacy.geometry.N?(['H','N','T'] as const):(['H','T'] as const)):[];
   const site=(id:'H'|'N'|'T'):Coordinate=>{if(!legacy)throw Error('Legacy site requested for public scope branch');return legacy.geometry[id]??legacy.geometry.H;};
@@ -483,7 +483,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
         {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<i key={scope.id} className="map-anchor" data-anchor={scope.id} aria-hidden="true" style={point(...scope.typed_geometry.position)}/>)}
         {play&&<svg className="plan-route" aria-hidden="true">{play.geometry.scopes.map(scope=>scope.kind==='point'&&<path key={scope.id} d={`M${point(...scope.typed_geometry.position).left} ${point(...scope.typed_geometry.position).top} v${scope.id==='approximate'?54:-44}`} stroke="#aabbb6" strokeWidth="1"/>)}</svg>}
         {play&&play.geometry.scopes.map(scope=>scope.kind==='point'&&<button key={scope.id} className={`site-marker ${selected===scope.id?'selected':''}`} data-marker={scope.id} data-scope-kind="point" aria-label={`图上地点 ${scope.id}`} style={{...point(...scope.typed_geometry.position),marginTop:scope.id==='approximate'?54:-44}} onClick={()=>onSelect(scope.id)}><span className="site-shape">{scope.id==='approximate'?'?':scope.id}</span>{labels&&scope.uncertainty.kind==='known'&&scope.uncertainty.value>0&&<b>误差 {scope.uncertainty.value} 图上米</b>}</button>)}
-        {play&&knownPoint&&<button className={`unit-marker play-unit ${selected==='R'?'selected':''}`} data-marker="R" aria-label="编组R最后确认位置" style={point(...knownPoint.typed_geometry.position)} onClick={()=>onSelect('R')}><img className="mil-symbol" alt="虚构编组R" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(view.scenario_kind==='play_intelligence'?intelligenceSymbol:symbol)}`}/>{labels&&<b>R · 最后收到的位置</b>}</button>}
+        {play&&knownPoint&&<button className={`unit-marker play-unit ${selected==='R'?'selected':''}`} data-marker="R" aria-label="编组R最后确认位置" style={point(...knownPoint.typed_geometry.position)} onClick={()=>onSelect('R')}><img className="mil-symbol" alt="虚构编组R" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent((view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome')?intelligenceSymbol:symbol)}`}/>{labels&&<b>R · 最后收到的位置</b>}</button>}
       </div>
       <div className="map-tools map-controls" data-ui>
         <button aria-label="放大地图" onClick={() => magnify(1.2)}>
@@ -530,7 +530,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       {synthetic&&sourceInfo&&<div className="map-source" data-ui><strong>原创合成网格 · 版本1</strong><p>仅验证显示配准，不是遥感影像。背景范围不是可执行区域。</p><p>当前操作范围：400 × 300 图上米；合成背景：800 × 600。</p><button disabled={renderer!=='synthetic-ready'} onClick={()=>{surface.current?.fit(true);apply();}}>区域全景</button><button disabled={renderer!=='synthetic-ready'} onClick={fit}>返回操作范围</button><button disabled={renderer!=='synthetic-ready'} onClick={()=>{const next=variant==='grid'?'colour':'grid';surface.current?.variant(next);setVariant(next);}}>切换颜色变体</button><button disabled={renderer!=='synthetic-ready'} onClick={checkDisplay}>检验显示配准</button>{displayChecks.length>0&&<table className="map-coordinate-check"><caption>本次浮点显示往返 · 仅阅读</caption><thead><tr><th>图上坐标</th><th>回算坐标</th></tr></thead><tbody>{displayChecks.map(check=><tr key={check.point.join(',')} data-return-x={check.returned[0]} data-return-y={check.returned[1]} data-error={check.error}><td>{check.point.join(', ')}</td><td>{check.returned.map(value=>value.toFixed(2)).join(', ')}</td></tr>)}</tbody></table>}<small>来源：项目原创；{mapManifest.assets.reduce((sum,asset)=>sum+asset.bytes,0)} 字节PNG，另有小型清单。</small></div>}
       <div className="map-legend" data-ui>
         <button aria-expanded={legend} onClick={() => setLegend((x) => !x)}>
-          图例 {legend ? "收起" : "展开"}
+          {view.scenario_kind==='play_outcome'?'地图图例':`图例 ${legend ? '收起' : '展开'}`}
         </button>
         {legend && (
           <div>
@@ -549,7 +549,7 @@ export function MapView({ view, selected, onSelect, planned,plannedTarget='T',di
       </div>
       <div className="map-north" data-ui><Compass size={20}/>图上北</div>
     </section>
-    <div className="map-objects" aria-label="地图对象选择">{(play?['R','H','A','B']:recording?['R','H']:legacy?.geometry.N?['R','H','N','T']:['R','H','T']).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording||view.scenario_kind==='play_intelligence'?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
+    <div className="map-objects" aria-label="地图对象选择">{(play?['R','H','A','B']:recording?['R','H']:legacy?.geometry.N?['R','H','N','T']:['R','H','T']).map(id=><button key={id} aria-pressed={selected===id} onClick={()=>onSelect(id)}>{id} · {id==='R'?(recording||(view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome')?'记录组':'联络组'):id==='H'?(recording?'工位':'总部'):'联络点'}</button>)}<span className="scale"><i style={{width:scaleMetres*c.s,maxWidth:'none'}}/>{scaleMetres} 图上米</span></div>
     </div>
   );
 }

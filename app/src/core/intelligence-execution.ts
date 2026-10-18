@@ -55,12 +55,15 @@ function report(state:IntelligenceState,order:IntelligenceFieldOrder,actor:Intel
   if(!canSend)return;
   state.field.deliveries.push({ref:{run_id:state.run_id,kind:'field_delivery',id:'D-'+id,version:1},report_ref:ref,sender:actor.actor,target:'HQ',sent:at,received:at+definition.profile.parameters.link_ms,facility_ref:facility?.id??null});
 }
-export function advance_field_work(state:IntelligenceState,to:number,definition:IntelligenceDefinition){
-  const p=definition.profile.parameters;
+export function advance_field_work(state:IntelligenceState,to:number,definition:IntelligenceDefinition,control:{deadline?:number;abort_receipts?:ReadonlyArray<{actor:string;received_at:number}>}={}){
+  if(control.deadline!==undefined&&(!Number.isSafeInteger(control.deadline)||control.deadline<1))throw new GameError('INVALID_DEFINITION');
+  const p={...definition.profile.parameters,deadline:Math.min(definition.profile.parameters.deadline,control.deadline??Infinity)};
   for(const order of state.field.orders){
     const actor=state.field.actors.find(a=>a.actor===order.payload.actor_ref.id)!,activity=definition.catalogs.activities.find(a=>a.id===order.payload.activity_ref.id)!;
     if(order.status==='issued'&&order.arrives_at<=to){
       const at=order.arrives_at;
+      const abort=control.abort_receipts?.find(receipt=>receipt.actor===actor.actor&&receipt.received_at<=at);
+      if(abort){order.status='refused';order.terminal_at=at;order.settled=true;report(state,order,actor,'refused',at,definition,'local_abort_received');continue;}
       const record=activity.action==='record',repair=activity.action==='repair',work=record||repair,capability=definition.capabilities.find(c=>c.id===activity.capability),r=actor.resources;
       const cost=record?p.record_energy_cost:p.repair_energy_cost,packs=record?p.record_pack_cost:p.repair_pack_cost,wear=record?p.record_first_wear:p.repair_first_wear,energy=record?r.record_energy:r.work_energy;
       const movement=work?null:timing(actor,activity,definition),movement_cost=movement?movement_energy(fraction(movement.length_units.reduce((sum,n)=>sum+BigInt(n),0n),1000000),definition):0;

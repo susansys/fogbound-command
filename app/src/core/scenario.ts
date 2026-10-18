@@ -1,3 +1,4 @@
+import {load_outcome_definition,type OutcomeDefinition} from './outcome-definition';
 import definition from "./engineering.json";
 import recordDefinition from "./record-engineering.json";
 import prestartDefinition from './prestart-engineering.json';
@@ -15,7 +16,7 @@ export const recordEngineeringDefinition = recordDefinition;
 export const prestartEngineeringDefinition=prestartDefinition;
 export const playCorridorDefinition=playDefinition;
 export type PlayDefinition=Omit<typeof playDefinition,'schema'|'scenario_kind'|'catalogs'>&{schema:7;scenario_kind:'play_corridor';catalogs:Omit<typeof playDefinition.catalogs,'map'|'initial_evidence'|'engine_conditions'|'position_reports'>&{map:PublicMap;position_reports:PositionCatalogEntry[];engine_conditions:{closed_at_x:number|null;report_delivery_delay_ms:number};initial_evidence:{id:string;scope_ref:string;observed:KnownTime;source_event_time:KnownTime;origin:'registered_initial_evidence'}}};
-export function is_play_definition(value:Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition):value is PlayDefinition{return value.schema===7;}
+export function is_play_definition(value:Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition):value is PlayDefinition{return value.schema===7;}
 export function play_definition_for_package(definitionHash:unknown,registered:readonly PlayDefinition[]=[]):PlayDefinition{
   const selected=[playDefinition,...registered].find(x=>x.definition_hash===definitionHash);
   if(!selected)throw new GameError('INVALID_SAVE');
@@ -55,7 +56,8 @@ function known_time(value:unknown):boolean{
   if(value.kind==='unknown')return fields(value,['kind']);
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
-export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition> {
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition> {
+  if(record(input)&&input.schema===10)return load_outcome_definition(input,outcomes);
   if(record(input)&&input.schema===9)return load_intelligence_definition(input,intelligence);
   if(record(input)&&input.schema===8){
     if(!record(input.profile)||!record(input.profile.parameters))throw new GameError('CONFIG_PARAMETER_MISSING','profile.parameters');

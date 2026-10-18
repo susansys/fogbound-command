@@ -1,6 +1,7 @@
 import type { Mode, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
+import {verify_outcome_participant_receipt,verify_outcome_inference_receipt,verify_outcome_truth_digest,verify_outcome_debrief_digest} from './outcome-dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
 import type {MissionPreview,MissionPlayerView,MissionDecisionEvaluation,MissionRef} from './mission-contracts';
@@ -10,10 +11,21 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
   read_only?:boolean;
 };
 export type Request =
+  |{kind:'get_outcome_participants';query:import('./outcome-contracts').OutcomeParticipantQuery}
+  |{kind:'append_outcome_inference';envelope:import('./outcome-contracts').OutcomeInferenceRequest}
+  |{kind:'transition_outcome_debrief';envelope:import('./outcome-contracts').OutcomeDebriefTransition}
+  |{kind:'evaluate_outcome_decision';query:import('./outcome-contracts').OutcomeDecisionEvaluationRequest}
+  |{kind:'query_outcome_debrief';query:import('./outcome-contracts').OutcomeDebriefQuery}
+  |{kind:'resolve_outcome_evidence';query:import('./outcome-contracts').OutcomeEvidenceRequest}
+  |{kind:'get_outcome_fairness';run_id:string}
+  |{kind:'open_outcome_debrief';run_id:string}
+  |{kind:'request_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthRequest}
+  |{kind:'confirm_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthAcknowledgement}
+  |{kind:'operate_outcome';envelope:import('./outcome-contracts').OutcomeEnvelope}
   |{kind:'request_source_validation';envelope:unknown}
   |{kind:'request_preparation';envelope:unknown}
   |{kind:'issue_activity';envelope:unknown}
@@ -47,6 +59,15 @@ export type Response =
       plan?: PreviewPlan;
       mission_preview?:MissionPreview;
       mission_evaluation?:MissionDecisionEvaluation;
+      debrief?:import('./outcome-contracts').OutcomeDebriefSession;
+      debrief_inference?:import('./outcome-contracts').OutcomeInferenceReceipt;
+      debrief_participants?:import('./outcome-contracts').OutcomeParticipantReceipt;
+      outcome_truth?:import('./outcome-contracts').OutcomeTruthPayload;
+      truth_confirmation?:import('./outcome-contracts').OutcomeTruthConfirmation;
+      outcome_fairness?:import('./outcome-contracts').OutcomeFairness;
+      decision_evaluation?:import('./outcome-contracts').OutcomeDecisionEvaluation;
+      debrief_answer?:import('./outcome-contracts').OutcomeDebriefAnswer;
+      evidence_resolution?:import('./outcome-contracts').OutcomeEvidenceResolution;
       receipt?: Receipt | null;
     }
   | { request_id: string; ok: false; code: string;field_path?:string;mission_view?:MissionPlayerView };
@@ -62,9 +83,13 @@ export class Transport {
     this.worker = new Worker(new URL("./worker.ts", import.meta.url), {
       type: "module",
     });
-    this.worker.onmessage = (event: MessageEvent<unknown>) => {
-      const response:Response = valid_response(event.data)?event.data:{request_id:correlation(event.data),ok:false,code:'CHANNEL_UNCERTAIN'},
-        waiting = this.pending.get(response.request_id);
+    this.worker.onmessage = async(event: MessageEvent<unknown>) => {
+      let response:Response = valid_response(event.data)?event.data:{request_id:correlation(event.data),ok:false,code:'CHANNEL_UNCERTAIN'};
+      if(response.ok&&response.debrief_participants){try{if(!await verify_outcome_participant_receipt(response.debrief_participants))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
+      if(response.ok&&response.debrief_inference){try{if(!await verify_outcome_inference_receipt(response.debrief_inference))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
+      if(response.ok&&response.outcome_truth){try{if(!await verify_outcome_truth_digest(response.outcome_truth))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
+      if(response.ok&&(response.debrief_answer||response.evidence_resolution)){try{if(!await verify_outcome_debrief_digest(response.debrief_answer??response.evidence_resolution))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
+      const waiting = this.pending.get(response.request_id);
       for(const listener of this.listeners)listener(response);
       if (!waiting) return;
       clearTimeout(waiting.timer);

@@ -95,4 +95,4 @@ export type State = {
   };
   log: LogEntry[];
 };
-export type StoredState=State|import('./play-state').PlayState|import('./mission-state').MissionState|import('./intelligence-state').IntelligenceState;
+export type StoredState=State|import('./play-state').PlayState|import('./mission-state').MissionState|import('./intelligence-state').IntelligenceState|import('./outcome-state').OutcomeState;
