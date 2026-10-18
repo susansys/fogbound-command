@@ -755,3 +755,49 @@ explicit legacy fixture hash is updated; original231,292/278 discovery,
 product runtime, worker1/retries0 and browser30/quality15 budgets remain.
 The incomplete initial helper setup188/selector189 attempts are retained and
 are not counted as software RED. New repair-PR and main CI remain mandatory.
+
+
+## Approved post-B24 workflow maintenance
+
+B24 delivered main757e4eb6 and its immutable CI/evidence remain unchanged.
+The follow-up removes only the browser job's project-wide timeout and first-
+failure cutoff. Platform limits and per-test/action hang protection remain;
+quality stays15 minutes, two jobs, one worker, zero retries, all278 portable/
+231 legacy cases and14 separate Windows obligations remain mandatory.
+Any required failure or incomplete report still fails the gate.
+
+The browser wrapper emits short count/hash summaries and saves the complete
+discovery manifest, raw Playwright report and detailed summary under
+verification-output/browser-contract/. The existing pinned upload action
+publishes these artifacts on success or failure. No result is inferred from
+a truncated log line. Missing reports remain unknown evidence, never a pass.
+
+Targeted external-CLI wrapper contracts prove a failure does not suppress
+later independent results, all-green completeness and missing-report refusal.
+They use actual Playwright discovery without running the delivered game suite.
+Fixture contracts exercise the existing real MB13 bootstrap FIFO before and
+after readiness, the committed uncertain-pause window after STALE_REVISION,
+and independently hashed current plus explicitly preserved historical identity.
+No product runtime, browser title/source or original assertion is changed.
+Full B24 native/visual/recovery evidence is reused only because runtime inputs
+are unchanged; no new whole-batch run or performance improvement is claimed.
+
+Both required jobs still execute for documentation changes. Their explicit
+docs-only result is permitted only for a nonempty, verified ancestor-to-HEAD
+diff confined to the six existing docs/maintenance files, with ordinary Git
+file modes in both trees and no linked worktree paths. Missing base/head,
+unknown events, new/deleted/nonordinary files, runtime/workflow or mixed paths
+take full verification. Empty or unverifiable diffs also take full verification.
+No paths-ignore, branch protection, permissions or current run is changed.
+Docs-only reports explicitly say runtime tests were not run; they never claim
+the 278 games passed. Source scope evidence is published with browser artifacts.
+
+Local Windows targeted verification: seven external wrapper/workflow contracts,
+three existing-fixture/identity mechanism checks, typecheck, lint and actual
+discovery292/portable278/legacy231/Windows14 passed. Original cleanup run text
+is unchanged, retaining its delivered16-case CI evidence. Original wrapper
+failed all four initial maintenance contracts before the change; the first
+fixture harness attempt failed TypeScript setup and is not a product failure.
+Spec and Standards independently reported zero remaining static blockers.
+These are bounded local maintenance results, not a new278-game browser run
+or evidence that this workflow has already executed on a remote runner.

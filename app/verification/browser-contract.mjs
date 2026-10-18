@@ -4,6 +4,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 
+// Only these published maintenance documents can take the explicit no-runtime-
+// change route. Unknown event/base/head/path/type always selects full testing.
+const maintenanceDocs=new Set(['README.md','approved-decisions.md','known-issues-and-next.md','public-status.md','sync-contract.md','technical-index.md'].map(name=>'docs/maintenance/'+name));
+function classifyChange(){
+ const base=process.env.VERIFICATION_BASE,head=process.env.GITHUB_SHA,event=process.env.GITHUB_EVENT_NAME;
+ const full=reason=>({docs_only:false,route:'full',reason});
+ if(!['push','pull_request'].includes(event)||!/[1-9a-f]/.test(base??'')||!/^([a-f0-9]{40})$/.test(base??'')||!/^([a-f0-9]{40})$/.test(head??''))return full('untrusted_or_missing_event_identity');
+ const git=(...args)=>{const result=spawnSync('git',args,{encoding:'utf8',timeout:5000,maxBuffer:4000000});assert.equal(result.status,0);return result.stdout;};
+ try{
+  if(git('rev-parse','HEAD').trim()!==head)return full('checkout_head_mismatch');
+  git('merge-base','--is-ancestor',base,head);
+  const changed=git('diff','--no-ext-diff','--no-textconv','--no-renames','--name-only','-z',base,head).split('\0').filter(Boolean);
+  if(!changed.length||changed.some(file=>!maintenanceDocs.has(file)))return full('empty_mixed_or_unknown_paths');
+  for(const file of changed){
+   for(const commit of [base,head])if(!git('ls-tree','-z',commit,'--',file).startsWith('100644 blob '))return full('nonordinary_or_new_file');
+   for(let current=path.resolve(file);current!==process.cwd();current=path.dirname(current))if(fs.lstatSync(current).isSymbolicLink())return full('linked_worktree_path');
+   if(!fs.lstatSync(file).isFile())return full('nonordinary_worktree_path');
+  }
+  return {docs_only:true,route:'docs_only',reason:'only_existing_six_maintenance_documents',base,head,changed};
+ }catch{return full('unavailable_or_unverifiable_diff');}
+}
+if(process.argv[2]==='--classify-change'){
+ assert.equal(process.argv.length,3);const scope=classifyChange();
+ if(process.env.GITHUB_OUTPUT)fs.appendFileSync(process.env.GITHUB_OUTPUT,'docs_only='+scope.docs_only+'\n');
+ const folder=path.resolve('app/verification-output/browser-contract');fs.mkdirSync(folder,{recursive:true});fs.writeFileSync(path.join(folder,'scope.json'),JSON.stringify(scope,null,2)+'\n');
+ console.log('FB01_VERIFICATION_SCOPE '+JSON.stringify(scope));process.exit(0);
+}
+
 // Fixed from actual discovery. All231 original contracts remain; MB13's
 // dynamic Worker bootstrap has one reviewed FIFO correction and updated hash.
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
@@ -318,11 +346,27 @@ const portable=full.filter(row=>!nativeKeys.has(row.key)),windowsHost=process.pl
 const escape=value=>value.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\$&');
 const nativeExclusionPattern=frozen.windows.map(item=>'(?:^| )'+escape(item.title)+'$').join('|'),filters=windowsHost?[]:['--grep-invert',nativeExclusionPattern];
 const discoveryMs=Date.now()-started;
-console.log('FB01_BROWSER_MANIFEST '+JSON.stringify({jobs:1,workers:1,retries:0,baseline_sha:frozen.baseline_sha,legacy_count:legacy.length,full_count:full.length,portable_count:portable.length,windows_required_count:native.length,native_exclusion_pattern:nativeExclusionPattern,execution_platform:process.platform,planned_execution_count:expected.length,windows_obligation:windowsHost?'Executing actual cases; final default-Windows receipts still require source/artifact binding.':'Not executed on this platform; required separate final-SHA Windows proof, never counted as passed.',full_keys_sha256:digest(keys(full)),tests:full.map(({id,key,file,title})=>({id,key,file,title,obligation:nativeKeys.has(key)?'windows_required':'portable'})),discovery_ms:discoveryMs}));
+const artifactDir=path.resolve('verification-output/browser-contract');fs.mkdirSync(artifactDir,{recursive:true});
+const manifest={jobs:1,workers:1,retries:0,baseline_sha:frozen.baseline_sha,legacy_count:legacy.length,full_count:full.length,portable_count:portable.length,windows_required_count:native.length,native_exclusion_pattern:nativeExclusionPattern,execution_platform:process.platform,planned_execution_count:expected.length,windows_obligation:windowsHost?'Executing actual cases; final default-Windows receipts still require source/artifact binding.':'Not executed on this platform; required separate final-SHA Windows proof, never counted as passed.',full_keys_sha256:digest(keys(full)),tests:full.map(({id,key,file,title})=>({id,key,file,title,obligation:nativeKeys.has(key)?'windows_required':'portable'})),discovery_ms:discoveryMs};
+fs.writeFileSync(path.join(artifactDir,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
+const {tests,native_exclusion_pattern,...manifestSummary}=manifest;
+// Discovery-only is an existing captured machine interface, never a CI log.
+console.log('FB01_BROWSER_MANIFEST '+JSON.stringify(listOnly?manifest:{...manifestSummary,artifact:'verification-output/browser-contract/manifest.json'}));
 if(!listOnly){
  const selected=filters.length?discover(filters):full;assert.deepEqual(keys(selected),keys(expected),'The exact native whitelist is the only platform selection');assert.deepEqual(keys(expected.filter(row=>legacyFiles.has(row.file))),keys(legacy));
- const folder=process.env.RUNNER_TEMP??process.env.TEMP;assert(folder&&path.isAbsolute(folder));const output=path.join(folder,'fb01-browser-contract-'+process.pid+'.json');assert(!fs.existsSync(output));
- const result=spawnSync(process.execPath,[cli,'test',...filters,'--max-failures=1','--reporter=list,json'],{stdio:'inherit',env:{...process.env,PLAYWRIGHT_JSON_OUTPUT_FILE:output}});assert(fs.existsSync(output),'Missing browser report is not a pass');const report=JSON.parse(fs.readFileSync(output)),actual=rows(report),passed=actual.filter(row=>row.test.expectedStatus==='passed'&&row.test.results.length===1&&row.test.results[0].status==='passed');
- console.log('FB01_BROWSER_RESULT '+JSON.stringify({expected_count:expected.length,legacy_required_count:231,actual_passed_count:passed.length,passed_ids:ids(passed),passed_keys_sha256:digest(keys(passed)),unpassed_ids:actual.filter(row=>!passed.includes(row)).map(row=>row.id),windows_target_not_run_here:windowsHost?[]:frozen.windows.map(item=>({file:item.file,title:item.title,status:'required_not_run_on_this_platform'})),exit:result.status,elapsed_ms:Date.now()-started,browser_ms:report.stats.duration,discovery_ms:discoveryMs}));
- checkConfig(report);assert.equal(result.status,0,'Failed or interrupted execution cannot pass');assert.deepEqual(keys(actual),keys(expected));assert.deepEqual(ids(actual),ids(selected));assert.deepEqual(keys(passed),keys(expected),'No skipped, retried or unfinished executed test may pass');
+ const output=path.join(artifactDir,'result.json');assert(!fs.existsSync(output),'An old browser report cannot serve as a new result');
+ const result=spawnSync(process.execPath,[cli,'test',...filters,'--reporter=list,json'],{stdio:'inherit',env:{...process.env,PLAYWRIGHT_JSON_OUTPUT_FILE:output}});
+ if(!fs.existsSync(output)){
+  const missing={status:result.signal?'cancelled':'unknown',reason:result.error?.message??'Missing browser execution report',expected_count:expected.length,actual_passed_count:null,exit:result.status,signal:result.signal};
+  fs.writeFileSync(path.join(artifactDir,'summary.json'),JSON.stringify(missing,null,2)+'\n');console.log('FB01_BROWSER_RESULT '+JSON.stringify(missing));assert.fail('Missing browser report is not a pass');
+ }
+ const report=JSON.parse(fs.readFileSync(output)),actual=rows(report),passed=actual.filter(row=>row.test.expectedStatus==='passed'&&row.test.results.length===1&&row.test.results[0].status==='passed');
+ const failed=actual.filter(row=>row.test.results.some(result=>['failed','timedOut'].includes(result.status))),cancelled=actual.filter(row=>row.test.results.some(result=>result.status==='interrupted')),notRun=actual.filter(row=>!row.test.results.length||row.test.results.every(result=>result.status==='skipped'));
+ let validationError;
+ try{checkConfig(report);assert.equal(result.status,0,'Failed or interrupted execution cannot pass');assert.deepEqual(keys(actual),keys(expected));assert.deepEqual(ids(actual),ids(selected));assert.deepEqual(keys(passed),keys(expected),'No skipped, retried or unfinished executed test may pass');}catch(error){validationError=error.message;}
+ const summary={status:result.signal?'cancelled':validationError?'failed':'passed',validation_error:validationError??null,expected_count:expected.length,legacy_required_count:231,actual_passed_count:passed.length,failed_count:failed.length,cancelled_count:cancelled.length,not_run_count:notRun.length,unknown_count:actual.length-passed.length-failed.length-cancelled.length-notRun.length,passed_ids:ids(passed),passed_keys_sha256:digest(keys(passed)),unpassed_ids:actual.filter(row=>!passed.includes(row)).map(row=>row.id),windows_target_not_run_here:windowsHost?[]:frozen.windows.map(item=>({file:item.file,title:item.title,status:'required_not_run_on_this_platform'})),exit:result.status,signal:result.signal,elapsed_ms:Date.now()-started,browser_ms:report.stats.duration,discovery_ms:discoveryMs};
+ fs.writeFileSync(path.join(artifactDir,'summary.json'),JSON.stringify(summary,null,2)+'\n');
+ const {passed_ids,unpassed_ids,windows_target_not_run_here,validation_error,...shortSummary}=summary;
+ console.log('FB01_BROWSER_RESULT '+JSON.stringify({...shortSummary,windows_required_not_run_here:windows_target_not_run_here.length,artifact:'verification-output/browser-contract/'}));
+ assert.equal(validationError,undefined,'Browser execution and identity must both pass; see summary artifact');
 }
