@@ -17,21 +17,44 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Determine verification scope
+        id: scope
+        working-directory: .
+        run: node app/verification/browser-contract.mjs --classify-change
+        env:
+          VERIFICATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - name: Documentation-only result
+        if: steps.scope.outputs.docs_only == 'true'
+        working-directory: .
+        run: |
+          echo 'Verified only the six existing ordinary maintenance documents changed.'
+          echo 'Runtime tests not run for this docs-only diff; no game test pass is claimed.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           node-version: 22.23.3
           cache: npm
           cache-dependency-path: app/package-lock.json
       - name: Verify owned-resource cleanup boundaries
+        if: steps.scope.outputs.docs_only != 'true'
         working-directory: .
         run: node --test .github/tests/owned-ci-cleanup.test.mjs
       - run: npm ci --ignore-scripts --no-audit --no-fund
+        if: steps.scope.outputs.docs_only != 'true'
+      - name: Verify browser execution and evidence boundaries
+        if: steps.scope.outputs.docs_only != 'true'
+        working-directory: .
+        run: node --test .github/tests/browser-ci.test.mjs
       - run: npm run typecheck
+        if: steps.scope.outputs.docs_only != 'true'
       - run: npm run lint
+        if: steps.scope.outputs.docs_only != 'true'
       - run: npm test
+        if: steps.scope.outputs.docs_only != 'true'
   browser-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
     env:
       FB01_BROWSER: /tmp/fb01-chrome/chrome-linux64/chrome
       MAP_A_SOFTWARE_GL: '1'
@@ -40,27 +63,50 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Determine verification scope
+        id: scope
+        working-directory: .
+        run: node app/verification/browser-contract.mjs --classify-change
+        env:
+          VERIFICATION_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - name: Documentation-only result
+        if: steps.scope.outputs.docs_only == 'true'
+        working-directory: .
+        run: |
+          echo 'Verified only the six existing ordinary maintenance documents changed.'
+          echo 'Runtime tests not run for this docs-only diff; no game test pass is claimed.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           node-version: 22.23.3
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci --ignore-scripts --no-audit --no-fund
+        if: steps.scope.outputs.docs_only != 'true'
       - run: npx playwright install-deps chromium
+        if: steps.scope.outputs.docs_only != 'true'
       - name: Install the pinned Chrome for Testing build
+        if: steps.scope.outputs.docs_only != 'true'
         run: |
           curl --fail --location --retry 2 https://storage.googleapis.com/chrome-for-testing-public/155.0.8059.39/linux64/chrome-linux64.zip --output /tmp/fb01-chrome.zip
           echo '55672d1f392fd3e7b7a08621b6e804e6bcb39d40cf155504abb74b3a021ea8ea  /tmp/fb01-chrome.zip' | sha256sum --check
           unzip -q /tmp/fb01-chrome.zip -d /tmp/fb01-chrome
       - name: Install the window manager required for native focus transitions
+        if: steps.scope.outputs.docs_only != 'true'
         run: sudo apt-get install --no-install-recommends -y openbox
       - name: Build the tested static image
+        if: steps.scope.outputs.docs_only != 'true'
         run: docker build --label org.fogbound.ci-run="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --iidfile image-id.txt -t "fogbound-fb01:ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" .
       - name: Serve the same image
+        if: steps.scope.outputs.docs_only != 'true'
         run: docker run -d --rm --cidfile "$RUNNER_TEMP/fb01-container-id.txt" --label org.fogbound.ci-run="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --name fb01-ci -p 127.0.0.1:4175:80 "$(cat image-id.txt)"
       - name: Record public build fingerprint
+        if: steps.scope.outputs.docs_only != 'true'
         run: node verification/fingerprint.mjs
       - name: Run browser contracts with virtual display focus changes
+        if: steps.scope.outputs.docs_only != 'true'
         run: xvfb-run --auto-servernum sh -ec 'openbox --version; openbox >/tmp/fb01-openbox.log 2>&1 & wm_pid=$!; sleep 1; kill -0 "$wm_pid"; node verification/browser-contract.mjs'
         env:
           FB01_HEADED: '1'
@@ -117,4 +163,12 @@ jobs:
             app/verification-output/fingerprint.json
             app/test-results/**/*.png
           if-no-files-found: ignore
+          retention-days: 7
+      - name: Browser contract results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: browser-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: app/verification-output/browser-contract/
+          if-no-files-found: warn
           retention-days: 7
