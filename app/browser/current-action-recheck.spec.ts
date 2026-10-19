@@ -102,7 +102,9 @@ test('UXF E02 E07 explicit source return retains unsaved input and the initiatin
  await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');
  await page.getByRole('button',{name:'开始演练',exact:true}).click();
  const action=page.getByRole('region',{name:'当前行动',exact:true}),purpose=page.getByLabel('准备目的',{exact:true});
- await page.getByLabel('推进速度',{exact:true}).selectOption('4');
+ await page.getByRole('button',{name:'暂停行动',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
+ await page.getByLabel('推进速度',{exact:true}).selectOption('4');await expect(page.getByLabel('推进速度',{exact:true})).toHaveValue('4');
+ await page.getByRole('button',{name:'继续行动',exact:true}).click();
  await purpose.fill('UXF保留未提交的准备目的');
  const firstClock=await page.locator('.clock strong').innerText();
  await expect(page.locator('.clock strong')).not.toHaveText(firstClock);
