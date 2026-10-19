@@ -25,5 +25,5 @@ export type PlayPlayerView={
   issued_orders:Array<{command_id:string;issued:number;plan:RoutePlan;reason?:string}>;
   replay_nodes:PlayerView['replay_nodes'];log:LogEntry[];
 };
-export type GamePlayerView=PlayerView|PlayPlayerView|import('./mission-contracts').MissionPlayerView|import('./intelligence-contracts').IntelligencePlayerView|import('./outcome-contracts').OutcomePlayerView;
+export type GamePlayerView=import('./source-time-contracts').SourceTimePlayerView|PlayerView|PlayPlayerView|import('./mission-contracts').MissionPlayerView|import('./intelligence-contracts').IntelligencePlayerView|import('./outcome-contracts').OutcomePlayerView;
 export function is_play_view(view:GamePlayerView):view is PlayPlayerView{return view.scenario_kind==='play_corridor';}

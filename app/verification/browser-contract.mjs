@@ -37,8 +37,8 @@ if(process.argv[2]==='--classify-change'){
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
 const frozen={
   "baseline_sha": "cab208ebd360a55f8fcf55e150e5b7a033f02f59",
-  "full_count": 298,
-  "full_keys_sha256": "b760d86fd6f7691ed7db3f308ab1f534e05d8955ac30964b3f58841f56a0393a",
+  "full_count": 300,
+  "full_keys_sha256": "e431cd329a094f92a53efb3bb356153d7d4844a8378bbe2ee4b65471e7dfdc08",
   "legacy_count": 231,
   "legacy_keys_sha256": "272a726ad5b0eff5a06b345e202737d5bb292a20f6ed2069a785618a1efef7da",
   "legacy_files": [

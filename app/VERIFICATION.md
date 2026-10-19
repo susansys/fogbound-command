@@ -925,3 +925,55 @@ their own source binding. It is not a fresh fourteen-case native run. Old CI
 failures, the local pause/context RED and previous narrower reuse records remain
 retained; fixed-head review, new complete candidate/main CI and delivery await
 actual receipts. Original244AT and formalPLAY remain unsigned.
+
+## B31 T01 optional source package: local engineering evidence
+
+The explicit `B31-SOURCE-TIME-01` selection uses schema11 and retains the exact
+registered schema10 return/delivery task as its validated prefix. Existing
+schema4–10 JSON packages and the default selection remain unchanged. Context
+notes are separate typed originals and deliveries; they cannot satisfy the old
+task's source-validation credential. Source times reference actual metadata
+records received with their original report. Unknown times have no value or
+basis. The private lineage is not a PlayerView field.
+
+The fixed `b31-t01-review-fixed-03` snapshot passed all794 core tests across73
+files with one local core worker and the original existing case budgets. Its
+two installed-Chrome browser cases passed with workers1/retries0/no skips,
+covering the optional UI, distinct originals and unknown times, and the
+unchanged default return task. Typecheck and UI/Transport boundaries passed.
+The wrapper's seven contracts passed after actual discovery registration at
+300 total/286 portable/14 existing Windows obligations; all231 original browser
+identities and source hashes remain. This is local evidence, not remote CI.
+
+| Engineering case | Actual T01 evidence |
+|---|---|
+| E01 | Real Game creation, explicit UI selection, unchanged default package and old-run reading, basic same-run paused restore |
+| E02 | Three distinct same-text originals, delivery identities and unknown independent count; no text-based merge |
+| E03 | Separate event/observation/source-reported times; five resolvable visible basis records; missing/cross-run/future/wrong-report basis rejected |
+| E04 | One large and several small Game advances agree; replaying original operation IDs preserves six single deliveries |
+| E05 | Context-note UI has no validation action; a context delivery masquerading as an old task credential is rejected with the same public code in both packages |
+| E06 | Both packages complete the same legal task at368000 with six confirmed people, two artifacts, equal resource accounts and a working original debrief entry |
+
+Both independent read-only reviews initially found one P2 each. Actual REDs
+reproduced missing basis resolution and acceptance of a corrupted outer source
+package from a previously exposed run. The fixes and three corruption/basis
+tests pass; both roles rechecked the fixed snapshot with zero remaining
+blocking findings. Cross-run exposure now validates each full schema11 current
+and sealed package before extracting the original task, while keeping the
+original public storage-error policy and atomic rollback.
+
+Earlier failures remain in the execution evidence: the original schema11
+creation and clock REDs, a new paired task test's default5second harness limit
+(that new test has a finite30second budget), a wrong-working-directory test
+invocation, comparison of different run IDs before normalization, premature R3
+UI expectation at65000 instead of its existing86000 receipt, and intermediate
+discovery registration. A first local parallel core run had777/789 passes;
+the later serial790 run had all784 existing cases pass and one new expected
+error mismatch. The corrected same-code negative and both review regressions
+are included in the complete794-pass fixed run. No old assertion, simulation
+deadline or old case timeout was relaxed.
+
+T02 evidence/retraction behavior and T03 opacity, full-process native recovery,
+final CI/PR/main/artifacts/delivery remain pending. The current source package
+is a T01 implementation, not full B31 acceptance. Original244AT and formal
+PLAY remain unsigned; these Agent checks are not human experience evidence.
