@@ -6,6 +6,17 @@ import {conflicting_action_definition} from '../src/core/conflicting-action-defi
 import type {ConflictingActionPlayerView} from '../src/conflicting-action-contracts';
 import {state_hash,validate_state} from '../src/core/snapshot';
 
+test('B32 E22 a saved working assessment still permits the next preparation draft and original receipt',async()=>{
+ const f=await fixture('faulted');
+ try{
+  await f.advance(22000);await f.apply({kind:'save_working_assessment',base_ref:null,draft:{target_scope:'B',explanations:['operable','faulted'],preferred:'operable',basis_refs:[f.view.conflicting_action.reports[0].ref]}});
+  const saved=await f.apply({kind:'save_plan',base_plan_ref:null,draft:{purpose:'两处记录与返回交付',repair_packs:2}});
+  expect(saved.view.plan).toMatchObject({purpose:'两处记录与返回交付'});expect(await f.game.get_receipt(f.view.run_id,saved.envelope.operation_id)).toEqual(saved.receipt);
+  expect(saved.view.decision_records.at(-1)).toMatchObject({knowledge_revision:3,operation_seq:3});
+  expect(f.view.conflicting_action.assessments).toHaveLength(1);expect(valid_response({request_id:'plan-after-assessment',ok:true,view:f.view})).toBe(true);
+ }finally{await f.store.delete();}
+});
+
 test.each([2500,7000,16000,18000])('B32 E22 cold Game restoration at inspection %ims preserves private state, original receipt and physical ledger',async to=>{
  const f=await fixture('operable');
  try{

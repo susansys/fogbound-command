@@ -1095,6 +1095,25 @@ at four inspection nodes, original receipt replay, read-only history, and a
 self-hashed corrupted private state rejected by authoritative input replay.
 These local results do not sign the actual Windows or Worker route obligations.
 
+The first real Worker walkthrough then found that saving a preparation draft
+after an assessment committed the draft but produced an invalid decision DTO:
+the inner action input count omitted the assessment revision. The separate
+public Game/DTO test reproduced the mismatch (sequence2 versus revision3).
+Decision sequence now follows the authoritative revision, preserving the old
+packages' existing equality. The work-file sample passed27 cases after this
+fix. This closes neither the new fixed candidate's browser run nor delivery.
+
+On candidate89405e1, the raw native E18 sample v9 actually passed trusted hidden
+and visible events, matching Game pause receipts, no wall-clock catch-up,
+explicit continuation and owned process/endpoint closure; both original review
+axes independently checked its evidence. The lifecycle was one owned page's
+native window minimize/restore; retained copied labels mentioning a tab do not
+mean another tab was used. Earlier failures remain and no unique browser root
+cause is claimed. Chrome's two recovery nodes passed on that candidate; Edge
+reached both nodes but its final pause assertion raced an ordinary tick. The
+verifier now waits for actual Game paused=true within the unchanged assertion
+budget. New fixed-source execution and final source/artifact binding remain due.
+
 Actual discovery is311 cases:293 portable and18 Windows obligations. All231
 legacy cases and the16 prior Windows identities remain intact; only the two
 B32 native recovery cases were added. The wrapper's seven checks passed against

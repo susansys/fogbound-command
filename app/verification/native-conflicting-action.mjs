@@ -43,7 +43,7 @@ export async function conflictingRecovery(carrier,{chromium,expect,info,profileR
  const driver=await nativeDriver(carrier,profile,origin,{chromium,expect});let page;
  const current=()=>publicView(page);
  const commit=async name=>{const prior=await current();await page.getByRole('button',{name,exact:true}).press('Enter');await expect.poll(async()=>(await current())?.revision).toBeGreaterThan(prior.revision);};
- const pause=async()=>{if(!(await current()).paused)await commit('暂停行动');expect((await current()).paused).toBe(true);};
+ const pause=async()=>{if(!(await current()).paused)await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect.poll(async()=>(await current()).paused).toBe(true);};
  const resume=async()=>{const before=await current();await commit('继续行动');await expect.poll(async()=>(await current()).sim_time).toBeGreaterThan(before.sim_time);expect((await current()).paused).toBe(false);};
  try{
   page=await driver.open();evidence.executable=driver.executable;evidence.browser_version=driver.version;await page.bringToFront();
@@ -73,7 +73,7 @@ export async function conflictingRecovery(carrier,{chromium,expect,info,profileR
   const final=await current(),state=(await ownedRecords(page,final.run_id)).state;evidence.final=final;
   expect(state.task.prefix.field.orders.filter(row=>row.payload.activity_ref.id==='W-inspect')).toHaveLength(1);expect(final.actors.find(row=>row.actor==='W')).toMatchObject({equipment_energy:22,durability:99,packs:2});expect(final.field_reports.filter(row=>row.report.typed_payload.activity_ref.id==='W-inspect')).toHaveLength(2);
   evidence.passed=true;
- }catch(error){evidence.failure=String(error);if(page&&!page.isClosed())try{evidence.failure_view=await current();await page.screenshot({path:info.outputPath(carrier+'-failure.png'),fullPage:true});}catch{}throw error;}
+ }catch(error){evidence.failure=String(error);if(page&&!page.isClosed())try{evidence.failure_view=await current();evidence.failure_trace=await page.evaluate(()=>Reflect.get(window,'__b24FullTrace'));await page.screenshot({path:info.outputPath(carrier+'-failure.png'),fullPage:true});}catch{}throw error;}
  finally{
   try{evidence.final_closed_processes=await driver.close();evidence.remaining_profile_processes=ownedProcesses(profile);expect(evidence.remaining_profile_processes).toEqual([]);}catch(error){evidence.passed=false;evidence.closure_failure=String(error);throw error;}
   finally{evidence.finished=new Date().toISOString();await fs.writeFile(info.outputPath(carrier+'-conflicting-recovery.json'),JSON.stringify(evidence,null,2)+'\n');}

@@ -8,8 +8,10 @@ import {advance_intelligence_source} from './intelligence-source';import {advanc
 import {project_outcome_view} from './outcome-knowledge';import {hash} from './scenario';import {advance_return_reception,next_outcome_time} from './outcome-execution';
 async function decision_sources(state:OutcomeState,envelope:OutcomeEnvelope,known:import('../outcome-contracts').OutcomePlayerView){
  const intent=envelope.intent;
+ // A schema12 assessment advances the authoritative revision without inventing
+ // an inner action input. Decision sequence follows that public revision.
  const evidence=await hq_outcome_evidence(known),known_then_refs=evidence.filter(entry=>entry.ref.kind==='report'||entry.ref.kind==='delivery'||entry.ref.kind==='event').map(entry=>entry.ref);
- return {knowledge_revision:state.revision,operation_seq:state.inputs.length+1,basis_refs:'basis_delivery_refs' in intent?structuredClone(intent.basis_delivery_refs):[],known_then_refs,selected_versions:{plan_ref:'plan_ref' in intent?structuredClone(intent.plan_ref):intent.kind==='save_plan'?structuredClone(intent.base_plan_ref):null,activity_ref:'activity_ref' in intent?structuredClone(intent.activity_ref):null,authority_ref:'authority_ref' in intent?structuredClone(intent.authority_ref):null},administrative_receipt_ref:{run_id:state.run_id,kind:'administrative_receipt' as const,id:envelope.operation_id,version:1}};
+ return {knowledge_revision:state.revision,operation_seq:state.revision,basis_refs:'basis_delivery_refs' in intent?structuredClone(intent.basis_delivery_refs):[],known_then_refs,selected_versions:{plan_ref:'plan_ref' in intent?structuredClone(intent.plan_ref):intent.kind==='save_plan'?structuredClone(intent.base_plan_ref):null,activity_ref:'activity_ref' in intent?structuredClone(intent.activity_ref):null,authority_ref:'authority_ref' in intent?structuredClone(intent.authority_ref):null},administrative_receipt_ref:{run_id:state.run_id,kind:'administrative_receipt' as const,id:envelope.operation_id,version:1}};
 }
 export async function create_outcome_rejection(state:OutcomeState,request:OutcomeEnvelope,code:import('../outcome-contracts').OutcomeRejectedDecision['code'],owned:readonly OutcomeDefinition[]=[]):Promise<Omit<import('../outcome-contracts').OutcomeRejectedDecision,'ref'|'attempt_seq'>>{
  if(typeof state.integrity!=='string')throw new GameError('INVALID_SAVE');
