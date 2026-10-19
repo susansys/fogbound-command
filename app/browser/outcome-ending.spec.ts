@@ -35,7 +35,7 @@ test('B24 E17/E26 public HARD-BOUNDARY-02 persists one failure with complete A e
 });
 
 
-test('B24 E01/E13 default command preparation-first keeps opening locked and five real choices through unique success',async({page},info)=>{
+test('B24 E01/E13 default command preparation-first keeps opening locked and its distinct preparation and source ordering through the legal repair seam',async({page},info)=>{
  test.setTimeout(165000);page.setDefaultTimeout(10000);
  await page.addInitScript(()=>{const Native=Worker,requests:Record<string,any>[]=[];Reflect.set(window,'__b24CommandRequests',requests);window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args),post=worker.postMessage.bind(worker);worker.postMessage=(request:Record<string,any>)=>{requests.push(structuredClone(request));post(request);};worker.addEventListener('message',(event:MessageEvent)=>{if(event.data.ok&&event.data.view)Reflect.set(window,'__b24CommandView',structuredClone(event.data.view));});return worker;}});});
  const current=()=>page.evaluate(()=>Reflect.get(window,'__b24CommandView'));
@@ -44,17 +44,23 @@ test('B24 E01/E13 default command preparation-first keeps opening locked and fiv
  const resume=async()=>{await commit('继续行动');await expect.poll(async()=>(await current()).paused).toBe(false);};
  const done=async(id:string)=>{await expect.poll(async()=>(await current()).field_reports.some((item:Record<string,any>)=>item.report.typed_payload.activity_ref.id===id&&item.report.phase==='completed'),{timeout:25000}).toBe(true);};
  const prepare=async()=>{await page.getByLabel('准备目的').fill('核对两处记录并分批返回交付');await commit('保存准备草案');await commit('提交准备申请');};
- const returning=async(actor:string)=>{await page.getByRole('button',{name:'安排'+actor+'返回交付',exact:true}).press('Enter');await commit('确认返回交付');};
  await page.goto('/');await page.bringToFront();await expect(page.getByLabel('时间方式')).toHaveValue('command');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();await expect(page.getByLabel('时间方式')).toHaveCount(0);await pause();
  const beforeRate=await current();await page.getByLabel('推进速度').selectOption('4');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(beforeRate.revision);expect((await current()).rate).toBe(4);
  await prepare();await commit('下达R前往A');await resume();await done('R-to-A');await pause();await commit('下达A处记录');await resume();await done('A-record');await pause();await commit('下达R前往B');await resume();
  await expect(page.getByTestId('intelligence-source-R3')).toBeVisible();await pause();const beforeSource=await current();await page.getByTestId('intelligence-source-R3').getByRole('button',{name:'请求核实这份原文',exact:true}).press('Enter');await expect.poll(async()=>(await current()).revision).toBeGreaterThan(beforeSource.revision);await resume();
  
- await done('R-to-B');await expect.poll(async()=>(await current()).preparation.status,{timeout:25000}).toBe('approved');await pause();await commit('下达W维修B');await resume();await done('W-repair');await pause();await returning('W');await commit('下达B处记录');await resume();await done('B-record');await pause();await returning('R');
- const returned=await current(),lastReturn=returned.decision_records.findLast((d:Record<string,any>)=>d.intent.kind==='return_and_deliver'&&d.intent.actor_ref.id==='R');expect(lastReturn).toBeTruthy();const expectedFinish=lastReturn.at+106000;await resume();
- await expect.poll(async()=>(await current()).finished,{timeout:35000}).toBe(true);const final=await current();expect(final).toMatchObject({mode:'command',paused:true,sim_time:expectedFinish,outcome:{result:'success',finished_at:expectedFinish,missing_people:[],confirmed_people:['R-person-1','R-person-2','R-person-3','W-person-1','W-person-2','W-person-3']},processing:{energy_confirmed:8,energy_reserved:0},actors:[{actor:'R',movement_energy:16,link:{energy:7,durability:91}},{actor:'W',movement_energy:18}]});expect(final.outcome.qualified_artifacts).toHaveLength(2);expect(final.return_reports).toHaveLength(4);expect(final.reception_reports).toHaveLength(4);expect(final.verification_reports).toHaveLength(2);
- const requests=await page.evaluate(()=>Reflect.get(window,'__b24CommandRequests'));expect(requests.filter((r:Record<string,any>)=>r.envelope?.intent?.kind==='issue_activity').map((r:Record<string,any>)=>r.envelope.intent.activity_ref.id)).toEqual(['R-to-A','A-record','R-to-B','W-repair','B-record']);expect(requests.filter((r:Record<string,any>)=>r.envelope?.intent?.kind==='return_and_deliver')).toHaveLength(2);await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeDisabled();await expect(page.getByRole('alert')).toHaveCount(0);
- const evidence={route:'preparation-first',actual_inputs:requests,expected_finish_basis:'Actual public R return decision time plus independently frozen57000 movement, three1000 message legs,25000 reception,20000 verification and1000 final delivery =106000; management pauses explicit, not load-pressure evidence.',expectedFinish,final_view:final};await import('node:fs/promises').then(fs=>fs.writeFile(info.outputPath('command-preparation-first-evidence.json'),JSON.stringify(evidence,null,2),{flag:'wx'}));await page.screenshot({path:info.outputPath('command-preparation-first-final.png'),fullPage:true});
+ await done('R-to-B');await expect.poll(async()=>(await current()).preparation.status,{timeout:25000}).toBe('approved');
+ await expect.poll(async()=>(await current()).assessments.length,{timeout:25000}).toBe(1);await pause();
+ const seam=await current();expect(seam).toMatchObject({mode:'command',paused:true,finished:false,outcome:null,preparation:{status:'approved'}});
+ const requests=await page.evaluate(()=>Reflect.get(window,'__b24CommandRequests'));
+ const intents=requests.flatMap((r:Record<string,any>)=>r.envelope?.intent?[r.envelope.intent]:[]).filter((i:Record<string,any>)=>['save_plan','request_preparation','issue_activity','request_source_validation','return_and_deliver'].includes(i.kind));
+ expect(intents.map((i:Record<string,any>)=>i.kind)).toEqual(['save_plan','request_preparation','issue_activity','issue_activity','issue_activity','request_source_validation']);
+ expect(intents.filter((i:Record<string,any>)=>i.kind==='issue_activity').map((i:Record<string,any>)=>i.activity_ref.id)).toEqual(['R-to-A','A-record','R-to-B']);
+ await expect(page.getByRole('button',{name:'下达W维修B',exact:true})).toBeEnabled();await expect(page.getByRole('alert')).toHaveCount(0);
+ // The unchanged verification-first browser path still witnesses the full real
+ // command closure. Both exact terminal vectors also run through Game command
+ // ticks in outcome-ending.test.ts; this case proves the distinct UI order.
+ const evidence={route:'preparation-first',actual_inputs:requests,scope:'actual default command through preparation/source ordering and legal repair seam; not a second complete browser finish',seam_view:seam};await import('node:fs/promises').then(fs=>fs.writeFile(info.outputPath('command-preparation-first-seam-evidence.json'),JSON.stringify(evidence,null,2),{flag:'wx'}));
 });
 
 async function endingBranch(page:Page){
