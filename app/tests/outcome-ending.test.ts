@@ -274,6 +274,36 @@ test('B24 E21 early cleanup closure waits for a necessary actual HQ processing t
   } finally {await d.store.delete();}
 });
 
+// Shared terminal/accounting obligations from both browser command orderings.
+// These ticks exercise the public command clock; they do not certify wall time,
+// DOM/Worker wiring, or replace the retained complete command browser witness.
+test.each(['verification-first','preparation-first'] as const)('B24 command %s preserves both complete manifests and the independently fixed final resource vector',async(order)=>{
+  const d=await driver('ci-accounting-'+order,registered as OutcomeDefinition,'command');
+  try {
+    const preparationFirst=order==='preparation-first';
+    if(preparationFirst)await d.prepare();
+    await d.issue('R-to-A');await d.advance(32000);await d.issue('A-record');await d.advance(80000);await d.issue('R-to-B');await d.advance(86000);await d.source();
+    if(preparationFirst)await d.advance(146000);
+    else {await d.advance(108000);await d.prepare();await d.advance(170000);}
+    await d.issue('W-repair','W',[Reflect.get(d.view,'preparation_results')[0].delivery.ref]);
+    await d.advance(preparationFirst?214000:237000);await d.returning('W','B');
+    await d.issue('B-record','R',[Reflect.get(d.view,'assessments')[0].delivery.ref,Reflect.get(d.view,'field_reports').find((r:{report:{repair_condition:string}})=>r.report.repair_condition==='repaired').delivery.ref]);
+    await d.advance(preparationFirst?262000:285000);await d.returning('R','B');
+    const finish=preparationFirst?368000:391000;
+    await d.advance(finish-1);expect(d.view.finished).toBe(false);
+    await d.advance(finish);
+    expect(d.view).toMatchObject({mode:'command',paused:true,sim_time:finish,finished:true,outcome:{result:'success',finished_at:finish,missing_people:[],confirmed_people:['R-person-1','R-person-2','R-person-3','W-person-1','W-person-2','W-person-3']},processing:{energy_confirmed:8,energy_reserved:0},actors:[{actor:'R',movement_energy:16,link:{energy:7,durability:91}},{actor:'W',movement_energy:18}]});
+    expect(Reflect.get(d.view,'outcome').qualified_artifacts).toHaveLength(2);
+    expect(Reflect.get(d.view,'return_reports')).toHaveLength(4);
+    expect(Reflect.get(d.view,'reception_reports')).toHaveLength(4);
+    expect(Reflect.get(d.view,'verification_reports')).toHaveLength(2);
+    const decisions=Reflect.get(d.view,'decision_records') as {intent:{kind:string;activity_ref?:{id:string};actor_ref?:{id:string}}}[];
+    expect(decisions.filter(r=>r.intent.kind==='issue_activity').map(r=>r.intent.activity_ref?.id)).toEqual(['R-to-A','A-record','R-to-B','W-repair','B-record']);
+    expect(decisions.filter(r=>r.intent.kind==='return_and_deliver').map(r=>r.intent.actor_ref?.id)).toEqual(['W','R']);
+    expect(valid_response({request_id:'complete-command-'+order,ok:true,view:d.view})).toBe(true);
+  }finally{await d.store.delete();}
+});
+
 test('B24 command an intent whose real clock reaches success cannot add primary work after that boundary',async()=>{
   const d=await driver('command-intent-finishes-first',registered as OutcomeDefinition,'command');
   try {

@@ -1006,3 +1006,69 @@ Independent Standards review subsequently found that those retained owned TEMP p
 Final local fixed07 passed826/826 core cases across74 files, fresh UI5 plus fresh Windows Chrome/Edge native2 in one seven-pass run, typecheck0, boundary lint0 and wrapper7/7. Both new native profiles are exclusively created UUID leaves under the already admitted HOME/native/profiles root, retained after three verified full-process closures each. The actual before/after-retraction restores preserve same-run source knowledge, task resources and historical reading. The owned server was stopped after the run. This replaces fixed05/06 reuse as the E15 evidence for the corrected runtime; the original TEMP observations and both initial review findings remain retained. Independent re-review and all E18 remote delivery gates remain pending.
 
 Earlier viewport harness failures are retained: reading workspace hides the advance footer; rate/pause acknowledgements must precede controls; selecting R3 intentionally focuses its detail rather than the row. The first actor implementation exposed an empty source field before R delivery; a real RED reproduced this and the delivery condition fixed it. No old assertion, simulation deadline, legacy identity or fault boundary was removed. E13-E17 have local evidence; E18 final independent reviews, candidate/main CI, integration, artifacts and delivery await actual receipts. Original244AT remain not_run and formalPLAY is unsigned.
+
+## Browser CI organization follow-up
+
+This independent maintenance change keeps all298 discovery identities except the
+honest rename of the preparation-first command case (284 portable,231 legacy,
+14 Windows obligations). The explicit mapping is
+`verification/ci-coverage-equivalence.json`. Product runtime/assets, native
+obligations, browser workers1/retries0 and the six-document classifier
+remain unchanged. There is no overall browser job time cap.
+
+All12 projection cells retain coordinate/route/symbol/camera/resize and no-write
+oracles. Functional raster controls cover each of the four viewport/DPR pairs;
+the other eight cells omit repeated shared-background scans and sixteen success
+images. Functional terrain/water checks in other map contracts remain.
+
+The unchanged verification-first browser path retains a complete real command
+closure. Preparation-first retains its distinct actual UI/Worker order through
+approved preparation, source assessment and the legal repair seam. Both complete
+terminal/resource vectors also run as two public Game command-tick cases with
+their independently fixed ending times and explicit owned-store cleanup. These
+fast cases do not certify wall-clock/browser behavior. The affected core file
+passed34 cases before the browser tail was shortened; typecheck passed.
+
+An unchanged-source local baseline collected13 browser passes in148643ms:
+12 projection cases36901ms and the former complete preparation-first108712ms.
+This is a local comparison basis, not the earlier Linux CI duration. Four exact
+nine-case isolation trials, in workers1/2/2/1 order, all passed without retry or
+skip. Mean browser time was10879.498ms serial and10375.755ms parallel, a503.743ms
+gain (4.6%). It did not meet the recorded2second/15percent activation rule, so
+execution stays serial. Candidate browser timing, full CI and delivery remain
+pending actual evidence. Original failures and all preceding scope limitations
+are retained as historical records; original244AT/formalPLAY are unsigned.
+
+The first optimization candidate collected13 passes/one timeout, with no retry
+or skip. Both the distinct preparation-first seam and the unchanged complete
+verification-first closure passed. The1920/DPR2 record projection case timed out
+at its original90000ms limit: the numeric coordinate poll had succeeded, then
+a separate locator read waited on a vanished public coordinate element. This
+happened before the changed raster/capture section; its screenshot and DOM were
+inspected, but the trigger of disappearance was not certified. The helper now
+retains the public DOM sample read inside the existing numeric poll and checks
+that same sample against the independent coordinates, with the same0.1 bound,
+point sets and time budget. Fresh affected validation then passed all13 cases
+(map12 plus preparation-first seam1), in89072ms: map34331ms and seam51049ms.
+The comparable local13-case sample fell from148643ms by about59.6seconds; this
+combines less duplicate coverage with the public-read stabilization and is not a
+Linux CI speed prediction. The unchanged complete verification-first witness is
+reused from its actual120129ms pass in the preceding candidate; these are13+1
+precisely sourced passes, not a fresh single14-pass run. The
+failed aggregate is not a performance benchmark; wrapper checks were concurrent
+and can affect timing. Its raw failure and passing complete witness are retained.
+
+The optimization branch was mechanically imported onto verified product main
+3b5d200cd694f068da460e6f521264dbf93ede90. The measurements above remain
+historical evidence from base2cd93d9; fresh checks on the imported source and
+the new153-runtime/58-asset binding are recorded separately before delivery.
+
+The first imported candidate CI39221543619 quality job retained785 passing
+core tests and one failure: the unchanged mission-save32-version case exceeded
+its existing5000ms harness budget. The raw failure remains. The complete quality
+core command now uses --maxWorkers=1; this changes file scheduling, while keeping
+all786 cases, their existing timeout limits and explicit in-test concurrency
+checks. Browser scheduling, retries, simulations and workflow routing remain.
+The same786 cases passed locally with this command. CPU contention is a plausible
+contributor, not a certified sole root cause. Fresh fixed-SHA CI is still required;
+this adjustment does not claim a faster whole workflow.
