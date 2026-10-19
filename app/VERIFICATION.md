@@ -897,3 +897,31 @@ The earlier beb71848 immutable build separately passed the original default-comm
 Run39193765920 at6a60e76 completed with quality successful and283/284 portable browser cases passed. The sole failure was the new E02/E07 case waiting10000ms for a lawful source delivery; none of its source-return assertions had run. Original result/summary/manifest/scope and failure remain retained. Natural-CI screenshot retrieval encountered transport failures, so its exact rate/rejection cause has not been certified from an image.
 
 A separate controlled old-fixture probe delayed its original rate request until an actual same-run clock revision advanced, then sent that unchanged request to the real Worker. It returned actual STALE_REVISION; the UI stayed at1x and00:10.703, reproducing the same source-not-delivered assertion failure. This demonstrates the unsafe setup path, not a synthetic rejection or proof that every natural failure has that cause. The final fixture now explicitly requests Game-confirmed pause, sets and checks4x, then explicitly continues before the unchanged reading/dirty/focus assertions. The delay instrumentation was removed. Only the affected case was recollected and passed in installed Windows Chrome; all153 runtime inputs and58 build assets remain identical to6a60e76. No original assertion, wait/test budget, retry, legacy source/key, business policy or CI configuration changed. Revised fixed-SHA review and actual new candidate/main CI remain pending; prior five-case and native results retain their original source/provenance limits.
+### Second candidate CI and pause/refusal correction — 2026-10-19
+
+Run39197488097 at2cd93d9 also recorded283/284 portable passes, with no retry,
+skip, cancelled or unknown cases; quality raw logs confirm784 core,7 wrapper
+and16 cleanup checks passed. The earlier source-return fixture passed. The sole
+new failure was the draft-rejection case waiting5000ms for outcome-termination
+after an abort submitted while command time was running. Its exact natural
+abort response code has not been certified, so this is not a unique-cause claim.
+
+An explicit Game-confirmed pause before that abort then exposed a product bug:
+the pause request succeeded and cleared the correlated STALE error, hiding the
+original draft-recheck entry. That local candidate failed at the original entry
+locator; the actual abort commitment, termination and disabled input had passed.
+The fix preserves only the same-run correlated STALE context on successful
+manual management pause. Failed/unknown pause handling and ordinary successful
+requests keep their existing policy. The fixture also verifies a real accepted
+abort reply; original no-auto-pause, terminal, disabled-input, dirty and focus
+assertions and budgets remain.
+
+The changed runtime then passed all five UX cases plus two fresh installed
+Windows Chrome/Edge same-profile, same-origin full-process recovery cases
+(seven passes, workers1/retries0). This replaces the earlier all153-runtime/
+58-asset equality claim for the new candidate: Intelli pause handling changed,
+the other152 runtime inputs remain unchanged, and new built assets require
+their own source binding. It is not a fresh fourteen-case native run. Old CI
+failures, the local pause/context RED and previous narrower reuse records remain
+retained; fixed-head review, new complete candidate/main CI and delivery await
+actual receipts. Original244AT and formalPLAY remain unsigned.

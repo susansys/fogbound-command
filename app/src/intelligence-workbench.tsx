@@ -65,7 +65,10 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
       // The existing management queue asks Game to pause its current committed
       // revision. A delayed UI revision must not prevent a requested pause.
       inFlight.current=true;setBusy(true);
-      try{const result=await request({kind:'management_pause',reason:'manual'});if(result.ok&&result.view?.paused){setPauseUnknown(false);setNotice('暂停已确认，等待明确继续。');}else setPauseUnknown(true);}catch{setError('CHANNEL_UNCERTAIN');setPauseUnknown(true);}finally{inFlight.current=false;setBusy(false);}return;
+      // Confirming a pause is not a replacement business submission. Preserve
+      // the correlated refusal so the player can still review the old draft.
+      const clearError=!(error==='STALE_REVISION'&&rejection?.run_id===current.current.run_id);
+      try{const result=await request({kind:'management_pause',reason:'manual'},clearError);if(result.ok&&result.view?.paused){setPauseUnknown(false);setNotice('暂停已确认，等待明确继续。');}else setPauseUnknown(true);}catch{setError('CHANNEL_UNCERTAIN');setPauseUnknown(true);}finally{inFlight.current=false;setBusy(false);}return;
     }
     const envelope={run_id:current.current.run_id,operation_id:crypto.randomUUID(),expected_revision:current.current.revision,intent};pending.current=envelope;await send(envelope);
   }
