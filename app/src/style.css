@@ -1089,3 +1089,14 @@ dialog > header > button {
 .outcome-dialog{width:min(520px,100%);max-height:90vh;overflow:auto;padding:26px;background:#17252c;color:#e3e8e5;border:1px solid #60747c;box-shadow:0 20px 80px #0008}
 .outcome-dialog button{margin:10px 12px 0 0}.outcome-pending{border-left:3px solid #d8b56b;padding:10px}
 .outcome-dialog label{display:block;margin:14px 0 6px}.outcome-dialog textarea{display:block;box-sizing:border-box;width:100%;min-height:72px;max-height:160px;resize:vertical;padding:8px;font:inherit;color:inherit;background:#101c22;border:1px solid #60747c}
+
+/* Current legal actions precede supporting history and reference detail. */
+.current-action{display:flex;flex-direction:column;gap:10px;min-width:0}
+.current-action>h2{margin:0}
+.current-action-field>[data-testid="intelligence-field"]{order:-1}
+.current-action-return>.current-action-outcome{order:-2}
+.current-action textarea{max-width:100%;box-sizing:border-box}
+
+.rejection-context{border-left:3px solid #d5b667;padding:8px 10px;overflow-wrap:anywhere}
+.rejection-review{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.rejection-review p{white-space:pre-wrap;overflow-wrap:anywhere}

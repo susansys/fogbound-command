@@ -866,3 +866,62 @@ Only the test save helper changes: correlate the actual preview request/reply an
 The exact uninstrumented local candidate passed typecheck, import-boundary lint and all7 wrapper contracts. Full discovery confirms293 total/279 portable/231 legacy/14 Windows and unchanged full key digest `0057e33c1e60902ed168b3c981f4e52f493effba67b3862f3b65d87c3afac8b5`. An initial discovery-only invocation omitted the required headed marker and stopped at the strict guard; that tool log is retained, and the corrected discovery alone passed without rerunning the successful checks. It did not execute browser tests.
 
 All153 runtime inputs and the tested58-asset build remain byte-identical to the earlier native/natural candidate. The actual14 Windows obligation evidence remains two executions (8 passed plus only6 setup-failed cases recollected successfully), with original failed reports retained. Precise unchanged-source reuse is required at the eventual final commit; this entry does not claim another14-case run. Final revised-candidate independent review, new effective-SHA CI, PR merge, actual main CI, remote artifact/source comparison, safe synchronization, issue closure and final delivery remain pending actual receipts. Original244AT remain not_run; formal PLAY and human acceptance remain unknown.
+## UX-FOLLOWUP T01 local checkpoint — 2026-10-19
+
+Approved B, two serial tickets/eight engineering obligations; this checkpoint is T01 only. Base a6c59316, isolated branch codex/ux-current-action. The original first-layer action and source-return RED reports remain preserved. Current-action geometry and keyboard checks at1366x768/1920x1080, explicit lawful-source return with unsaved input/focus while command advances, and three existing B23 public-language protections passed in actual installed Windows Chrome (five tests total, one worker/zero retries). Typecheck and UI/Transport import boundary passed. The first source-return collection stopped before any legal delivery and correctly retained a disabled read control; corrected setup uses the existing explicit4x rate and waits for lawful delivery, with the failure retained.
+
+The sidebar and map layout contract remain unchanged. Two actual new test keys were discovered and registered: full295/portable281, original293keys/legacy231/native14 preserved. No workflow, retry, timeout, docs route, Game/Worker/Transport or schema change. Each tested build used an immutable snapshot/asset inventory and sequential owned4201 service. Independent fixed-commit review, T02, final CI/PR/main CI and delivery remain pending at this checkpoint. Original244AT not_run; formal PLAY/human usability not accepted.
+
+## UX-FOLLOWUP T02 local checkpoint — 2026-10-19
+
+Real correlated STALE_REVISION probes for preparation and return arrangements first failed on absent nearby-recheck entries, then passed after local UI context capture. The original submitted draft/actor/reason remains distinct from later input and current lawful HQ evidence; reading does not retry, pause, preview, save or issue. A controlled loss of a real committed preparation reply retained original-operation query recovery and explicit Game-confirmed pause; the definite-rejection entry stayed absent. This channel-fault probe is not a natural walkthrough or synthetic business rejection. The final targeted Windows Chrome collection passed all five new cases plus the original B25 stale-display protection and three B23 language/map protections (nine total). Typecheck/lint and seven existing wrapper contracts passed. Actual discovery is full298/portable284; original293keys plus T01 additions, legacy231 hashes and Windows14 remain unchanged.
+
+The full local default-parallel core invocation recorded768passed and16failed, all original5000ms timeouts across8unchanged files. Only those16 original failures were selected for a single-worker/file-serial check:16passed at the same assertion/time budgets; the153 excluded cases in those selected files were not counted again. Original failure/logs remain. This supports local parallel-resource contention, not a proven environmental root cause or a clean single784pass claim; the required complete remote CI remains pending.
+
+This checkpoint precedes final fixed-commit review, bounded same-content/current native close-and-restore checks, candidate/main CI, publication/artifacts, safe synchronization and whole-batch delivery. GitHub83/84/85 exist, but relation writes require actual network recovery/readback. Local UI and readonly checks do not sign original244AT, human feedback or formal PLAY. Narrow sidebar/layout friction and real revision conflicts still exist; no conflict-frequency, click/time or human-improvement claim.
+
+### UX-FOLLOWUP source-return focus correction — 2026-10-19
+
+Independent Spec review of545c28b found a P2: public-source navigation remounts the action sidebar, so stored rejected-control DOM nodes were detached. The existing real-stale return case now traverses the lawful original-source screen before returning to the arrangement entry. Its first collection stopped before source delivery (retained setup failure); after explicit pause/rate/continue setup and actual delivery, the old implementation failed specifically at the unchanged focus assertion. Stable control identities now resolve the current mounted preparation/source/activity and return/abort entries; saving a draft retains its live input reference. No business request, retry or time policy changes.
+
+The corrected snapshot passed the five current-action/recheck cases and three original B23 language/map cases (eight tests, one worker, zero retries), typecheck and boundary lint. The source-return RED and every prior failure remain preserved. Existing case identities and registration counts are unchanged. The initial graph retry stopped at a preflight callback deadline before any network mutation; the subsequent pure docs preflight passed. Revised fixed-commit review, final native checks and remote delivery still require actual receipts.
+
+The next Spec review identified the disabled-target edge: after a real stale preparation request, further unsaved edits disable the original application button. The same existing case now also follows that real request path, edits locally, and expects the current-action heading fallback without losing input or submitting twice. It failed specifically at that focus assertion on e63a6fd, then passed with a mounted-and-enabled target check in both workbenches. Only this affected case was rerun after the guard adjustment; it passed, as did typecheck and boundary lint. Earlier eight-case results remain separate. Both final builds made before the respective review fixes were never served and are not final-native evidence.
+
+Standards then found the same disabled-target edge in the save-plan live-input branch. The original save-rejection case now explicitly aborts through the existing UI after checking the reading-only phase, observes actual termination and the disabled draft input, then expects the same heading fallback and retained dirty text. The beb71848 implementation failed specifically at this focus assertion. All five new UX cases passed after unifying the enabled-target check, with typecheck/lint exit0. These are controlled technical probes, not human usability or conflict-rate measurements; original failures and review history remain.
+
+The earlier beb71848 immutable build separately passed the original default-command verification-first complete route and default Windows Chrome/Edge full-process close-and-restore cases (three tests, one worker/zero retries,3.4minutes). Each persistence case used its own retained native profile and the same4201origin across process close/reopen. This result signs that build. The subsequent runtime change is confined to the disabled save-input focus target; Game/Worker/Transport, IndexedDB, schema, native-test sources and other152runtime inputs remain byte-identical. Evidence reuse must state this one-file difference and the new five-case UI proof, not claim a fresh final-source fourteen-case native run. Existing source/layout/keyboard checks and remaining revision conflicts are reported separately; Agent familiarity and scripted pauses prevent claims about human improvement or reduced clicks/time/conflicts. Final accurate-SHA independent review and remote candidate/main CI, artifacts, safe synchronization and delivery remain pending.
+
+### First candidate CI and source-return fixture correction — 2026-10-19
+
+Run39193765920 at6a60e76 completed with quality successful and283/284 portable browser cases passed. The sole failure was the new E02/E07 case waiting10000ms for a lawful source delivery; none of its source-return assertions had run. Original result/summary/manifest/scope and failure remain retained. Natural-CI screenshot retrieval encountered transport failures, so its exact rate/rejection cause has not been certified from an image.
+
+A separate controlled old-fixture probe delayed its original rate request until an actual same-run clock revision advanced, then sent that unchanged request to the real Worker. It returned actual STALE_REVISION; the UI stayed at1x and00:10.703, reproducing the same source-not-delivered assertion failure. This demonstrates the unsafe setup path, not a synthetic rejection or proof that every natural failure has that cause. The final fixture now explicitly requests Game-confirmed pause, sets and checks4x, then explicitly continues before the unchanged reading/dirty/focus assertions. The delay instrumentation was removed. Only the affected case was recollected and passed in installed Windows Chrome; all153 runtime inputs and58 build assets remain identical to6a60e76. No original assertion, wait/test budget, retry, legacy source/key, business policy or CI configuration changed. Revised fixed-SHA review and actual new candidate/main CI remain pending; prior five-case and native results retain their original source/provenance limits.
+### Second candidate CI and pause/refusal correction — 2026-10-19
+
+Run39197488097 at2cd93d9 also recorded283/284 portable passes, with no retry,
+skip, cancelled or unknown cases; quality raw logs confirm784 core,7 wrapper
+and16 cleanup checks passed. The earlier source-return fixture passed. The sole
+new failure was the draft-rejection case waiting5000ms for outcome-termination
+after an abort submitted while command time was running. Its exact natural
+abort response code has not been certified, so this is not a unique-cause claim.
+
+An explicit Game-confirmed pause before that abort then exposed a product bug:
+the pause request succeeded and cleared the correlated STALE error, hiding the
+original draft-recheck entry. That local candidate failed at the original entry
+locator; the actual abort commitment, termination and disabled input had passed.
+The fix preserves only the same-run correlated STALE context on successful
+manual management pause. Failed/unknown pause handling and ordinary successful
+requests keep their existing policy. The fixture also verifies a real accepted
+abort reply; original no-auto-pause, terminal, disabled-input, dirty and focus
+assertions and budgets remain.
+
+The changed runtime then passed all five UX cases plus two fresh installed
+Windows Chrome/Edge same-profile, same-origin full-process recovery cases
+(seven passes, workers1/retries0). This replaces the earlier all153-runtime/
+58-asset equality claim for the new candidate: Intelli pause handling changed,
+the other152 runtime inputs remain unchanged, and new built assets require
+their own source binding. It is not a fresh fourteen-case native run. Old CI
+failures, the local pause/context RED and previous narrower reuse records remain
+retained; fixed-head review, new complete candidate/main CI and delivery await
+actual receipts. Original244AT and formalPLAY remain unsigned.
