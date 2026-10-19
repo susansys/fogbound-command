@@ -27,8 +27,8 @@ export async function conflictingRoute(page,{condition,route,expect,info}){
  }
  if(route==='repair'||condition==='faulted'){await issue('W-repair');await advance(route==='inspect'?324000:307000);}
  const recordAt=route==='inspect'?(condition==='operable'?304000:371000):354000;
- await issue('B-record');await advance(recordAt);await returning('W');await returning('R');await advance(593000);
- const final=await current();expect(final).toMatchObject({finished:true,outcome:{result:'success',missing_people:[]}});expect(final.outcome.qualified_artifacts).toHaveLength(2);expect(final.outcome.confirmed_people).toHaveLength(6);expect(final.outcome.finished_at).toBeLessThanOrEqual(593000);
+ await issue('B-record');await advance(recordAt);await returning('W');await returning('R');await page.getByLabel('推进到时刻（秒）').fill('593');await commit('推进到该时刻');
+ const final=await current();expect(final).toMatchObject({finished:true,outcome:{result:'success',missing_people:[]}});expect(final.sim_time).toBe(final.outcome.finished_at);expect(final.outcome.qualified_artifacts).toHaveLength(2);expect(final.outcome.confirmed_people).toHaveLength(6);expect(final.outcome.finished_at).toBeLessThanOrEqual(593000);
  const cost=route==='inspect'?(condition==='operable'?{energy:2,wear:1,packs:0}:{energy:8,wear:6,packs:2}):{energy:6,wear:5,packs:2};expect(final.actors.find(row=>row.actor==='W')).toMatchObject({equipment_energy:24-cost.energy,durability:100-cost.wear,packs:2-cost.packs});
  evidence.final=final;evidence.expected_work_cost=cost;await page.screenshot({path:info.outputPath(condition+'-'+route+'-complete.png'),fullPage:true});await fs.writeFile(info.outputPath(condition+'-'+route+'-route.json'),JSON.stringify(evidence,null,2)+'\n');return evidence;
 }
