@@ -28,11 +28,18 @@ test('UXF E03 E04 a real stale return arrangement exposes its own original actor
  await page.addInitScript(()=>{const witness={requests:[] as Record<string,any>[],replies:[] as Record<string,any>[]};Reflect.set(window,'__uxfReturn',witness);const Native=window.Worker;window.Worker=new Proxy(Native,{construct(Target,args){const worker=Reflect.construct(Target,args) as Worker,post=worker.postMessage.bind(worker);if(!String(args[0]).includes('/assets/worker-'))return worker;let held:Record<string,any>|null=null,first=true;worker.postMessage=(request:Record<string,any>)=>{witness.requests.push(structuredClone(request));if(first&&request.envelope?.intent.kind==='return_and_deliver'){first=false;held=request;return;}post(request);};worker.addEventListener('message',(event:MessageEvent)=>{const data=event.data,request=witness.requests.find(r=>r.request_id===data.request_id);if(request)witness.replies.push({request_id:data.request_id,intent:request.envelope?.intent.kind,ok:data.ok,code:data.code});if(held&&String(data.request_id).startsWith('clock-')&&data.ok&&data.view?.run_id===held.envelope.run_id&&data.view.revision>held.envelope.expected_revision){const original=held;held=null;post(original);}});return worker;}});});
  try{
   await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await page.getByRole('button',{name:'暂停行动',exact:true}).click();await expect(page.locator('.clock')).toContainText('已暂停');
+  await page.getByLabel('推进速度',{exact:true}).selectOption('4');await expect(page.getByLabel('推进速度',{exact:true})).toHaveValue('4');
+  await page.getByRole('button',{name:'继续行动',exact:true}).click();
+  const source=page.getByRole('button',{name:'查看当前已收资料',exact:true});await expect(source).toBeEnabled({timeout:10000});
   const arrange=page.getByRole('button',{name:'安排W返回交付',exact:true});await arrange.click();await page.getByLabel('返回理由（可选）',{exact:true}).fill('UXF原返回安排理由');await page.getByRole('button',{name:'确认返回交付',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>Reflect.get(window,'__uxfReturn').replies.some((r:any)=>r.intent==='return_and_deliver'&&!r.ok&&r.code==='STALE_REVISION'))).toBe(true);
   await fs.writeFile(info.outputPath('uxf-return-stale-trigger.json'),JSON.stringify(await page.evaluate(()=>Reflect.get(window,'__uxfReturn')),null,2),{flag:'wx'});
   const open=page.getByRole('button',{name:'查看本次返回安排与当前依据',exact:true});await expect(open).toBeVisible();await open.click();
   const review=page.getByRole('region',{name:'返回安排拒绝复核',exact:true});await expect(review).toContainText('W组');await expect(review).toContainText('UXF原返回安排理由');await expect(review).toContainText('总部最后确认');
+  await source.click();
+  await expect(page.getByRole('region',{name:'已收原文详情',exact:true})).toBeVisible();await page.getByRole('button',{name:'返回当前行动',exact:true}).click();
+  await expect(review).toContainText('UXF原返回安排理由');
   await review.getByRole('button',{name:'返回安排入口',exact:true}).click();await expect(arrange).toBeFocused();
   const witness=await page.evaluate(()=>Reflect.get(window,'__uxfReturn'));expect(witness.requests.filter((r:any)=>r.envelope?.intent.kind==='return_and_deliver')).toHaveLength(1);
  }finally{const witness=await page.evaluate(()=>Reflect.get(window,'__uxfReturn')).catch(()=>null);await fs.writeFile(info.outputPath('uxf-real-return-recheck.json'),JSON.stringify({witness,controlled_technical_probe:true,synthetic_rejection:false},null,2),{flag:'wx'});}
