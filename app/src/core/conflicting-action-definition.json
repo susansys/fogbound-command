@@ -1,0 +1,179 @@
+{
+  "schema": 12,
+  "scenario_kind": "play_conflicting_action",
+  "contract": "0.5.1",
+  "id": "B32-CONFLICTING-ACTION-01",
+  "version": 1,
+  "task_definition_hash": "274be78a494d303f57601a1b60554cab889024840da6c2c7e8f09ab793bbd4ea",
+  "field_definition_hash": "7b2a5b72b2d1c2ea87a50bc1d4ec5a5e51996d4b5b7ea9234369159cbd2b40ef",
+  "task_hashes": {
+    "profile": "f09a3fff7d04249beb945ed8578ad97e867663b22b7b4334de9b8f432125cc2c",
+    "capabilities": "855fed6c0704e6fc7c82484f3890eb6c5c72270f5d86a3998d14983fa4393694",
+    "rules": "4d4c1e92a23ea3d6348e615d1d98cdbb817091cfdab7e34be45796a25449f786",
+    "catalogs": "e61faa1b6fdcbb3bfc61a40baa10c5e6d09e6ba625fd909ed9643b0eee9d54c7",
+    "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "field_hashes": {
+    "profile": "faa36caf76f94141a0a5282b7f01384f79a2573708b798374faea372cfd34499",
+    "capabilities": "28ac05ef8ac311bbc9c617a8729a596d67ff43aeb7f2162fc8d43edced20c7b2",
+    "rules": "784308fbb295f614dc6d35b66a8d1899fa25de0ae1d8e36db3fd1e7ba833be6f",
+    "catalogs": "e61faa1b6fdcbb3bfc61a40baa10c5e6d09e6ba625fd909ed9643b0eee9d54c7",
+    "media": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "source_definition_hash": "75a7e1a9eb7439ea0c1110b81376b6d7558e9361ac4239b49199cf2afaecc1e0",
+  "profile": {
+    "id": "FIC-B32-CONFLICTING-ACTION-01",
+    "version": 1,
+    "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+    "parameters": {
+      "inspection_setup_ms": 5000,
+      "inspection_work_ms": 10000,
+      "inspection_energy": 2,
+      "inspection_wear": 1,
+      "inspection_packs": 0,
+      "assessment_versions": 32,
+      "assessment_reason_chars": 1000,
+      "assessment_basis_budget": 8
+    },
+    "registry": [
+      {
+        "id": "inspection_setup_ms",
+        "value": 5000,
+        "unit": "ms",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "inspection_work_ms",
+        "value": 10000,
+        "unit": "ms",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "inspection_energy",
+        "value": 2,
+        "unit": "count",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "inspection_wear",
+        "value": 1,
+        "unit": "count",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "inspection_packs",
+        "value": 0,
+        "unit": "count",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "assessment_versions",
+        "value": 32,
+        "unit": "count",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "assessment_reason_chars",
+        "value": 1000,
+        "unit": "character",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      },
+      {
+        "id": "assessment_basis_budget",
+        "value": 8,
+        "unit": "count",
+        "entry_version": 1,
+        "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/scenario-and-oracles",
+        "source_type": "design_assumption",
+        "calibration_status": "uncalibrated"
+      }
+    ]
+  },
+  "catalogs": {
+    "reports": [
+      {
+        "id": "FC1",
+        "version": 1,
+        "target": "B",
+        "source": "B点设施档案",
+        "claim": "operable",
+        "text": "B点设施记录称目前可用，仍需核对",
+        "event_time": {
+          "kind": "unknown"
+        },
+        "observed": 10000,
+        "source_reported": 15000
+      },
+      {
+        "id": "FC2",
+        "version": 1,
+        "target": "B",
+        "source": "B点设施档案",
+        "claim": "faulted",
+        "text": "B点设施记录称需要维修，仍需核对",
+        "event_time": {
+          "kind": "unknown"
+        },
+        "observed": 10000,
+        "source_reported": 17000
+      }
+    ],
+    "messages": [
+      {
+        "id": "D-FC1",
+        "report": "FC1",
+        "sender": "FacilityArchive",
+        "recipient": "HQ",
+        "sent": 19000,
+        "received": 20000
+      },
+      {
+        "id": "D-FC2",
+        "report": "FC2",
+        "sender": "FacilityArchive",
+        "recipient": "HQ",
+        "sent": 21000,
+        "received": 22000
+      }
+    ]
+  },
+  "rules": {
+    "version": "B32-CONFLICTING-ACTION-1.0.0",
+    "source_ref": "B32-CONFLICTING-ACTION-DESIGN-1.0.0/contract",
+    "target": "B",
+    "inspection_activity": "W-inspect",
+    "record_facility_gate": "delivered_operable_inspection_or_repair",
+    "retain_legacy_record_gates": true,
+    "facility_initial_version": 1
+  },
+  "hashes": {
+    "task": "274be78a494d303f57601a1b60554cab889024840da6c2c7e8f09ab793bbd4ea",
+    "field": "7b2a5b72b2d1c2ea87a50bc1d4ec5a5e51996d4b5b7ea9234369159cbd2b40ef",
+    "source": "75a7e1a9eb7439ea0c1110b81376b6d7558e9361ac4239b49199cf2afaecc1e0",
+    "profile": "357779aeccd04534f64db26bd40004ccd7c186c207e6ef19226bf7c053e09c06",
+    "catalogs": "bdc9a7f54fb6dc6b49d26d4433d55ee48e99370fcd2d91a6affed6e7d366bc8e",
+    "rules": "abd345611dc369003c6d200129de51507642d22995d644065638a685a2f1b1d2"
+  },
+  "definition_hash": "fc3ae9f65e40bd8e7b9d822f40ac9cb5a0f2c85494431f4619958bf9da1e55f1"
+}

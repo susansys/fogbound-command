@@ -1,4 +1,5 @@
 import type {IntelligenceDefinition} from './intelligence-definition';
+import {is_conflicting_task_hash,conflicting_task_definition,validate_conflicting_internal} from './conflicting-action-definition';
 import registered from './outcome-definition.json';
 import {load_intelligence_definition} from './intelligence-definition';
 import {hash} from './scenario';
@@ -62,9 +63,11 @@ export function outcome_definition_by_ref(reference:string):OutcomeDefinition{
 }
 export function is_outcome_definition(value:{schema:number}):value is OutcomeDefinition{return value.schema===10;}
 export function outcome_definition_for_package(digest:unknown,owned:readonly OutcomeDefinition[]=[]):OutcomeDefinition{
+ if(is_conflicting_task_hash(digest))return conflicting_task_definition();
  const found=[...builtinOutcomes,...preservedOutcomes,...owned].find(d=>d.definition_hash===digest);if(!found)throw new GameError('INVALID_SAVE');return structuredClone(found) as OutcomeDefinition;
 }
 export async function load_outcome_definition(input:unknown,owned:readonly OutcomeDefinition[]=[]):Promise<OutcomeDefinition>{
+ if(record(input)&&is_conflicting_task_hash(input.definition_hash)){const selected=conflicting_task_definition();await validate_conflicting_internal(input,selected);await load_intelligence_definition(selected.prefix_definition);return selected;}
  if(!record(input))throw new GameError('INVALID_DEFINITION');let selected:OutcomeDefinition;try{selected=outcome_definition_for_package(input.definition_hash,owned);}catch{throw new GameError('INVALID_DEFINITION');}
  if(JSON.stringify(input)!==JSON.stringify(selected)||selected.schema!==10||selected.scenario_kind!=='play_outcome'||selected.contract!=='0.5.1'||selected.id!=='B24-OUTCOME-01'||selected.version!==2||selected.profile.id!=='FIC-PLAY-B24-01'||selected.profile.version!==1)throw new GameError('INVALID_DEFINITION');
  const {definition_hash,...body}=selected;if(await hash(body)!==definition_hash)throw new GameError('INVALID_DEFINITION');for(const key of ['profile','capabilities','rules','catalogs'] as const)if(await hash(selected[key])!==selected.hashes[key])throw new GameError('INVALID_DEFINITION');if(await hash([])!==selected.hashes.media)throw new GameError('INVALID_DEFINITION');

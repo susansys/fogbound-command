@@ -1,3 +1,7 @@
+import {conflicting_definition_for_package,is_conflicting_action_definition,is_conflicting_task_hash} from './conflicting-action-definition';
+import {parse_working_assessment} from '../conflicting-action-protocol';
+import {initial_conflicting_state} from './conflicting-action-state';
+import {project_conflicting_action_view,apply_conflicting_action_control} from './conflicting-action';
 import {source_time_definition_for_package,is_source_time_definition} from './source-time-definition';
 import {initial_source_time_state,compose_source_time_state} from './source-time-state';
 import {project_source_time_view,project_source_reading} from './source-time';
@@ -9,7 +13,7 @@ import {hq_outcome_evidence,local_outcome_evidence,engine_outcome_evidence,decla
 import {project_outcome_view} from './outcome-knowledge';
 import {apply_outcome_control,create_outcome_rejection} from './outcome-game';
 import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_return_and_deliver,parse_outcome_envelope,parse_outcome_debrief_query,parse_outcome_truth_request,parse_outcome_evidence_request} from '../outcome-protocol';
-import {outcome_definition_for_package,outcome_decision_profile_for,is_outcome_definition,type OutcomeDefinition} from './outcome-definition';
+import {outcome_definition_for_package,load_outcome_definition,outcome_decision_profile_for,is_outcome_definition,type OutcomeDefinition} from './outcome-definition';
 import type {ReturnAndDeliver,OutcomePlayerView,OutcomeEnvelope} from '../outcome-contracts';
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {
@@ -54,7 +58,7 @@ import {preview_corridor} from './play-preview';
 import type {RouteDraft,RoutePlan,PreviewPlan} from '../route-contracts';
 import {preview_prestart,register_prestart,initial_prestart_data} from './prestart-move';
 import {prestart_parameters,prestart_case} from './scenario';
-function project_player_view(state:StoredState,registered:readonly import("./scenario").PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[],sources:readonly import('./source-time-definition').SourceTimeDefinition[]=[]):PlayerView{return state.schema===11?project_source_time_view(state,sources):state.schema===10?project_outcome_view(state,outcomes):state.schema===9?project_intelligence_view(state,intelligence):state.schema===8?project_mission_view(state,missions):state.schema===7?project_play_view(state,registered):project_legacy_view(state);}
+function project_player_view(state:StoredState,registered:readonly import("./scenario").PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[],sources:readonly import('./source-time-definition').SourceTimeDefinition[]=[]):PlayerView{return state.schema===12?project_conflicting_action_view(state):state.schema===11?project_source_time_view(state,sources):state.schema===10?project_outcome_view(state,outcomes):state.schema===9?project_intelligence_view(state,intelligence):state.schema===8?project_mission_view(state,missions):state.schema===7?project_play_view(state,registered):project_legacy_view(state);}
 export class Game {
   private writer_owner:Game|null=null;
   private epoch: number | null = null;
@@ -62,7 +66,7 @@ export class Game {
   private history:StoredState|null=null;
   private readonly validated_source_tasks=new WeakSet<object>();
   private readonly verified_replay_states=new Set<string>();
-  constructor(readonly store: Persistence) {}
+  constructor(readonly store: Persistence,private readonly fixture:{conflicting_facility?:'operable'|'faulted'}={}) {}
   private remember_replay_state(integrity:string){
     this.verified_replay_states.add(integrity);
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
@@ -79,11 +83,17 @@ export class Game {
     }catch{throw new GameError('INVALID_SAVE');}
   }
   private async validate_stored_state(state:StoredState){
+    if(this.validated_source_tasks.has(state)&&state.schema===10&&is_conflicting_task_hash(state.definition_hash)){
+      // Only a task obtained from an already validated schema12 snapshot may
+      // reach metadata readers. The public standalone-schema gate stays shut.
+      if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
+      await load_outcome_definition(outcome_definition_for_package(state.definition_hash));return;
+    }
     if(this.validated_source_tasks.has(state)){await this.validate_package(state);return;}
 
     await this.validate_package(state);
-    if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9&&state.schema!==10&&state.schema!==11)return;
-    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined}));
+    if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9&&state.schema!==10&&state.schema!==11&&state.schema!==12)return;
+    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined,facility_initial:value.schema===12?value.facility.initial:undefined}));
     const seen=new Set<string>();let current=state;
     while(true){
       if(seen.has(current.run_id))throw new GameError('INVALID_SAVE');seen.add(current.run_id);
@@ -93,8 +103,8 @@ export class Game {
       if(current.source_run===null)return;
       const parent=await this.store.read_committed(current.source_run);
       await this.validate_package(parent);
-      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||((current.schema===7||current.schema===8||current.schema===9||current.schema===10||current.schema===11)&&parent.mode!==current.mode)||(current.schema===6&&(parent.schema!==6||parent.prestart?.case_ref!==current.prestart?.case_ref))||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
-      if(parent.schema!==6&&parent.schema!==7&&parent.schema!==8&&parent.schema!==9&&parent.schema!==10&&parent.schema!==11)throw new GameError('INVALID_SAVE');current=parent;
+      if(!parent||parent.schema!==current.schema||parent.definition_hash!==current.definition_hash||((current.schema===7||current.schema===8||current.schema===9||current.schema===10||current.schema===11||current.schema===12)&&parent.mode!==current.mode)||(current.schema===6&&(parent.schema!==6||parent.prestart?.case_ref!==current.prestart?.case_ref))||parent.rng.origin!==current.rng.origin||!await this.store.is_read_only(parent.run_id))throw new GameError('INVALID_SAVE');
+      if(parent.schema!==6&&parent.schema!==7&&parent.schema!==8&&parent.schema!==9&&parent.schema!==10&&parent.schema!==11&&parent.schema!==12)throw new GameError('INVALID_SAVE');current=parent;
     }
   }
   private assert_current(){if(this.history)throw new GameError('HISTORY_READ_ONLY');}
@@ -102,7 +112,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(source);
-    return this.create(source.schema===11?source_time_definition_for_package(source.definition_hash,this.store.source_definitions):source.schema===10?outcome_definition_for_package(source.definition_hash,this.store.outcome_definitions):source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
+    return this.create(source.schema===12?conflicting_definition_for_package(source.definition_hash):source.schema===11?source_time_definition_for_package(source.definition_hash,this.store.source_definitions):source.schema===10?outcome_definition_for_package(source.definition_hash,this.store.outcome_definitions):source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -114,7 +124,7 @@ export class Game {
     // A history context is a reader owned by this same Game/Worker. Its
     // debrief metadata must use that owner lease, never claim a second writer.
     context.writer_owner=this.writer_owner??this;
-    if((latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
+    if((latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11||latest.schema===12)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
     if(nodeRevision!==undefined){
       if(!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
       const node=await this.store.snapshot(run,nodeRevision);
@@ -131,8 +141,8 @@ export class Game {
         if(node?.sim_time===to){context.history=node;return context;}
       }
     }
-    if(initial.schema===8||initial.schema===9||initial.schema===10||initial.schema===11)throw new GameError('INVALID_INPUT');
-    if(latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11)throw new GameError('INVALID_SAVE');
+    if(initial.schema===8||initial.schema===9||initial.schema===10||initial.schema===11||initial.schema===12)throw new GameError('INVALID_INPUT');
+    if(latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11||latest.schema===12)throw new GameError('INVALID_SAVE');
     context.history=initial.schema===7?replay_play_state(initial,latest.inputs,to,this.store.play_definitions):replay_state(initial,latest.inputs,to);return context;
   }
   private async writer():Promise<number> {
@@ -189,6 +199,7 @@ export class Game {
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
+    if(is_conflicting_action_definition(definition)){const state=await initial_conflicting_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,source?.schema===12?source.facility.initial:this.fixture.conflicting_facility);await this.commit(state,null,operation,creationFingerprint);return project_conflicting_action_view(state);}
     if(is_source_time_definition(definition)){const state=await initial_source_time_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_source_time_view(state,this.store.source_definitions);}
     if(is_outcome_definition(definition)){const state=initial_outcome_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_outcome_view(state,this.store.outcome_definitions);}
     if(is_intelligence_definition(definition)){
@@ -351,8 +362,8 @@ export class Game {
     if(await this.store.is_read_only(run)){view.can_issue=false;view.next_action='查看保留的行动记录';view.gap='这场行动已保留为只读记录';}
     return view;
   }
-  private async outcome_current(run:string){const outer=this.history?.run_id===run?this.history:await this.store.read_committed(run);if(outer?.schema===11){await this.validate_stored_state(outer);this.validated_source_tasks.add(outer.task);return outer.task;}return outer;}
-  private async outcome_snapshot(run:string,revision:number){const outer=await this.store.snapshot(run,revision);if(outer?.schema===11){await this.validate_stored_state(outer);this.validated_source_tasks.add(outer.task);return outer.task;}return outer;}
+  private async outcome_current(run:string){const outer=this.history?.run_id===run?this.history:await this.store.read_committed(run);if(outer?.schema===11||outer?.schema===12){await this.validate_stored_state(outer);this.validated_source_tasks.add(outer.task);return outer.task;}return outer;}
+  private async outcome_snapshot(run:string,revision:number){const outer=await this.store.snapshot(run,revision);if(outer?.schema===11||outer?.schema===12){await this.validate_stored_state(outer);this.validated_source_tasks.add(outer.task);return outer.task;}return outer;}
   async get_outcome_fairness(run:string){
     if(!valid_id(run))throw new GameError('INVALID_REQUEST');
     const state=await this.outcome_current(run);
@@ -529,7 +540,7 @@ export class Game {
   async get_actor_view(run:string,actor:string){
     if(!valid_id(run)||!valid_id(actor))throw new GameError('INVALID_INPUT');
     const outer=this.history?.run_id===run?this.history:await this.store.read_committed(run);
-    if(!outer)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(outer);const state=outer.schema===11?outer.task:outer;
+    if(!outer)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(outer);const state=(outer.schema===11||outer.schema===12)?outer.task:outer;
     if(state.schema===10){
       const abort = state.abort_notifications.find(n=>n.target===actor&&n.received!==null);const termination = abort&&state.termination?{received_at:abort.received,cleanup_deadline:state.termination.cleanup_deadline}:null;
       if(actor==='INTEL')return {run_id:run,actor:'INTEL',termination,sim_time:state.sim_time,work:structuredClone(state.prefix.processing.items),verification_batches:structuredClone(state.verification_batches),received_manifests:structuredClone(state.reception_manifests.filter(m=>state.reception_deliveries.some(d=>d.target==='INTEL'&&d.received<=state.sim_time&&state.reception_reports.some(r=>r.ref.id===d.report_ref.id&&r.phase==='completed'&&r.batch_ref.id===m.batch_ref.id)))),resources:{energy:state.prefix.processing.energy,energy_reserved:state.prefix.processing.energy_reserved},known_reports:structuredClone(state.reception_deliveries.filter(d=>d.target==='INTEL'&&d.received<=state.sim_time).map(delivery=>({delivery,report:state.reception_reports.find(r=>r.ref.id===delivery.report_ref.id)!}))),published_reports:structuredClone(state.verification_reports),published_status_reports:structuredClone(state.verification_status_reports)};
@@ -544,10 +555,19 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     if(actor!==definition.catalogs.source.actor)throw new GameError('UNSUPPORTED');
     return {run_id:run,actor,sim_time:state.sim_time,work:structuredClone(state.source.work),resources:structuredClone(state.source.resources),published_reports:structuredClone(state.reports.filter(r=>r.id===state.source.published_report_ref))};
   }
-  async apply_outcome_intent(input:unknown,clock_to?:number):Promise<{receipt:Receipt;view:OutcomePlayerView}>{return this.commit_outcome_request(parse_outcome_envelope(input),clock_to);}
+  async apply_outcome_intent(input:unknown,clock_to?:number):Promise<{receipt:Receipt;view:OutcomePlayerView}>{return record(input)&&record(input.intent)&&input.intent.kind==='save_working_assessment'?this.commit_conflicting_request(parse_working_assessment(input),clock_to):this.commit_outcome_request(parse_outcome_envelope(input),clock_to);}
   async return_and_deliver(input:unknown):Promise<{receipt:Receipt;view:OutcomePlayerView}>{return this.commit_outcome_request(parse_return_and_deliver(input));}
+  private async commit_conflicting_request(request:import('../conflicting-action-contracts').ConflictingActionEnvelope,clock_to?:number):Promise<{receipt:Receipt;view:import('../conflicting-action-contracts').ConflictingActionPlayerView}>{
+    this.assert_current();await this.assert_writable(request.run_id);const state=await this.store.read_committed(request.run_id);if(state?.schema!==12)throw new GameError('INVALID_REQUEST');await this.validate_stored_state(state);
+    const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);
+    if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return {receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:request.intent.kind,...(request.intent.kind==='restore'?{snapshot_revision:request.intent.snapshot_revision}:{})},view:project_conflicting_action_view(state)};}
+    if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
+    const candidate=await apply_conflicting_action_control(state,request,clock_to);await this.commit(candidate,state.revision,request.operation_id,fingerprint);
+    return {receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:request.intent.kind,...(request.intent.kind==='restore'?{snapshot_revision:request.intent.snapshot_revision}:{})},view:project_conflicting_action_view(candidate)};
+  }
   private async commit_outcome_request(request:OutcomeEnvelope,clock_to?:number):Promise<{receipt:Receipt;view:OutcomePlayerView}>{
-    this.assert_current();await this.assert_writable(request.run_id);const outer=await this.store.read_committed(request.run_id);if(!outer)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(outer);const state=outer.schema===11?outer.task:outer;if(state.schema!==10)throw new GameError('INVALID_REQUEST');
+    if((await this.store.read_committed(request.run_id))?.schema===12)return this.commit_conflicting_request(request,clock_to);
+    this.assert_current();await this.assert_writable(request.run_id);const outer=await this.store.read_committed(request.run_id);if(!outer)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(outer);const state=(outer.schema===11||outer.schema===12)?outer.task:outer;if(state.schema!==10)throw new GameError('INVALID_REQUEST');
     const fingerprint=await hash(canonical(request)),prior=await this.store.receipt(state.run_id,request.operation_id);if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_ID_REUSED');return {receipt:{run_id:state.run_id,operation_id:request.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:request.intent.kind},view:outer.schema===11?project_source_time_view(outer,this.store.source_definitions):project_outcome_view(state,this.store.outcome_definitions)};}
     if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');let candidate:import('./outcome-state').OutcomeState;
     try{candidate=await apply_outcome_control(state,request,clock_to,this.store.outcome_definitions);}catch(error){
@@ -664,7 +684,7 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     const state = this.history?.run_id===run?this.history:await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await this.validate_stored_state(state);
-    if(state.schema===9||state.schema===10||state.schema===11)throw new GameError('INVALID_REQUEST');
+    if(state.schema===9||state.schema===10||state.schema===11||state.schema===12)throw new GameError('INVALID_REQUEST');
     if(state.schema===8){
       if(revision!==state.revision)throw new GameError('STALE_REVISION');
       return preview_mission(state,editing_seq,route_draft,this.store.mission_definitions);
@@ -775,7 +795,7 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     await this.assert_writable(envelope.run_id);
     const state = await this.store.read_committed(envelope.run_id);
     if(!state)throw new GameError('RUN_NOT_FOUND');
-    if(state.schema===10||state.schema===11)return this.commit_outcome_request(envelope,clock_to);
+    if(state.schema===10||state.schema===11||state.schema===12)return this.commit_outcome_request(envelope,clock_to);
     if(state.schema===9){
       await this.validate_stored_state(state);
       const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(state.run_id,envelope.operation_id);

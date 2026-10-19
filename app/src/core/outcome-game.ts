@@ -1,3 +1,4 @@
+import type {ConflictingFacilityState} from './conflicting-action-state';
 import {canonical} from './snapshot';
 import {capture_outcome_observations,hq_outcome_evidence} from './outcome-evidence';
 import {evaluate_outcome,finish_outcome,outcome_public_obligations} from './outcome-evaluation';
@@ -7,15 +8,17 @@ import {advance_intelligence_source} from './intelligence-source';import {advanc
 import {project_outcome_view} from './outcome-knowledge';import {hash} from './scenario';import {advance_return_reception,next_outcome_time} from './outcome-execution';
 async function decision_sources(state:OutcomeState,envelope:OutcomeEnvelope,known:import('../outcome-contracts').OutcomePlayerView){
  const intent=envelope.intent;
+ // A schema12 assessment advances the authoritative revision without inventing
+ // an inner action input. Decision sequence follows that public revision.
  const evidence=await hq_outcome_evidence(known),known_then_refs=evidence.filter(entry=>entry.ref.kind==='report'||entry.ref.kind==='delivery'||entry.ref.kind==='event').map(entry=>entry.ref);
- return {knowledge_revision:state.revision,operation_seq:state.inputs.length+1,basis_refs:'basis_delivery_refs' in intent?structuredClone(intent.basis_delivery_refs):[],known_then_refs,selected_versions:{plan_ref:'plan_ref' in intent?structuredClone(intent.plan_ref):intent.kind==='save_plan'?structuredClone(intent.base_plan_ref):null,activity_ref:'activity_ref' in intent?structuredClone(intent.activity_ref):null,authority_ref:'authority_ref' in intent?structuredClone(intent.authority_ref):null},administrative_receipt_ref:{run_id:state.run_id,kind:'administrative_receipt' as const,id:envelope.operation_id,version:1}};
+ return {knowledge_revision:state.revision,operation_seq:state.revision,basis_refs:'basis_delivery_refs' in intent?structuredClone(intent.basis_delivery_refs):[],known_then_refs,selected_versions:{plan_ref:'plan_ref' in intent?structuredClone(intent.plan_ref):intent.kind==='save_plan'?structuredClone(intent.base_plan_ref):null,activity_ref:'activity_ref' in intent?structuredClone(intent.activity_ref):null,authority_ref:'authority_ref' in intent?structuredClone(intent.authority_ref):null},administrative_receipt_ref:{run_id:state.run_id,kind:'administrative_receipt' as const,id:envelope.operation_id,version:1}};
 }
 export async function create_outcome_rejection(state:OutcomeState,request:OutcomeEnvelope,code:import('../outcome-contracts').OutcomeRejectedDecision['code'],owned:readonly OutcomeDefinition[]=[]):Promise<Omit<import('../outcome-contracts').OutcomeRejectedDecision,'ref'|'attempt_seq'>>{
  if(typeof state.integrity!=='string')throw new GameError('INVALID_SAVE');
  const known=project_outcome_view(state,owned),knowledge=structuredClone({actors:known.actors,received_reports:known.received_reports,processing:known.processing,plan:known.plan}),sources=await decision_sources(state,request,known);
  return {code,public_constraints:structuredClone({field_activities:known.field_activities,return_plans:known.return_plans}),source_revision:state.revision,source_digest:state.integrity,at:state.sim_time,request:structuredClone(request),request_digest:await hash(canonical(request)),knowledge,knowledge_digest:await hash(knowledge),known_then_refs:sources.known_then_refs};
 }
-export async function apply_outcome_control(state:OutcomeState,envelope:OutcomeEnvelope,clock_to?:number,owned:readonly OutcomeDefinition[]=[]):Promise<OutcomeState>{
+export async function apply_outcome_control(state:OutcomeState,envelope:OutcomeEnvelope,clock_to?:number,owned:readonly OutcomeDefinition[]=[],facility?:ConflictingFacilityState):Promise<OutcomeState>{
  const d=outcome_definition_for_package(state.definition_hash,owned),p=d.profile.parameters;
  if(['abort_outcome','return_and_deliver','save_plan','request_source_validation','request_preparation','issue_activity'].includes(envelope.intent.kind))parse_outcome_envelope(envelope);else if(!valid_envelope(envelope,p.deadline+p.receipt_grace,true))throw new GameError('INVALID_REQUEST');
  const declared_reason='reason' in envelope.intent&&typeof envelope.intent.reason==='string'?{kind:'recorded' as const,text:envelope.intent.reason}:{kind:'not_recorded' as const};
@@ -27,7 +30,7 @@ export async function apply_outcome_control(state:OutcomeState,envelope:OutcomeE
   if(!Number.isSafeInteger(to)||to<next.sim_time||to>p.deadline+p.receipt_grace)throw new GameError('INVALID_INPUT');let steps=0;
   while(next.sim_time<to&&!next.finished){if(++steps>128)throw new GameError('ENGINE_UNCONFIRMED');const at=Math.min(next_outcome_time(next,to,d),next.termination?.cleanup_deadline??Infinity),kind=state.mode==='command'?'tick':'advance';
    const inner:Envelope={run_id:state.run_id,operation_id:'B24-clock-'+state.revision+'-'+at,expected_revision:next.prefix.revision,intent:{kind,to:at}},oldTime=next.prefix.sim_time;
-   receive_outcome_abort(next,at,d);advance_intelligence_source(next.prefix,at,d.prefix_definition);advance_intelligence_reports(next.prefix,at,d.prefix_definition);advance_processing_work(next.prefix,at,d.prefix_definition,processingAdmission());advance_field_work(next.prefix,at,d.prefix_definition,{deadline:p.deadline,abort_receipts:next.abort_notifications.filter(n=>(n.target==='R'||n.target==='W')&&n.received!==null).map(n=>({actor:n.target,received_at:n.received!}))});next.prefix.sim_time=at;next.prefix.ended=at===p.deadline+p.receipt_grace;if(next.prefix.ended)next.prefix.paused=true;next.prefix.revision++;next.prefix.inputs.push({envelope:inner,at:oldTime,revision:next.prefix.revision});sync();receive_outcome_abort(next,at,d);await advance_return_reception(next,at,d);receive_outcome_abort(next,at,d);
+   receive_outcome_abort(next,at,d);advance_intelligence_source(next.prefix,at,d.prefix_definition);advance_intelligence_reports(next.prefix,at,d.prefix_definition);advance_processing_work(next.prefix,at,d.prefix_definition,processingAdmission());advance_field_work(next.prefix,at,d.prefix_definition,{facility,deadline:p.deadline,abort_receipts:next.abort_notifications.filter(n=>(n.target==='R'||n.target==='W')&&n.received!==null).map(n=>({actor:n.target,received_at:n.received!}))});next.prefix.sim_time=at;next.prefix.ended=at===p.deadline+p.receipt_grace;if(next.prefix.ended)next.prefix.paused=true;next.prefix.revision++;next.prefix.inputs.push({envelope:inner,at:oldTime,revision:next.prefix.revision});sync();receive_outcome_abort(next,at,d);await advance_return_reception(next,at,d);receive_outcome_abort(next,at,d);
    if(d.catalogs.hard_boundary&&at===d.catalogs.hard_boundary.hard_close_time)finish_outcome(next,{...evaluate_outcome(next,at,d,'failure'),result:'failure'});
    else if(next.termination){const result=evaluate_outcome(next,at,d,'aborted');if(at===next.termination.cleanup_deadline||public_cleanup_complete(project_outcome_view(next,owned),result))finish_outcome(next,result);}
    else if(!next.termination){const result=evaluate_outcome(next,at,d,'success');if(result.result==='success'&&result.qualified_artifacts.length===2&&result.missing_people.length===0)finish_outcome(next,result);else if(at===p.deadline+p.receipt_grace)finish_outcome(next,evaluate_outcome(next,at,d,'failure'));}
@@ -68,7 +71,7 @@ export async function apply_outcome_control(state:OutcomeState,envelope:OutcomeE
   if(inner.intent.kind==='request_source_validation'||inner.intent.kind==='request_preparation'){
    if(inner.intent.kind==='request_source_validation')request_source_work(next.prefix,inner as import('../intelligence-protocol').IntelligenceSourceRequest,d.prefix_definition,processingAdmission());else request_preparation_work(next.prefix,inner as import('../intelligence-contracts').IntelligencePreparationRequest,d.prefix_definition,processingAdmission());
    next.prefix.revision++;next.prefix.inputs.push({envelope:inner,at:next.prefix.sim_time,revision:next.prefix.revision});
-  }else next.prefix=apply_intelligence_control(next.prefix,inner,undefined,[d.prefix_definition]);sync();
+  }else next.prefix=apply_intelligence_control(next.prefix,inner,undefined,[d.prefix_definition],facility);sync();
  }
  capture_outcome_observations(next);next.revision++;next.inputs.push({envelope:structuredClone(envelope),at:clock_to===undefined?state.sim_time:next.sim_time,revision:next.revision,...(clock_to===undefined?{}:{clock_to})});return next;
 }

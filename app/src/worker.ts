@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 import {source_time_definition} from './core/source-time-definition';
+import {conflicting_action_definition} from './core/conflicting-action-definition';
+import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
 import { Game } from "./core/game";
 import { Persistence } from "./core/persistence";
 import { engineeringDefinition,recordEngineeringDefinition,prestartEngineeringDefinition,playCorridorDefinition,load_definition,prestart_case,hash } from "./core/scenario";
@@ -81,7 +83,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
   const kind=event.data&&typeof event.data==='object'?Reflect.get(event.data,'kind'):null;
   const envelope=event.data&&typeof event.data==='object'?Reflect.get(event.data,'envelope'):null;
   const intent=envelope&&typeof envelope==='object'?Reflect.get(envelope,'intent'):null;
-  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
+  const pause=kind==='management_pause'||['operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action'].includes(kind)&&intent&&typeof intent==='object'&&Reflect.get(intent,'kind')==='pause';
   if(pause)pendingPauses++;
   queue = queue.then(async () => {
     let stalePauseView:import('./mission-contracts').MissionPlayerView|undefined;
@@ -91,8 +93,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -145,7 +147,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='B31-SOURCE-TIME-01'?source_time_definition:input.definition_ref?.startsWith('B24-OUTCOME-')?outcome_definition_by_ref(input.definition_ref):input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='B32-CONFLICTING-ACTION-01'?conflicting_action_definition:input.definition_ref==='B31-SOURCE-TIME-01'?source_time_definition:input.definition_ref?.startsWith('B24-OUTCOME-')?outcome_definition_by_ref(input.definition_ref):input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
@@ -211,6 +213,12 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
             input.editing_seq,
           ),
         };
+      else if(input.kind==='operate_conflicting_action'&&locked){
+        const envelope=parse_conflicting_action_envelope(input.envelope),view=await game.get_view(envelope.run_id);
+        if(!('conflicting_action' in view))throw new GameError('INVALID_INPUT');
+        const clock_to=envelope.intent.kind!=='save_working_assessment'&&active?.run_id===envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
+        response={request_id,ok:true,...await game.apply_outcome_intent(envelope,clock_to)};
+      }
       else if(input.kind==='operate_outcome'&&locked){
         const envelope=parse_outcome_envelope(input.envelope),view=await game.get_view(envelope.run_id);if(view.scenario_kind!=='play_outcome')throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;response={request_id,ok:true,...await game.apply_outcome_intent(envelope,clock_to)};

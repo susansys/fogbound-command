@@ -1,3 +1,5 @@
+import {validate_conflicting_action_state} from './conflicting-action';
+import {is_conflicting_field_hash,is_conflicting_task_hash} from './conflicting-action-definition';
 import {validate_source_time_state} from './source-time';
 import {validate_outcome_state} from './outcome-snapshot';
 import {is_record_plan,is_task_intent} from '../contracts';
@@ -165,6 +167,8 @@ function prestart_history_matches(state:State,definition:ReturnType<typeof defin
 }
 export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly import('./outcome-definition').OutcomeDefinition[]=[],sources:readonly import('./source-time-definition').SourceTimeDefinition[]=[]):Promise<StoredState>{
   try{
+    if(record(value)&&value.schema===12){if(!json_data(value))throw Error('invalid');return await validate_conflicting_action_state(value);}
+    if(record(value)&&(is_conflicting_field_hash(value.definition_hash)||is_conflicting_task_hash(value.definition_hash)))throw Error('invalid');
     if(record(value)&&value.schema===11){if(!json_data(value))throw Error('invalid');return await validate_source_time_state(value,sources);}
     if(record(value)&&value.schema===10){if(!json_data(value))throw Error('invalid');return await validate_outcome_state(value,outcomes);}
     if(record(value)&&value.schema===9){if(!json_data(value))throw Error('invalid');return await validate_intelligence_state(value,intelligence);}

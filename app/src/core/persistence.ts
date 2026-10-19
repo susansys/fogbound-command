@@ -9,7 +9,7 @@ import type {IntelligenceDefinition} from './intelligence-definition';
 import {outcome_definition_for_package} from './outcome-definition';
 import {create_outcome_debrief_anchor} from './outcome-debrief';
 // Metadata adapters operate on the already validated original task identity.
-const outcome_task=(state:State|undefined)=>state?.schema===11?state.task:state;
+const outcome_task=(state:State|undefined)=>state?.schema===11||state?.schema===12?state.task:state;
 class Database extends Dexie {
   runs!: Table<State, string>;
   snapshots!: Table<{ key: string; run_id: string; state: State }, string>;
@@ -276,7 +276,7 @@ export class Persistence {
     // This source may belong to another run and has not passed the caller's
     // Game validation. Keep the IDB transaction alive while checking the whole
     // source package, before inspecting its original task metadata.
-    for(const value of [raw,rawSealed])if(value?.schema===11)await Dexie.waitFor(validate_state(value,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions,this.source_definitions));
+    for(const value of [raw,rawSealed])if(value?.schema===11||value?.schema===12)await Dexie.waitFor(validate_state(value,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions,this.source_definitions));
     const state=outcome_task(raw),sealed=outcome_task(rawSealed);
     const grant=(await this.db.metadata.get('outcome-truth-grant:'+source.run_id+':'+source.operation_id))?.truth_grant;
     if(state?.schema!==10||state.definition_hash!==definition_hash||!state.finished||sealed?.schema!==10||!sealed.finished||sealed.integrity!==source.run_digest||!grant||grant.ack_revision===null)throw new GameError('INVALID_SAVE');
@@ -306,9 +306,10 @@ export class Persistence {
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
-      scenario_kind: x.schema===11?'play_outcome' as const:x.schema===10?'play_outcome' as const:x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
+      scenario_kind: x.schema===12?'play_outcome' as const:x.schema===11?'play_outcome' as const:x.schema===10?'play_outcome' as const:x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
       read_only,
-      ...(x.schema===11?{source_package:{id:'B31-SOURCE-TIME-01' as const,version:1 as const}}:{}),
+      ...((x.schema===11||x.schema===12)?{source_package:{id:'B31-SOURCE-TIME-01' as const,version:1 as const}}:{}),
+      ...(x.schema===12?{conflicting_package:{id:'B32-CONFLICTING-ACTION-01' as const,version:1 as const}}:{}),
     }));
   }
   async delete(): Promise<void> {
