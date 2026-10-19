@@ -6,7 +6,7 @@
 
 | 身份 | 固定来源 | 结论范围 |
 | --- | --- | --- |
-| 已合并工程来源 main | [f7ce7996be0fbe1bb6302172be1a27a77b91344d](https://github.com/susansys/fogbound-command/commit/f7ce7996be0fbe1bb6302172be1a27a77b91344d) | B32 冲突信息下的有界行动薄片已完成工程交付；主事件登记另按正式记录核对，文档不新增工程事件 |
+| 已合并工程来源 main | [f7ce7996be0fbe1bb6302172be1a27a77b91344d](https://github.com/susansys/fogbound-command/commit/f7ce7996be0fbe1bb6302172be1a27a77b91344d) | B32 冲突信息下的有界行动薄片已完成工程交付；正式交付事件已按原负责人记录核对，文档不新增工程事件 |
 | 文档来源 README | [固定 README](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/README.md) | 该固定公开 README 仍列旧六个演练；后续界面改进和 B31 可选档案包按固定实现、PR 分列，不把旧首页说明当最新范围；发布事实按 PR／验证记录分列 |
 | 该工程来源的 main CI | [39311064383](https://github.com/susansys/fogbound-command/actions/runs/39311064383) | 工作流成功；872 核心、293 可移植浏览器通过；Windows 18 项义务另有实际候选证据，main 仅按同源与制品绑定复用，不冒称重跑全套 |
 | 本目录已有文档交付 | [PR #98](https://github.com/susansys/fogbound-command/pull/98)、[文档 main bb5a4e4](https://github.com/susansys/fogbound-command/commit/bb5a4e46a6051bf3fab8fcbc4507f39fd6159baf) | 上次六文档真实 docs-only CI 已成功；runtime 未运行，不视为游戏测试通过 |
