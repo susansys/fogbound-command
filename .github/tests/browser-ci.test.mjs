@@ -42,9 +42,9 @@ function run(mode){
 test('one browser failure retains later independent results and a nonzero gate',()=>{
  const {result,manifest,report,summary}=run('fail');assert.notEqual(result.status,0);
  assert.ok(manifest,'full manifest is an artifact even when execution fails');assert.ok(report,'raw report remains available');assert.ok(summary);
- const expected=process.platform==='win32'?307:291;
+ const expected=process.platform==='win32'?309:293;
  assert.equal(summary.expected_count,expected);assert.equal(summary.actual_passed_count,expected-1);assert.equal(summary.failed_count,1);assert.equal(summary.not_run_count,0);assert.equal(summary.status,'failed');
- assert.equal(summary.passed_ids.length,expected-1);assert.equal(manifest.tests.length,307);
+ assert.equal(summary.passed_ids.length,expected-1);assert.equal(manifest.tests.length,309);
  assert(result.stdout.split('\n').every(line=>Buffer.byteLength(line)<4096),'machine summaries must not hit the GitHub 64KiB line limit');
 });
 test('all required cases pass only with complete raw and identity artifacts',()=>{
@@ -57,7 +57,7 @@ test('an exit-zero report with the right count but the wrong identity cannot pub
  const {result,summary}=run('wrong-identity');assert.notEqual(result.status,0);assert.equal(summary.status,'failed');assert.equal(summary.actual_passed_count,summary.expected_count);assert.ok(summary.validation_error);
 });
 test('the existing captured discovery interface keeps full tests and native selection fields',()=>{
- const {result}=run('list');assert.equal(result.status,0,result.stderr);const manifest=JSON.parse(result.stdout.split('\n').find(line=>line.startsWith('FB01_BROWSER_MANIFEST ')).slice(22));assert.equal(manifest.tests.length,307);assert.equal(typeof manifest.native_exclusion_pattern,'string');
+ const {result}=run('list');assert.equal(result.status,0,result.stderr);const manifest=JSON.parse(result.stdout.split('\n').find(line=>line.startsWith('FB01_BROWSER_MANIFEST ')).slice(22));assert.equal(manifest.tests.length,309);assert.equal(typeof manifest.native_exclusion_pattern,'string');
 });
 
 test('only a verified diff of the six existing ordinary maintenance docs selects the explicit docs route',()=>{

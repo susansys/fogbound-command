@@ -7,10 +7,16 @@ import {OutcomeDebrief} from './outcome-debrief';
 import type {OutcomeFairness} from './outcome-contracts';
 import type {Request} from './transport';
 import {parse_outcome_envelope} from './outcome-protocol';
+import {action_request_result,type CurrentAction,type ActionRequest} from './conflicting-action-progress';
 type Props=Omit<IntelligenceWorkbenchProps,'view'|'outcomeSlot'|'outcomeFrame'|'extraBusy'|'onBusyChange'>&{view:OutcomePlayerView};
 export function OutcomeWorkbench(props:Props){
  const{view,transport,history,adopt}=props,[choice,setChoice]=useState<OutcomeActor|'abort'|null>(null),[reason,setReason]=useState(''),[busy,setBusy]=useState(false),[baseBusy,setBaseBusy]=useState(false),[error,setError]=useState(''),[unknown,setUnknown]=useState(false),[faulted,setFaulted]=useState(false);
  const [workingBusy,setWorkingBusy]=useState(false),[workingDirty,setWorkingDirty]=useState(false);
+ const [work,setWork]=useState<CurrentAction>({actor:'R',activity:null,order:null,refs:[],epoch:0}),[actionRequest,setActionRequest]=useState<ActionRequest|null>(null);
+ const workNow=useRef(work),requestNow=useRef(actionRequest),progressView=useRef(view),progressMounted=useRef(true);progressView.current=view;
+ useEffect(()=>{progressMounted.current=true;return()=>{progressMounted.current=false;};},[]);
+ function selectWork(next:CurrentAction){workNow.current=next;setWork(next);}
+ function selectActor(actor:string){if(!('conflicting_action' in progressView.current)||!['R','W'].includes(actor))return;const order=progressView.current.field_activities.filter(item=>item.actor===actor).at(-1);selectWork({actor,activity:order?.activity??null,order:order?.ref??null,refs:[],epoch:workNow.current.epoch+1});}
  const [fairness,setFairness]=useState<OutcomeFairness|null>(null),[fairnessFailed,setFairnessFailed]=useState(false),[fairnessAttempt,setFairnessAttempt]=useState(0);
  const [nextReason,setNextReason]=useState(''),nextReasonValue=useRef(''),submittedReason=useRef<{run_id:string;operation_id:string;text:string|undefined}|null>(null);nextReasonValue.current=nextReason;
  const [rejection,setRejection]=useState<{run_id:string;kind:'return_and_deliver'|'abort_outcome';actor:OutcomeActor|null;reason:string|undefined}|null>(null),[recheckOpen,setRecheckOpen]=useState(false);
@@ -33,6 +39,31 @@ export function OutcomeWorkbench(props:Props){
    if(response.ok&&response.receipt?.run_id===envelope.run_id&&response.receipt.operation_id===envelope.operation_id)setNextReason(current=>current===text?'':current);return response;
   };
  }}),[transport,view.run_id]);
+ const progressTransport=useMemo(()=>new Proxy(declarationTransport,{get(target,key){
+  if(key!=='request'){const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}
+  return async(input:Request)=>{
+   const now=progressView.current;if(!('conflicting_action' in now))return target.request(input);
+   const active=()=>progressMounted.current&&progressView.current.run_id===now.run_id;
+   if(input.kind==='receipt'){
+    const response=await target.request(input),original=requestNow.current;
+    if(active()&&original?.run_id===input.run_id&&original.operation_id===input.operation_id&&response.ok&&response.receipt?.run_id===input.run_id&&response.receipt.operation_id===input.operation_id){const next=action_request_result(original,response);requestNow.current=next;setActionRequest(next);}return response;
+   }
+   if(input.kind!=='operate_outcome'&&input.kind!=='operate_conflicting_action')return target.request(input);
+   const envelope=input.envelope,intent=envelope.intent;
+   const label=intent.kind==='issue_activity'?now.field_options.find(o=>o.intent.activity_ref.id===intent.activity_ref.id)?.label??'现场指令':intent.kind==='save_working_assessment'?'保存工作研判':intent.kind==='save_plan'?'保存准备草案':intent.kind==='request_source_validation'?'核实引用原文':intent.kind==='request_preparation'?'提交准备申请':null;
+   if(!label||envelope.run_id!==now.run_id)return target.request(input);
+   const repeated=requestNow.current?.run_id===envelope.run_id&&requestNow.current.operation_id===envelope.operation_id;
+   if(!repeated){const previous=workNow.current;
+    if(intent.kind==='issue_activity')selectWork({actor:intent.actor_ref.id,activity:intent.activity_ref.id,order:null,refs:intent.basis_delivery_refs,epoch:previous.epoch+1});
+    else if(intent.kind==='request_source_validation')selectWork({...previous,refs:intent.basis_delivery_refs,epoch:previous.epoch+1});
+    else if(intent.kind==='request_preparation')selectWork({...previous,refs:[intent.plan_ref],epoch:previous.epoch+1});
+   }
+   const original:ActionRequest={run_id:envelope.run_id,operation_id:envelope.operation_id,label,status:'submitting'};requestNow.current=original;setActionRequest(original);
+   try{const response=await target.request(input);if(active()&&requestNow.current?.operation_id===original.operation_id){const next=action_request_result(original,response);requestNow.current=next;setActionRequest(next);
+    if(next.status==='registered'&&response.ok&&response.view?.run_id===envelope.run_id&&'conflicting_action' in response.view&&intent.kind==='issue_activity'){const order=response.view.field_activities.filter(item=>item.actor===intent.actor_ref.id&&item.activity===intent.activity_ref.id).at(-1);if(order&&workNow.current.actor===intent.actor_ref.id&&workNow.current.activity===intent.activity_ref.id)selectWork({...workNow.current,order:order.ref});}
+   }return response;}catch(error){if(active()&&requestNow.current?.operation_id===original.operation_id){const next:ActionRequest={...original,status:'unknown',code:'CHANNEL_UNCERTAIN'};requestNow.current=next;setActionRequest(next);}throw error;}
+  };
+ }}),[declarationTransport,view.run_id]);
  useEffect(()=>{
   let cancelled=false;setFairness(null);setFairnessFailed(false);
   void transport.request({kind:'get_outcome_fairness',run_id:view.run_id}).then(response=>{
@@ -105,5 +136,5 @@ export function OutcomeWorkbench(props:Props){
  ].sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
  const records=<section className='bottom-log outcome-received-log' aria-label='总部已收回报记录'><div className='log-heading'><div><strong>已收到的回报</strong><span>{received.length} 条递交记录</span></div><span>按总部收到时刻排列；原文及递交分别保留</span></div><div className='log-lines'>{received.length===0?<p>尚未收到回报。</p>:received.map(item=><details key={item.id}><summary><time>{clock(item.at)}</time><span>{item.sender}</span><span className='received-excerpt'>{item.text}</span><small>{item.kind}</small></summary><p>{item.text}</p><small>总部已收递交记录：{item.id}</small></details>)}</div></section>;
  const footer=<footer className='global-footer'><span>虚构娱乐 · 地形与行动均为合成场景</span><span>以总部已收凭证组织行动</span></footer>;
- return <IntelligenceWorkbench {...props} transport={declarationTransport} view={view} primaryStopped={!!view.termination||view.finished} finished={view.finished} outcomeFrame={{records,footer,sources:<>{'conflicting_action' in view&&<ConflictingActionWorkbench view={view as ConflictingActionPlayerView} transport={transport} history={history} blocked={busy||baseBusy||!!pending.current||props.storageFault||faulted} adopt={adopt} onBusy={setWorkingBusy} onDirty={setWorkingDirty} onStorageFault={()=>setFaulted(true)}/ >}{'source_reading' in view&&<SourceTimeReading view={view as SourceTimePlayerView}/>}</>}} outcomeSlot={<>{!view.finished&&!view.termination&&<label>下次关键操作的理由（可选）<textarea aria-label='下次关键操作的理由（可选）' maxLength={600} value={nextReason} disabled={blocked} onChange={event=>setNextReason(event.target.value)}/><small>随下一次保存准备、核实来源、申请筹备或下达活动登记；不填写也可提交。</small></label>}{slot}</>} extraBusy={busy||!!pending.current||workingBusy} extraDirty={workingDirty} onBusyChange={setBaseBusy} storageFault={props.storageFault||faulted} onStorageRecovered={()=>{setFaulted(false);props.onStorageRecovered();}}/>;
+ return <IntelligenceWorkbench {...props} transport={progressTransport} onWorkSelect={selectActor} view={view} primaryStopped={!!view.termination||view.finished} finished={view.finished} outcomeFrame={{records,footer,lead:<>{'conflicting_action' in view&&<ConflictingActionWorkbench view={view as ConflictingActionPlayerView} work={work} actionRequest={actionRequest} transport={progressTransport} history={history} blocked={busy||baseBusy||!!pending.current||props.storageFault||faulted} adopt={adopt} onBusy={setWorkingBusy} onDirty={setWorkingDirty} onStorageFault={()=>setFaulted(true)}/ >}</>,sources:<>{'source_reading' in view&&<SourceTimeReading view={view as SourceTimePlayerView}/>}</>}} outcomeSlot={<>{!view.finished&&!view.termination&&<label>下次关键操作的理由（可选）<textarea aria-label='下次关键操作的理由（可选）' maxLength={600} value={nextReason} disabled={blocked} onChange={event=>setNextReason(event.target.value)}/><small>随下一次保存准备、核实来源、申请筹备或下达活动登记；不填写也可提交。</small></label>}{slot}</>} extraBusy={busy||!!pending.current||workingBusy} extraDirty={workingDirty} onBusyChange={setBaseBusy} storageFault={props.storageFault||faulted} onStorageRecovered={()=>{setFaulted(false);props.onStorageRecovered();}}/>;
 }
