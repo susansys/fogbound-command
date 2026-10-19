@@ -1,0 +1,44 @@
+import {test,expect} from '@playwright/test';
+
+test('B31 E01/E02/E03/E05 optional source originals remain distinct and readable beside the original task',async({page})=>{
+ await page.goto('/');await page.getByLabel('演练任务').selectOption('B31-SOURCE-TIME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+ await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();
+ const notes=page.getByTestId('source-time-reading');await expect(notes).toContainText('尚未收到档案背景原文');
+ await page.getByLabel('推进到时刻（秒）').fill('65');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.locator('.clock strong')).toHaveText('01:05');
+ await expect(notes.locator('article')).toHaveCount(3);await expect(notes).toContainText('来源关系与独立来源总数未知');
+ for(const id of ['M1','M2','M3']){const note=page.getByTestId('source-note-'+id);await note.locator('summary').press('Enter');await expect(note).toContainText('档案说明称：B处访问凭证为蓝色；内容尚未核实。');await expect(note.getByRole('button')).toHaveCount(0);}
+ await expect(page.getByTestId('source-note-M2').locator('dd')).toHaveText(['未知','未知','未知']);
+ await expect(page.getByTestId('source-note-M1')).toContainText('D-M1');await expect(page.getByTestId('source-note-M3')).toContainText('M3-visible-event-record');
+ await page.getByLabel('推进到时刻（秒）').fill('86');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.locator('.clock strong')).toHaveText('01:26');
+ await expect(page.getByTestId('intelligence-source-R3')).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(page.getByLabel('准备目的',{exact:true})).toBeEditable();
+});
+
+test('B31 E01 default return task does not receive optional source UI or replace its old saved identity',async({page})=>{
+ await page.goto('/');await page.getByLabel('演练任务').selectOption('B24-OUTCOME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+ await expect(page.getByRole('heading',{name:'返回与交付任务',exact:true})).toBeVisible();await expect(page.getByTestId('source-time-reading')).toHaveCount(0);
+ await page.getByLabel('推进到时刻（秒）').fill('65');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.locator('.clock strong')).toHaveText('01:05');await expect(page.getByTestId('source-note-M1')).toHaveCount(0);await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+
+test('B31 E07/E08/E09/E10/E12 received relation controls retain originals, draft and focus through the scoped retraction',async({page})=>{
+ await page.goto('/');await page.getByLabel('演练任务').selectOption('B31-SOURCE-TIME-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+ const advance=async(seconds:number)=>{await page.getByLabel('推进到时刻（秒）').fill(String(seconds));await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect(page.locator('.clock strong')).toHaveText(seconds===75?'01:15':seconds===95?'01:35':'01:55');};
+ await advance(75);const notes=page.getByTestId('source-time-reading'),control=page.getByRole('button',{name:'展开或收起 L12 转述原文',exact:true});await expect(control).toHaveAttribute('aria-expanded','true');
+ for(const id of ['M1','M2','M3'])await page.getByTestId('source-note-'+id).locator('summary').press('Enter');
+ await page.getByLabel('准备目的',{exact:true}).fill('未提交的来源对照草稿');await control.press('Enter');await expect(page.getByTestId('source-note-M2')).toBeHidden();await expect(page.getByTestId('source-note-M1')).toContainText('档案说明称');
+ await advance(95);await expect(notes).toContainText('M1 / M3：两份不同采集记录');await expect(page.getByLabel('准备目的',{exact:true})).toHaveValue('未提交的来源对照草稿');await expect(page.getByTestId('source-note-M2')).toBeHidden();
+ await page.getByLabel('推进到时刻（秒）').fill('115');await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await control.focus();await expect(page.locator('.clock strong')).toHaveText('01:55');
+ await expect(control).toBeFocused();await expect(control).toHaveAttribute('aria-disabled','true');await expect(page.getByTestId('source-note-M2')).toBeVisible();await expect(page.getByTestId('source-note-M2').locator('details')).toHaveAttribute('open','');await expect(notes).toContainText('X12');await expect(notes).toContainText('撤销后关联未知，未证明第三个独立来源');await expect(notes).toContainText('M1 / M3：两份不同采集记录');await expect(page.getByLabel('准备目的',{exact:true})).toHaveValue('未提交的来源对照草稿');await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+
+for(const viewport of [{width:1366,height:768},{width:1920,height:1080}])test('B31 E17 source reading retains selected original and dirty draft across history at '+viewport.width+'x'+viewport.height,async({page})=>{
+ test.setTimeout(90000);await page.setViewportSize(viewport);await page.goto('/');await page.getByLabel('演练任务').selectOption('B31-SOURCE-TIME-01');await expect(page.getByLabel('时间方式')).toHaveValue('command');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+ const action=page.getByRole('region',{name:'当前行动',exact:true}),save=action.getByRole('button',{name:'保存准备草案',exact:true}),box=await save.boundingBox();expect(box).not.toBeNull();expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.y+box!.height).toBeLessThanOrEqual(viewport.height);await save.focus();await page.keyboard.press('Shift+Tab');await expect(page.getByLabel('准备目的',{exact:true})).toBeFocused();await page.getByLabel('准备目的',{exact:true}).fill('B31历史往返未提交草稿');await page.getByLabel('推进速度',{exact:true}).selectOption('4');
+ const seconds=async()=>{const text=await page.locator('.clock strong').innerText(),parts=text.split(':').map(Number);return parts[0]*60+parts[1];},waitUntil=async(to:number)=>{await expect.poll(seconds,{timeout:35000}).toBeGreaterThanOrEqual(to);};
+ await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();await page.getByRole('button',{name:'继续行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'暂停行动',exact:true})).toBeEnabled();await waitUntil(75);await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();expect(await seconds()).toBeLessThan(95);const historicalRevision=await page.getByLabel('历史节点',{exact:true}).locator('option').last().getAttribute('value');
+ await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();await page.getByRole('button',{name:'继续行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'暂停行动',exact:true})).toBeEnabled();await page.getByRole('button',{name:'查看当前已收资料',exact:true}).press('Enter');const list=page.getByRole('region',{name:'已收原始资料列表',exact:true});await expect(list.getByRole('button',{name:/蓝色凭证原文/})).toHaveAttribute('aria-pressed','true');await waitUntil(95);const green=list.getByRole('button',{name:/绿色凭证原文/});await green.press('Enter');await expect(green).toHaveAttribute('aria-pressed','true');const detail=page.locator('#source-details-R3');await expect(detail).toBeFocused();await waitUntil(115);await expect(green).toHaveAttribute('aria-pressed','true');await expect(detail).toBeFocused();await page.getByRole('button',{name:'暂停行动',exact:true}).press('Enter');await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();await expect(page.getByRole('button',{name:'返回当前行动',exact:true})).toBeEnabled();await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');await expect(page.getByLabel('准备目的',{exact:true})).toHaveValue('B31历史往返未提交草稿');
+ await page.getByLabel('历史节点',{exact:true}).selectOption(historicalRevision!);await expect(page.getByRole('button',{name:'查看历史节点',exact:true})).toBeEnabled();await page.getByRole('button',{name:'查看历史节点',exact:true}).press('Enter');await expect(page.locator('.clock')).toContainText('历史只读');const reading=page.getByTestId('source-time-reading');await expect(reading).toContainText('已收到明确转述凭证');await expect(reading.getByText('来源关系凭证 C13',{exact:true})).toHaveCount(0);await expect(reading.getByText('来源关系凭证 X12',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'返回当前行动',exact:true})).toBeEnabled();await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');await expect(reading).toContainText('撤销后关联未知，未证明第三个独立来源');await expect(reading).toContainText('M1 / M3：两份不同采集记录');await expect(page.getByLabel('准备目的',{exact:true})).toHaveValue('B31历史往返未提交草稿');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await expect(page.getByRole('alert')).toHaveCount(0);
+});

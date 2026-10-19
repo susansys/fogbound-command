@@ -13,6 +13,7 @@ export type RunSummary = {
   finished: boolean;
   scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
   read_only?:boolean;
+  source_package?:{id:'B31-SOURCE-TIME-01';version:1};
 };
 export type Request =
   |{kind:'get_outcome_participants';query:import('./outcome-contracts').OutcomeParticipantQuery}

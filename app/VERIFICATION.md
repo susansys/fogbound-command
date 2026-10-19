@@ -926,6 +926,87 @@ failures, the local pause/context RED and previous narrower reuse records remain
 retained; fixed-head review, new complete candidate/main CI and delivery await
 actual receipts. Original244AT and formalPLAY remain unsigned.
 
+## B31 T01 optional source package: local engineering evidence
+
+The explicit `B31-SOURCE-TIME-01` selection uses schema11 and retains the exact
+registered schema10 return/delivery task as its validated prefix. Existing
+schema4–10 JSON packages and the default selection remain unchanged. Context
+notes are separate typed originals and deliveries; they cannot satisfy the old
+task's source-validation credential. Source times reference actual metadata
+records received with their original report. Unknown times have no value or
+basis. The private lineage is not a PlayerView field.
+
+The fixed `b31-t01-review-fixed-03` snapshot passed all794 core tests across73
+files with one local core worker and the original existing case budgets. Its
+two installed-Chrome browser cases passed with workers1/retries0/no skips,
+covering the optional UI, distinct originals and unknown times, and the
+unchanged default return task. Typecheck and UI/Transport boundaries passed.
+The wrapper's seven contracts passed after actual discovery registration at
+300 total/286 portable/14 existing Windows obligations; all231 original browser
+identities and source hashes remain. This is local evidence, not remote CI.
+
+| Engineering case | Actual T01 evidence |
+|---|---|
+| E01 | Real Game creation, explicit UI selection, unchanged default package and old-run reading, basic same-run paused restore |
+| E02 | Three distinct same-text originals, delivery identities and unknown independent count; no text-based merge |
+| E03 | Separate event/observation/source-reported times; five resolvable visible basis records; missing/cross-run/future/wrong-report basis rejected |
+| E04 | One large and several small Game advances agree; replaying original operation IDs preserves six single deliveries |
+| E05 | Context-note UI has no validation action; a context delivery masquerading as an old task credential is rejected with the same public code in both packages |
+| E06 | Both packages complete the same legal task at368000 with six confirmed people, two artifacts, equal resource accounts and a working original debrief entry |
+
+Both independent read-only reviews initially found one P2 each. Actual REDs
+reproduced missing basis resolution and acceptance of a corrupted outer source
+package from a previously exposed run. The fixes and three corruption/basis
+tests pass; both roles rechecked the fixed snapshot with zero remaining
+blocking findings. Cross-run exposure now validates each full schema11 current
+and sealed package before extracting the original task, while keeping the
+original public storage-error policy and atomic rollback.
+
+Earlier failures remain in the execution evidence: the original schema11
+creation and clock REDs, a new paired task test's default5second harness limit
+(that new test has a finite30second budget), a wrong-working-directory test
+invocation, comparison of different run IDs before normalization, premature R3
+UI expectation at65000 instead of its existing86000 receipt, and intermediate
+discovery registration. A first local parallel core run had777/789 passes;
+the later serial790 run had all784 existing cases pass and one new expected
+error mismatch. The corrected same-code negative and both review regressions
+are included in the complete794-pass fixed run. No old assertion, simulation
+deadline or old case timeout was relaxed.
+
+T02 evidence/retraction behavior and T03 opacity, full-process native recovery,
+final CI/PR/main/artifacts/delivery remain pending. The current source package
+is a T01 implementation, not full B31 acceptance. Original244AT and formal
+PLAY remain unsigned; these Agent checks are not human experience evidence.
+
+
+### B31 T02 local relation credentials and targeted retraction
+
+On the T01 base ae22ebe478dbcf048cceec3f5c67c4d52f225c1a, received C12 alone permits the M1/M2 forward group; received C13 establishes two acquisition records for M1/M3 only. X12 retracts only L12/C12 and restores M2 to unknown without implying a third independent source. Both conflicting credentials remain visible, their pair loses grouping/counting, and the separate M1/M3 credential remains effective. Earlier history and task decision knowledge retain their original content. Source originals remain distinct from delivery identities, including a second actual delivery of M1.
+
+A constructor-owned definition registration seam exercises real Game creation, clocks and saved-state validation for bounded counterexamples; the Worker still uses only its default registration. Malformed issuer, authority, missing/future target, wrong retraction, duplicate message and unknown report definitions reject before creation. The public DTO resolves received evidence/delivery/time references and recomputes only the bounded pair projection; private fields, invented counts and invalid references cannot pass.
+
+Local fixed snapshot b31-t02-ui-green-02 passed all 806 core cases across 73 files with one worker, 3 actual Chrome UI cases, typecheck, import-boundary lint and 7 wrapper contracts. The added UI case checks folded original retention, pair-scoped display, targeted retraction, retained original detail, unsent preparation draft and relation-button focus. Full discovery is now 301, portable287, unchanged Windows14 and legacy231; the two B31 E15 native recovery cases remain T03 work. Initial relation/history, owned-registration, malformed-definition, delivery-reference and UI failures are retained as RED evidence. These results establish local T02 behavior, not complete B31 delivery, remote CI or formal PLAY acceptance. Original 244AT remain not_run.
+
+The independent initial T02 reviews of tree25cfba266f5bb958edf87cabe6872100ecc3b076 found the same P2: a credential target had to be known by its received time, rather than merely present in the current view. Three consistently reordered C12/C13/X12 counterexamples first failed, then the stricter target-arrival/retraction checks passed809 full core cases in b31-t02-review-fixed-03. A TypeScript callback narrowing error was then corrected by capturing the already validated received number in a local constant; all25 source tests and typecheck passed on that version. The contradictory unconditional relation-unknown copy was also corrected. Initial findings and failures remain. Fresh UI verification and final independent re-review are pending; a stopped old server PID was reused by an unrelated later Codex process, so the conservative v3 server guard rejected startup before listening, without touching that process.
+
+Final T02 local snapshot b31-t02-review-fixed-05 passed810/810 core cases across73 files,26 source cases, installed-Chrome UI3/3 with zero retries/skips/errors, typecheck0 and unchanged boundary/wrapper checks. The same runtime160/assets58 was served by the versioned identity-aware owned server and then stopped; the reused old Codex PID was never touched. The C13-only registered counterexample also confirms bounded independence without any C12 delivery. Both received-target chronology and relation-unknown copy corrections are included. Full discovery301/portable287/native14/legacy231 remains; T03 native recovery and final B31 delivery are still pending.
+
+### B31 T03 local opacity and recovery evidence
+
+On T02 e1d89afd8f009436ea4f325b3db04d44b3e591df, local actor R receives source reading only after an actual delivery to R. Its sequence, relations and visible bases derive solely from its own receipts. Before any R delivery its input remains identical to the existing Outcome task. Real Game tests compare entire HQ and R inputs under different private lineage graphs, delayed recipient receipts and identical public errors. Five Transport cases exercise an owned message-port fault seam against actual Game views: private fields, future times, missing bases and invented totals cannot reach subscribers. This seam does not substitute for the real Worker browser checks.
+
+Six saved-state corruption cases reject invalid packages without deleting their bytes. Restart preserves the parent read-only facts and RNG origin while using a new run identity. These are bounded engineering checks, not permission to read or migrate user data.
+
+Fixed snapshot b31-t03-review-fixed-06 passed825/825 core cases across74 files, typecheck0, boundary lint0, wrapper7/7 and fresh installed-Chrome UI5/5 (workers1/retries0/skips0). The two E17 cases use1366x768 and1920x1080, retain a dirty draft and selected detail focus across clock updates, and distinguish historical C12/C13 knowledge from current retraction without horizontal overflow. Actual discovery305/portable289/native16 retains231 legacy identities and the old14 native obligations; the two additional native titles are B31 E15.
+
+The two installed Windows Chrome/Edge native cases passed in b31-t03-review-fixed-05. They use owned retained profiles, same origin, full-process closure, paused same-run restoration, no wall-time catchup, explicit continuation, second restoration after retraction and historical reading. native-pair-equivalence-actual-v2.json verifies that fixed05 and fixed06 have the exact same160 runtime inputs,58 built assets, native test module, configuration and dependencies. This is fresh UI5 plus two exact-runtime native witnesses, not a single fresh seven-case run. Owned services are stopped; profiles and failure evidence remain.
+
+Independent Standards review subsequently found that those retained owned TEMP profiles differed from the admitted HOME/native/profiles/<UUID> location. Their successful runtime observations remain historical facts but do not sign compliant E15. The new carrier requires an admitted absolute profile root and exclusively creates a new UUID leaf. Independent Spec review also found that known times were checked only against the first delivery of an original. A real Game RED reproduced acceptance of M1 delivered to R at5000 despite its source-reported time20000. Validation now checks every delivery of that original. The regression and41 previous source/Transport cases passed together (42 tests). A new fixed07 build and full validation are in progress; fixed06 results do not sign this later runtime.
+
+Final local fixed07 passed826/826 core cases across74 files, fresh UI5 plus fresh Windows Chrome/Edge native2 in one seven-pass run, typecheck0, boundary lint0 and wrapper7/7. Both new native profiles are exclusively created UUID leaves under the already admitted HOME/native/profiles root, retained after three verified full-process closures each. The actual before/after-retraction restores preserve same-run source knowledge, task resources and historical reading. The owned server was stopped after the run. This replaces fixed05/06 reuse as the E15 evidence for the corrected runtime; the original TEMP observations and both initial review findings remain retained. Independent re-review and all E18 remote delivery gates remain pending.
+
+Earlier viewport harness failures are retained: reading workspace hides the advance footer; rate/pause acknowledgements must precede controls; selecting R3 intentionally focuses its detail rather than the row. The first actor implementation exposed an empty source field before R delivery; a real RED reproduced this and the delivery condition fixed it. No old assertion, simulation deadline, legacy identity or fault boundary was removed. E13-E17 have local evidence; E18 final independent reviews, candidate/main CI, integration, artifacts and delivery await actual receipts. Original244AT remain not_run and formalPLAY is unsigned.
+
 ## Browser CI organization follow-up
 
 This independent maintenance change keeps all298 discovery identities except the
@@ -991,3 +1072,9 @@ checks. Browser scheduling, retries, simulations and workflow routing remain.
 The same786 cases passed locally with this command. CPU contention is a plausible
 contributor, not a certified sole root cause. Fresh fixed-SHA CI is still required;
 this adjustment does not claim a faster whole workflow.
+
+### B31 final integration with delivered CI organization
+
+The ordinary merge e1fc1aad22c4cdcf91cca59dde8c05981a093d5e has the exact ordered parents a6ec3e4a48d1fe4c0d9025c6ab1523cdcd23b4e2 (T03) and c2b4c246b5f8967da07daf6fb93789a7a635e4f5 (delivered CI optimization). T01/T02/T03 commits and their proof bytes remain ancestors. The only conflicts were this verification history and browser registration; both histories are retained, and the imported approved wrapper remains the template. Actual discovery305/portable289/native16/legacy231 has key digest e093a54d621484ebf93c87a30040e172744f4ceb52fb9f2a93cb8953ae3fa3dd. The approved map-projection source hash comes from exact imported main; all other legacy identities and14 native entries remain, with only the two B31 native entries appended.
+
+The combined local source passed828/828 core tests across74 files with one worker, typecheck0, boundary lint0 and wrapper7/7. The new b31-final-import-01 build has exactly the same160 runtime inputs and58 asset bytes as fixed07. Both source UI and native test modules, configuration and locked dependencies also match; checks/import/native-equivalence-actual-v1.json supports reuse of fixed07's freshUI5/native2 evidence. No new native execution is claimed, and the other14 Windows obligations are not called fresh. Remote full289 portable CI, final PR/main and delivery evidence remain pending; original244AT remain not_run and formalPLAY unsigned.

@@ -12,6 +12,6 @@ export function legacy_result<T extends {view:GamePlayerView}>(value:T):Omit<T,'
 export function legacy_state(value:StoredState):State;
 export function legacy_state(value:StoredState|undefined):State|undefined;
 export function legacy_state(value:StoredState|undefined):State|undefined{
-  if(value?.schema===7||value?.schema===8||value?.schema===9||value?.schema===10)throw Error('Legacy fixture stored a later schema');
+  if(value?.schema===7||value?.schema===8||value?.schema===9||value?.schema===10||value?.schema===11)throw Error('Legacy fixture stored a later schema');
   return value;
 }

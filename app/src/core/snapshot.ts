@@ -1,3 +1,4 @@
+import {validate_source_time_state} from './source-time';
 import {validate_outcome_state} from './outcome-snapshot';
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {State} from './state';
@@ -162,8 +163,9 @@ function prestart_history_matches(state:State,definition:ReturnType<typeof defin
   initial.schedule=[];initial.log=[{id:'initial-report',at:0,kind:'report',text:'原始工位报告已递交；R最后确认在H。',evidence:c.delivery.id}];
   return equal(replay_committed_state(initial,state.inputs),state);
 }
-export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly import('./outcome-definition').OutcomeDefinition[]=[]):Promise<StoredState>{
+export async function validate_state(value:unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],outcomes:readonly import('./outcome-definition').OutcomeDefinition[]=[],sources:readonly import('./source-time-definition').SourceTimeDefinition[]=[]):Promise<StoredState>{
   try{
+    if(record(value)&&value.schema===11){if(!json_data(value))throw Error('invalid');return await validate_source_time_state(value,sources);}
     if(record(value)&&value.schema===10){if(!json_data(value))throw Error('invalid');return await validate_outcome_state(value,outcomes);}
     if(record(value)&&value.schema===9){if(!json_data(value))throw Error('invalid');return await validate_intelligence_state(value,intelligence);}
     if(record(value)&&value.schema===8){if(!json_data(value))throw Error('invalid');return await validate_mission_state(value,missions);}

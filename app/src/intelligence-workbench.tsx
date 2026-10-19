@@ -9,7 +9,7 @@ import type {Transport,Request,Response} from './transport';
 import type {RegionalDisplaySession} from './regional-display';
 import {MapView} from './map';
 import {clock,error_copy} from './player-copy';
-export type IntelligenceWorkbenchProps={view:IntelligencePlayerView|OutcomePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onNewRun:(view:IntelligencePlayerView|OutcomePlayerView)=>void;outcomeSlot?:ReactNode;outcomeFrame?:{records:ReactNode;footer:ReactNode};primaryStopped?:boolean;finished?:boolean;extraBusy?:boolean;onBusyChange?:(busy:boolean)=>void;history:boolean;liveRunId:string|null;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean;onStorageRecovered:()=>void};
+export type IntelligenceWorkbenchProps={view:IntelligencePlayerView|OutcomePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onNewRun:(view:IntelligencePlayerView|OutcomePlayerView)=>void;outcomeSlot?:ReactNode;outcomeFrame?:{records:ReactNode;footer:ReactNode;sources?:ReactNode};primaryStopped?:boolean;finished?:boolean;extraBusy?:boolean;onBusyChange?:(busy:boolean)=>void;history:boolean;liveRunId:string|null;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean;onStorageRecovered:()=>void};
 export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liveRunId,onHistory,displaySession,onLeave,channelError,storageFault,onStorageRecovered,outcomeSlot,outcomeFrame,extraBusy=false,onBusyChange,primaryStopped=false,finished=false}:IntelligenceWorkbenchProps){
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[advance,setAdvance]=useState('21'),[selected,setSelected]=useState('R'),[pauseUnknown,setPauseUnknown]=useState(false);
   const [expanded,setExpanded]=useState<string[]>([]),[node,setNode]=useState('1');
@@ -152,6 +152,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
         {view.preparation_results.length>0&&<section><h3>已收准备决定</h3>{view.preparation_results.map(({result,delivery})=><p key={result.ref.id}>第{result.plan_ref.version}版 · {result.purpose} · {result.status==='approved'?'批准已收到':'用品与已有承诺不足，未批准'} · 完成 {clock(result.completed_at)} · 收到 {clock(delivery.received)}</p>)}</section>}
         <h2>已收原始资料</h2><p>蓝色凭证{view.access.blue==='verified'?'已核实':'待核实'} · 绿色凭证{view.access.green==='verified'?'已核实':'待核实'}；转发次数不等于独立来源数。</p>
         {view.source_groups.length===0&&<p>尚未收到原文。总部没有当前源时点或现场采集进展。</p>}
+        {outcomeFrame?.sources}
         {view.source_groups.map(sourceArticle)}
         {outcomeFrame&&historyControls}
       </aside></>}</div>
