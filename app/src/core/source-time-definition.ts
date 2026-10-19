@@ -38,10 +38,10 @@ export async function load_source_time_definition(input:unknown,owned:readonly S
  if(new Set(evidence.map(e=>e.basis)).size!==evidence.length||new Set(evidence.filter(e=>e.kind==='confirmed_forward_claim').map(e=>e.relation_id)).size!==evidence.filter(e=>e.kind==='confirmed_forward_claim').length)invalid();
  const bases=selected.catalogs.time_bases,used=new Set<string>();if(!Array.isArray(bases)||new Set(bases.map(b=>b.id)).size!==bases.length)throw new GameError('INVALID_DEFINITION');
  for(const report of selected.catalogs.reports){
-  const delivery=selected.catalogs.messages.find(message=>message.report===report.id);if(!delivery)throw new GameError('INVALID_DEFINITION');
+  const deliveries=selected.catalogs.messages.filter(message=>message.report===report.id);if(!deliveries.length)throw new GameError('INVALID_DEFINITION');
   for(const [field,kind]of [['event_time','event'],['observed_time','observation'],['source_reported_time','source_reported']] as const){
    const time=report[field];if(!record(time))throw new GameError('INVALID_DEFINITION');if(time.kind==='unknown'){if(!fields(time,['kind']))throw new GameError('INVALID_DEFINITION');continue;}
-   const basis=bases.find(basis=>basis.id===time.basis_ref);if(time.kind!=='known'||!fields(time,['kind','value','basis_ref'])||!Number.isSafeInteger(time.value)||Number(time.value)<0||Number(time.value)>delivery.received||!basis||!fields(basis,['id','report','kind','value','description'])||!valid_id(basis.id)||basis.report!==report.id||basis.kind!==kind||basis.value!==time.value||typeof basis.description!=='string'||basis.description.length>2000)throw new GameError('INVALID_DEFINITION');used.add(basis.id);
+   const basis=bases.find(basis=>basis.id===time.basis_ref);if(time.kind!=='known'||!fields(time,['kind','value','basis_ref'])||!Number.isSafeInteger(time.value)||Number(time.value)<0||deliveries.some(delivery=>Number(time.value)>delivery.received)||!basis||!fields(basis,['id','report','kind','value','description'])||!valid_id(basis.id)||basis.report!==report.id||basis.kind!==kind||basis.value!==time.value||typeof basis.description!=='string'||basis.description.length>2000)throw new GameError('INVALID_DEFINITION');used.add(basis.id);
   }
  }
  if(used.size!==bases.length)throw new GameError('INVALID_DEFINITION');
