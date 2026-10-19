@@ -14,6 +14,7 @@ export type RunSummary = {
   scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
   read_only?:boolean;
   source_package?:{id:'B31-SOURCE-TIME-01';version:1};
+  conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};
 };
 export type Request =
   |{kind:'get_outcome_participants';query:import('./outcome-contracts').OutcomeParticipantQuery}
@@ -26,6 +27,7 @@ export type Request =
   |{kind:'open_outcome_debrief';run_id:string}
   |{kind:'request_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthRequest}
   |{kind:'confirm_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthAcknowledgement}
+  |{kind:'operate_conflicting_action';envelope:import('./conflicting-action-contracts').ConflictingActionEnvelope}
   |{kind:'operate_outcome';envelope:import('./outcome-contracts').OutcomeEnvelope}
   |{kind:'request_source_validation';envelope:unknown}
   |{kind:'request_preparation';envelope:unknown}

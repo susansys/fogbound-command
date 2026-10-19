@@ -3,6 +3,7 @@ import type {IntelligencePlayerView} from '../intelligence-contracts';
 import {intelligence_definition_for_package} from './intelligence-definition';
 import {current_preparation,carried_record_conditions} from './intelligence-gates';
 import {intelligence_site} from './intelligence-execution';
+import {is_conflicting_field_hash} from './conflicting-action-definition';
 import {path_timing,ceil_fraction} from './play-timing';
 export function project_intelligence_view(state:IntelligenceState,owned:readonly import('./intelligence-definition').IntelligenceDefinition[]=[]):IntelligencePlayerView{
   const definition=intelligence_definition_for_package(state.definition_hash,owned);
@@ -44,7 +45,7 @@ export function project_intelligence_view(state:IntelligenceState,owned:readonly
       position_knowledge={status:'known_scope',scope,observed:{kind:'known',value:report.observed.value,evidence:report.ref.id},reported:{kind:'known',value:delivery.sent,evidence:report.ref.id},source_event_time:{kind:'unknown'},received:delivery.received,provenance:{kind:'delivered',report_ref:report.ref.id,delivery_ref:delivery.ref.id},evidence_refs:[report.ref.id,delivery.ref.id]};
     }
   }
-  const repair_condition:IntelligencePlayerView['repair_condition']=repair_report?{site:'B',status:'confirmed_repaired',confirmed_at:repair_report.delivery.received,evidence_ref:repair_report.delivery.ref.id}:{site:'B',status:'required',confirmed_at:0,evidence_ref:'B23-INITIAL-B-REPAIR'};
+  const repair_condition:IntelligencePlayerView['repair_condition']=repair_report?{site:'B',status:'confirmed_repaired',confirmed_at:repair_report.delivery.received,evidence_ref:repair_report.delivery.ref.id}:is_conflicting_field_hash(state.definition_hash)?{site:'B',status:'unknown',confirmed_at:null,evidence_ref:null}:{site:'B',status:'required',confirmed_at:0,evidence_ref:'B23-INITIAL-B-REPAIR'};
   for(const commitment of supply_commitments){if(field_reports.some(({report})=>report.phase==='completed'&&report.repair_condition==='repaired'&&state.field.orders.find(o=>o.ref.id===report.order_ref.id)?.payload.basis_delivery_refs.some(ref=>ref.kind==='product_delivery'&&state.processing.deliveries.some(d=>d.ref.id===ref.id&&d.product_ref.id===commitment.approval_ref.id))))commitment.status='consumed';}
   const field_activities:IntelligencePlayerView['field_activities']=state.field.orders.map(order=>{const last=field_reports.filter(r=>r.report.order_ref.id===order.ref.id).at(-1);return{ref:structuredClone(order.ref),actor:order.payload.actor_ref.id,activity:order.payload.activity_ref.id,issued_at:order.issued_at,status:last?.report.phase??'issued'};});
   const field_options:IntelligencePlayerView['field_options']=definition.catalogs.activities.map(activity=>{

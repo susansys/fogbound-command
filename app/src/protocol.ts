@@ -1,3 +1,4 @@
+import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
 import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_outcome_envelope,parse_outcome_truth_request,parse_outcome_debrief_query,parse_outcome_evidence_request} from './outcome-protocol';
 import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
@@ -35,6 +36,7 @@ export function valid_request(
   if(value.kind==='query_outcome_debrief'||value.kind==='resolve_outcome_evidence'){if(!fields(value,['kind','request_id','query']))return false;try{if(value.kind==='query_outcome_debrief')parse_outcome_debrief_query(value.query);else parse_outcome_evidence_request(value.query);return true;}catch{return false;}}
   if(value.kind==='open_outcome_debrief'||value.kind==='get_outcome_fairness')return fields(value,['kind','request_id','run_id'])&&valid_id(value.run_id);
   if(value.kind==='request_outcome_truth'||value.kind==='confirm_outcome_truth'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_truth_request(value.envelope,value.kind==='confirm_outcome_truth');return true;}catch{return false;}}
+  if(value.kind==='operate_conflicting_action'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_conflicting_action_envelope(value.envelope);return true;}catch{return false;}}
   if(value.kind==='operate_outcome'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_outcome_envelope(value.envelope);return true;}catch{return false;}}
   if(value.kind==='request_source_validation'||value.kind==='request_preparation'||value.kind==='issue_activity')return fields(value,['kind','request_id','envelope'])&&record(value.envelope);
   if(value.kind==='management_pause')return fields(value,['kind','reason','request_id'])&&typeof value.reason==='string'&&['manual','focus_lost','application_hidden'].includes(value.reason);
@@ -51,7 +53,7 @@ export function valid_request(
       fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref']),...(value.case_ref===undefined?[]:['case_ref'])]) &&
       (value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&
       (value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE')&&
-      (value.definition_ref===undefined||value.definition_ref==='B31-SOURCE-TIME-01'||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01'||value.definition_ref==='B23-INTELLIGENCE-01'||value.definition_ref==='B24-OUTCOME-01'||value.definition_ref==='B24-OUTCOME-NARROW-01'||value.definition_ref==='B24-OUTCOME-HARD-BOUNDARY-02') &&
+      (value.definition_ref===undefined||value.definition_ref==='B32-CONFLICTING-ACTION-01'||value.definition_ref==='B31-SOURCE-TIME-01'||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01'||value.definition_ref==='B23-INTELLIGENCE-01'||value.definition_ref==='B24-OUTCOME-01'||value.definition_ref==='B24-OUTCOME-NARROW-01'||value.definition_ref==='B24-OUTCOME-HARD-BOUNDARY-02') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );

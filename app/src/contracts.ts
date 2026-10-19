@@ -1,6 +1,6 @@
 import type {RoutePlan} from './route-contracts';
 export type Mode = "command" | "research";
-export type DefinitionRef='B31-SOURCE-TIME-01'|'FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01'|'B22-MISSION-01'|'B23-INTELLIGENCE-01'|'B24-OUTCOME-01'|'B24-OUTCOME-NARROW-01'|'B24-OUTCOME-HARD-BOUNDARY-02';
+export type DefinitionRef='B32-CONFLICTING-ACTION-01'|'B31-SOURCE-TIME-01'|'FB01-ENG-MOVE'|'FB02-ENG-RECORD'|'ENG-PRESTART-REPLACE'|'B21-CORRIDOR-01'|'B22-MISSION-01'|'B23-INTELLIGENCE-01'|'B24-OUTCOME-01'|'B24-OUTCOME-NARROW-01'|'B24-OUTCOME-HARD-BOUNDARY-02';
 export const prestart_case_refs=['normal','hq_short_outage','hq_expiry_outage','old_acceptance_delayed','hq_result_unconfirmed','reports_unconfirmed'] as const;
 export type PrestartCaseRef=typeof prestart_case_refs[number];
 export type Position = {
@@ -150,7 +150,7 @@ export type Receipt = {
   sim_time: number;
   fingerprint: string;
   result: "committed";
-  kind: Intent["kind"]|'save_plan'|'issue_mission'|'append_explanation'|'request_source_validation'|'request_preparation'|'issue_activity'|'return_and_deliver'|'abort_outcome';
+  kind: Intent["kind"]|'save_plan'|'issue_mission'|'append_explanation'|'request_source_validation'|'request_preparation'|'issue_activity'|'return_and_deliver'|'abort_outcome'|'save_working_assessment';
   snapshot_revision?:number;
 };
 export class GameError extends Error {

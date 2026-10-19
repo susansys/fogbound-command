@@ -1,4 +1,5 @@
 import registered from './intelligence-definition.json';
+import {is_conflicting_field_hash,conflicting_field_definition,validate_conflicting_internal} from './conflicting-action-definition';
 import {GameError} from '../contracts';
 import {record,valid_id,fields} from '../protocol';
 import {hash} from './scenario';
@@ -6,6 +7,7 @@ export type IntelligenceLocalCondition={actor:string;qualifications:string[]|nul
 export type IntelligenceDefinition=Omit<typeof registered,'schema'|'scenario_kind'|'catalogs'>&{schema:9;scenario_kind:'play_intelligence';catalogs:Omit<typeof registered.catalogs,'forwardings'|'local_conditions'>&{local_conditions:IntelligenceLocalCondition[];forwardings:Array<{id:string;received:number;proof:string|null;proof_received?:number;report_id?:string}>}};
 export function is_intelligence_definition(value:{schema:number}):value is IntelligenceDefinition{return value.schema===9;}
 export function intelligence_definition_for_package(digest:unknown,owned:readonly IntelligenceDefinition[]=[]):IntelligenceDefinition{
+  if(is_conflicting_field_hash(digest))return conflicting_field_definition();
   const selected=[registered,...owned].find(d=>d.definition_hash===digest);
   if(!selected)throw new GameError('INVALID_SAVE');
   return structuredClone(selected) as IntelligenceDefinition;
@@ -16,6 +18,7 @@ export function intelligence_original_metadata(definition:IntelligenceDefinition
   return {observed:value.R1.observed,published:value.R1.published};
 }
 export async function load_intelligence_definition(input:unknown,owned:readonly IntelligenceDefinition[]=[]):Promise<IntelligenceDefinition>{
+  if(record(input)&&is_conflicting_field_hash(input.definition_hash)){const selected=conflicting_field_definition();await validate_conflicting_internal(input,selected);return selected;}
   if(!record(input)||!record(input.profile)||!record(input.profile.parameters)||!Array.isArray(input.profile.registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
   if(!Array.isArray(input.profile.resolved_registry))throw new GameError('CONFIG_PARAMETER_MISSING','profile.registry');
   // E14 owns explicit low-energy definitions passed through the existing

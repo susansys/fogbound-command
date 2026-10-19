@@ -31,7 +31,7 @@ export type IntelligencePlayerView={
   geometry:PublicMap;can_issue:boolean;next_action:string;gap:string;replay_nodes:PlayerView['replay_nodes'];log:PlayerView['log'];
   position_knowledge:PositionKnowledge;
   actors:IntelligenceActorConfirmation[];
-  repair_condition:{site:'B';status:'required'|'confirmed_repaired';confirmed_at:number;evidence_ref:string};
+  repair_condition:{site:'B';status:'required'|'confirmed_repaired';confirmed_at:number;evidence_ref:string}|{site:'B';status:'unknown';confirmed_at:null;evidence_ref:null};
   plan:IntelligencePlan|null;
   assessments:Array<{assessment:IntelligenceAssessment;delivery:IntelligenceProductDelivery}>;
   preparation:{status:'not_requested'}|{status:'under_review';plan_ref:IntelligenceRef<'plan'>}|{status:'approved'|'not_approved';plan_ref:IntelligenceRef<'plan'>;result_ref:IntelligencePreparationResult['ref']};
