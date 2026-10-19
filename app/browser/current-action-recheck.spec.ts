@@ -90,6 +90,10 @@ test('UXF E03 E04 real stale rejection keeps the submitted draft distinct from l
   await expect(page.getByRole('alert')).toContainText('情况记录已更新');await expect(purpose).toHaveValue('UXF随后编辑且尚未提交');
   await review.getByRole('button',{name:'返回准备编辑',exact:true}).click();await expect(purpose).toBeFocused();
   const witness=await page.evaluate(()=>Reflect.get(window,'__uxfRecheck'));expect(witness.requests.filter((r:any)=>r.envelope?.intent.kind==='save_plan')).toHaveLength(1);expect(witness.requests.some((r:any)=>r.kind==='management_pause'||['request_preparation','issue_activity','preview_mission'].includes(r.envelope?.intent.kind??r.kind))).toBe(false);expect(witness.released.tick_revision).toBeGreaterThan(witness.released.expected_revision);
+  await page.getByRole('button',{name:'中止本次任务',exact:true}).click();await page.getByRole('button',{name:'确认中止任务',exact:true}).click();
+  await expect(page.getByTestId('outcome-termination')).toBeVisible();await expect(purpose).toBeDisabled();
+  await page.getByRole('button',{name:'查看本次提交与当前依据',exact:true}).click();await page.getByRole('region',{name:'本次拒绝复核',exact:true}).getByRole('button',{name:'返回准备编辑',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'当前行动',exact:true})).toBeFocused();await expect(purpose).toHaveValue('UXF随后编辑且尚未提交');
  }finally{const witness=await page.evaluate(()=>Reflect.get(window,'__uxfRecheck')).catch(()=>null);await fs.writeFile(info.outputPath('uxf-real-stale-recheck.json'),JSON.stringify({witness,controlled_technical_probe:true,synthetic_rejection:false,natural_walkthrough:false},null,2),{flag:'wx'});}
 });
 
