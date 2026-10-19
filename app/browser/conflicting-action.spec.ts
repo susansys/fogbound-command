@@ -31,6 +31,8 @@ for(const width of [1366,1920])test(`B32 E13/E14/E15/E16/E18 current action show
  await page.evaluate(()=>Reflect.set(window,'__b32FaultNextAssessment',true));await panel.getByRole('button',{name:'保存工作研判',exact:true}).press('Enter');
  await expect(progress).toContainText('提交结果待核查');await expect(progress).toContainText('已收到接令回报，等待后续');await expect(draft).toBeDisabled();
  const unknownRequests=await page.evaluate(()=>Reflect.get(window,'__b32ManualRequests'));
+ await page.locator('#current-action-source-return').press('Enter');await expect(page.getByRole('region',{name:'已收原文详情'})).toBeVisible();await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');
+ await expect(draft).toHaveValue('收到接令后仍保留的草稿');await expect(draft).toBeDisabled();await expect(panel.getByRole('button',{name:'查询原研判结果',exact:true})).toBeVisible();
  await panel.getByRole('button',{name:'查询原研判结果',exact:true}).press('Enter');await expect(progress).toContainText('总部已登记');await expect(panel).toContainText('工作研判第1版已登记');await expect(draft).toHaveValue('收到接令后仍保留的草稿');
  expect(await page.evaluate(()=>Reflect.get(window,'__b32ManualRequests'))).toEqual(unknownRequests);await draft.fill('收到接令后仍保留的草稿');
  await expect(progress.getByRole('button',{name:'查看相关依据',exact:true})).toHaveCount(0);await advance(256999);await expect(progress).toContainText('已收到接令回报，等待后续');await expect(progress.getByRole('button',{name:'查看相关依据',exact:true})).toHaveCount(0);

@@ -136,7 +136,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
     <div className="shell"><nav className="rail"><button className="active" onClick={()=>document.getElementById('intelligence-sources')?.focus()}>情报报告</button><button onClick={()=>document.getElementById('intelligence-history')?.focus()}>当时所知</button><button disabled={blocked} onClick={()=>void (async()=>{if(extraDirty&&!window.confirm('工作研判尚未保存，确定离开并舍弃这些输入？'))return;if(!view.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></nav>
     <main className="main"><div className="workspacebar"><h1>{view.scenario_kind==='play_outcome'?'返回与交付任务':'情报与协作任务'}</h1><span className="outline-tag">总部视图 · {verificationCopy}</span></div>
       {!outcomeFrame&&operationStatus}
-      <div className={"workbody mission-body"+(activeGroup?" intel-layout workspace-report":"")}>{activeGroup?reportWorkspace:<><MapView view={view} selected={selected} onSelect={actor=>{setSelected(actor);onWorkSelect?.(actor);}} planned={false} displaySession={history?undefined:displaySession}/>
+      <div className={"workbody mission-body"+(activeGroup?" intel-layout workspace-report":"")}>{activeGroup&&reportWorkspace}<div className="intelligence-live-workspace" hidden={!!activeGroup} style={{display:activeGroup?'none':'contents'}}><MapView view={view} selected={selected} onSelect={actor=>{setSelected(actor);onWorkSelect?.(actor);}} planned={false} displaySession={history?undefined:displaySession}/>
       <aside id="intelligence-sources" tabIndex={-1} className="intelligence-sources" aria-label="总部已收原始资料">
         {outcomeFrame&&operationStatus}{outcomeFrame?.lead}
         <section className={"current-action"+(view.preparation.status==='approved'?" current-action-field":"")+(view.artifact_reports.length>=2?" current-action-return":"")} aria-label="当前行动"><h2 id="current-action-heading" tabIndex={-1}>当前行动</h2>{error==='STALE_REVISION'&&rejection?.run_id===view.run_id&&!history&&!pending.current&&!hasStorageFault&&!recoveryUnknown&&!restartPending&&<div className="rejection-context"><p>本次{rejection.operation}未提交；情况记录已更新。</p><button disabled={busy} onClick={()=>setRecheckOpen(true)}>查看本次提交与当前依据</button>{recheckOpen&&<section className="rejection-review" aria-label="本次拒绝复核"><h3>本次被拒绝的提交</h3><p>{rejection.operation}：{rejection.submitted}</p><h3>当前总部已知资料</h3><p>{view.plan?'已保存草案第'+view.plan.ref.version+'版：'+view.plan.purpose:'草案尚未保存'}</p><p>{view.source_groups.length?'已有原文与递交可通过“查看当前已收资料”阅读；不据递交次数判断独立来源。':'尚未收到原文；当前来源依据不明。'}</p><p>{view.next_action}</p><p>资料仍会变化；查看不等于批准、保存或保证下次提交成功。新尝试仍需明确操作。</p><button onClick={()=>{setRecheckOpen(false);const control=rejection.kind==='save_plan'?purposeInput.current:document.getElementById(rejectedControl.current??'');(control&&!control.matches(':disabled')?control:document.getElementById('current-action-heading'))?.focus();}}>{rejection.kind==='save_plan'?'返回准备编辑':'返回当前操作'}</button></section>}</div>}
@@ -153,9 +153,9 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
         <h2>已收原始资料</h2><p>蓝色凭证{view.access.blue==='verified'?'已核实':'待核实'} · 绿色凭证{view.access.green==='verified'?'已核实':'待核实'}；转发次数不等于独立来源数。</p>
         {view.source_groups.length===0&&<p>尚未收到原文。总部没有当前源时点或现场采集进展。</p>}
         {outcomeFrame?.sources}
-        {view.source_groups.map(sourceArticle)}
+        {!activeGroup&&view.source_groups.map(sourceArticle)}
         {outcomeFrame&&historyControls}
-      </aside></>}</div>
+      </aside></div></div>
       {outcomeFrame?.records}
       {!outcomeFrame&&historyControls}
     </main></div>
