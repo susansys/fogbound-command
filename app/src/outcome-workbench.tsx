@@ -8,6 +8,7 @@ export function OutcomeWorkbench(props:Props){
  const{view,transport,history,adopt}=props,[choice,setChoice]=useState<OutcomeActor|'abort'|null>(null),[reason,setReason]=useState(''),[busy,setBusy]=useState(false),[baseBusy,setBaseBusy]=useState(false),[error,setError]=useState(''),[unknown,setUnknown]=useState(false),[faulted,setFaulted]=useState(false);
  const [fairness,setFairness]=useState<OutcomeFairness|null>(null),[fairnessFailed,setFairnessFailed]=useState(false),[fairnessAttempt,setFairnessAttempt]=useState(0);
  const [nextReason,setNextReason]=useState(''),nextReasonValue=useRef(''),submittedReason=useRef<{run_id:string;operation_id:string;text:string|undefined}|null>(null);nextReasonValue.current=nextReason;
+ const [rejection,setRejection]=useState<{run_id:string;kind:'return_and_deliver'|'abort_outcome';actor:OutcomeActor|null;reason:string|undefined}|null>(null),[recheckOpen,setRecheckOpen]=useState(false);
  // Adapt only this B24 screen. The original B23 controls and the actual
  // Transport/Worker remain in use. A retry retains the first declaration for
  // the same operation even if the player has since edited the next input.
@@ -43,9 +44,10 @@ export function OutcomeWorkbench(props:Props){
  const adoptCurrent=async()=>{const r=await transport.request({kind:'view',run_id:current.current.run_id});if(r.ok&&r.view?.scenario_kind==='play_outcome')adopt(r.view);else if(!r.ok)setError(r.code);};
  async function send(original:ReturnAndDeliver|AbortOutcome){
   if(inFlight.current||history)return;inFlight.current=true;setBusy(true);setError('');
+  setRejection(null);setRecheckOpen(false);
   try{const r=await transport.request({kind:'operate_outcome',envelope:original});
    if(r.ok&&r.view?.scenario_kind==='play_outcome'&&r.receipt?.operation_id===original.operation_id&&r.receipt.kind===original.intent.kind){pending.current=null;setUnknown(false);setChoice(null);adopt(r.view);}
-   else if(!r.ok){setError(r.code);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(r.code)){setUnknown(true);if(r.code!=='CHANNEL_UNCERTAIN')setFaulted(true);}else{pending.current=null;setUnknown(false);setChoice(null);await adoptCurrent();}}
+   else if(!r.ok){setError(r.code);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(r.code)){setUnknown(true);if(r.code!=='CHANNEL_UNCERTAIN')setFaulted(true);}else{if(r.code==='STALE_REVISION'&&current.current.run_id===original.run_id)setRejection({run_id:original.run_id,kind:original.intent.kind,actor:original.intent.kind==='return_and_deliver'?original.intent.actor_ref.id as OutcomeActor:null,reason:original.intent.reason});pending.current=null;setUnknown(false);setChoice(null);await adoptCurrent();}}
    else{setUnknown(true);setError('CHANNEL_UNCERTAIN');}
   }catch{setUnknown(true);setError('CHANNEL_UNCERTAIN');}finally{inFlight.current=false;setBusy(false);}
  }
@@ -65,6 +67,7 @@ export function OutcomeWorkbench(props:Props){
   }catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
  }
  const slot=<section className='outcome-panel' aria-label='返回交付安排'>
+  {error==='STALE_REVISION'&&rejection?.run_id===view.run_id&&!history&&!unknown&&!faulted&&!props.storageFault&&!pending.current&&<div className='rejection-context'><p>本次{rejection.actor?rejection.actor+'组返回安排':'中止安排'}未提交；情况记录已更新。</p><button disabled={busy||baseBusy} onClick={()=>setRecheckOpen(true)}>{rejection.actor?'查看本次返回安排与当前依据':'查看本次中止安排与当前依据'}</button>{recheckOpen&&<section className='rejection-review' aria-label={rejection.actor?'返回安排拒绝复核':'中止安排拒绝复核'}><h3>本次被拒绝的安排</h3><p>{rejection.actor?rejection.actor+'组返回总部H':'中止本次任务'} · 原理由：{rejection.reason??'当时未填写理由'}</p><h3>当前总部已知资料</h3><p>总部最后确认：{rejection.actor?rejection.actor+'组，'+(view.actors.find(actor=>actor.actor===rejection.actor)?.position_scope??'位置不明'):'以现有已收人员与成果回报为准'}。</p><p>查看不代表安排已签发或保证下一次成功；资料仍会变化，请核对下方已收回报。</p><button onClick={()=>{setRecheckOpen(false);returnFocus.current?.focus();}}>返回安排入口</button></section>}</div>}
   {fairnessFailed&&<p role='status'>尚未确认本场景的事实查看记录。<button onClick={()=>setFairnessAttempt(n=>n+1)}>重试核对查看记录</button></p>}
   {fairness?.run_id===view.run_id&&fairness.truth_exposure&&<aside data-testid='outcome-fairness'><p>已看过本场景事实，非首次公平局。</p><p>仅反映本应用已经记录的事实查看；新局角色仍从各自的初始所知开始。</p><details><summary>查看实际来源记录</summary><ul>{fairness.sources.map(source=><li key={source.run_id+':'+source.operation_id}>来源行动 {source.run_id} · 已确认查看记录 {source.operation_id}</li>)}</ul></details></aside>}
   <section data-testid='outcome-constraints'><h3>结束条件</h3><p>两份成果按时交付、核验，总部收到确认；必要人员分别返回、接收并核对。</p><p>实体截止 {clock(view.public_rules.deadline)} · 旧回执宽限 {view.public_rules.receipt_grace/1000} 秒，不能补做工作。</p>{view.hard_boundary&&<p>公开硬截止 {clock(view.hard_boundary.hard_close_time)}，同刻优先于普通成功。</p>}{view.verification_receipt_delay!==1000&&<p>本演练的核验回执传递需 {view.verification_receipt_delay/1000} 秒。</p>}</section>

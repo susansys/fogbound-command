@@ -1096,3 +1096,7 @@ dialog > header > button {
 .current-action-field>[data-testid="intelligence-field"]{order:-1}
 .current-action-return>.current-action-outcome{order:-2}
 .current-action textarea{max-width:100%;box-sizing:border-box}
+
+.rejection-context{border-left:3px solid #d5b667;padding:8px 10px;overflow-wrap:anywhere}
+.rejection-review{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.rejection-review p{white-space:pre-wrap;overflow-wrap:anywhere}
