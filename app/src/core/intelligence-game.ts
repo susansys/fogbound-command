@@ -1,3 +1,4 @@
+import type {ConflictingFacilityState} from './conflicting-action-state';
 import {planned_intelligence_loadout} from './intelligence-accounting';
 import {issue_intelligence_activity,advance_field_work} from './intelligence-execution';
 import type {IntelligenceActivityRequest} from '../intelligence-contracts';
@@ -11,7 +12,7 @@ import type {IntelligenceState} from './intelligence-state';
 import {intelligence_definition_for_package} from './intelligence-definition';
 import {advance_intelligence_reports} from './intelligence-reports';
 import {advance_intelligence_source} from './intelligence-source';
-export function apply_intelligence_control(state:IntelligenceState,envelope:Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest,clock_to?:number,owned:readonly import('./intelligence-definition').IntelligenceDefinition[]=[]):IntelligenceState{
+export function apply_intelligence_control(state:IntelligenceState,envelope:Envelope|SaveIntelligencePlan|IntelligenceSourceRequest|IntelligencePreparationRequest|IntelligenceActivityRequest,clock_to?:number,owned:readonly import('./intelligence-definition').IntelligenceDefinition[]=[],facility?:ConflictingFacilityState):IntelligenceState{
   const definition=intelligence_definition_for_package(state.definition_hash,owned),p=definition.profile.parameters,bound=p.deadline+p.receipt_grace;
   if(envelope.intent.kind==='issue_activity')parse_intelligence_activity(envelope);
   else if(envelope.intent.kind==='save_plan')parse_intelligence_plan(envelope);
@@ -23,7 +24,7 @@ export function apply_intelligence_control(state:IntelligenceState,envelope:Enve
   const candidate=structuredClone(state),intent=envelope.intent;
   const advance=(to:number)=>{
     if(!Number.isSafeInteger(to)||to<state.sim_time||to>bound)throw new GameError('INVALID_INPUT');
-    advance_intelligence_source(candidate,to,definition);advance_intelligence_reports(candidate,to,definition);advance_processing_work(candidate,to,definition);advance_field_work(candidate,to,definition);candidate.sim_time=to;candidate.ended=to===bound;if(candidate.ended)candidate.paused=true;
+    advance_intelligence_source(candidate,to,definition);advance_intelligence_reports(candidate,to,definition);advance_processing_work(candidate,to,definition);advance_field_work(candidate,to,definition,{facility});candidate.sim_time=to;candidate.ended=to===bound;if(candidate.ended)candidate.paused=true;
   };
   if(clock_to!==undefined){if(state.mode!=='command'||state.paused)throw new GameError('CLOCK_PAUSED');advance(clock_to);}
   if(intent.kind==='tick'||intent.kind==='advance'){

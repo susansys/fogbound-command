@@ -50,3 +50,31 @@ test('B32 E01/E02/E05 the actual Worker preserves conflicting originals while an
   await info.attach('owned-profile-lifecycle',{body:JSON.stringify({profile,origin,closed:true,processes,default_network_launch:true},null,2),contentType:'application/json'});
  }
 });
+
+test('B32 E07/E08/E09/E10 the actual Worker delivers a diagnosis before explicit repair and B record',async({},info)=>{
+ const profileRoot=process.env.B32_OWNED_PROFILE_ROOT??info.outputPath('owned-profiles');
+ if(process.platform==='win32'&&!process.env.B32_OWNED_PROFILE_ROOT)throw Error('The admitted absolute B32 profile root is required on Windows');
+ const profile=path.join(profileRoot,randomUUID());if(fs.existsSync(profile))throw Error('A fresh owned profile is required');
+ const context=await chromium.launchPersistentContext(profile,{...(process.env.FB01_BROWSER?{executablePath:process.env.FB01_BROWSER}:{}),headless:process.env.FB01_HEADED!=='1',viewport:{width:1366,height:768}}),page=context.pages()[0],origin=process.env.FB01_URL??'http://127.0.0.1:4175';
+ try{
+  await page.addInitScript(()=>{const Original=window.Worker;Object.defineProperty(window,'Worker',{value:class extends Original{constructor(url:string|URL,options?:WorkerOptions){super(url,options);this.addEventListener('message',event=>{if(event.data?.view)Reflect.set(window,'__b32WorkView',event.data.view);});}}});});
+  await page.goto(origin);await page.getByLabel('演练任务').selectOption('B32-CONFLICTING-ACTION-01');await page.getByLabel('时间方式').selectOption('research');await page.getByRole('button',{name:'开始演练',exact:true}).press('Enter');
+  const actual=()=>page.evaluate(()=>Reflect.get(window,'__b32WorkView'));
+  const advance=async(to:number)=>{await page.getByLabel('推进到时刻（秒）').fill(String(to/1000));await page.getByRole('button',{name:'推进到该时刻',exact:true}).press('Enter');await expect.poll(async()=>(await actual())?.sim_time).toBe(to);};
+  const issue=async(id:string,count:number)=>{await page.locator('#field-action-'+id).press('Enter');await expect.poll(async()=>(await actual())?.field_activities.length).toBe(count);};
+  await page.getByLabel('准备目的').fill('取得两处记录并组织交付');await page.getByRole('button',{name:'保存准备草案',exact:true}).press('Enter');await expect(page.getByTestId('intelligence-plan')).toContainText('草案第1版');
+  await issue('R-to-A',1);await advance(32000);await issue('A-record',2);await advance(80000);await issue('R-to-B',3);await advance(90000);
+  await page.locator('#current-action-source-return').press('Enter');await page.getByRole('button',{name:/绿色凭证原文/}).press('Enter');await page.locator('#validate-source-R3').press('Enter');await expect.poll(async()=>(await actual())?.processing.queue.length).toBe(1);
+  await page.getByRole('button',{name:'返回当前行动',exact:true}).press('Enter');await page.getByRole('button',{name:'提交准备申请',exact:true}).press('Enter');await expect.poll(async()=>(await actual())?.processing.queue.length).toBe(2);await advance(240000);
+  expect((await actual()).conflicting_action.assessments).toEqual([]);await issue('W-inspect',4);await advance(256999);
+  expect((await actual()).field_reports.filter((item:{report:{typed_payload:{activity_ref:{id:string}}}})=>item.report.typed_payload.activity_ref.id==='W-inspect')).toMatchObject([{report:{phase:'accepted'}}]);expect((await actual()).repair_condition.status).toBe('unknown');
+  await advance(257000);await expect(page.getByRole('region',{name:'总部已知的任务前提'})).toContainText('检查确认故障');await expect(page.locator('#field-action-B-record')).toBeDisabled();
+  await issue('W-repair',5);await advance(324000);await expect(page.locator('#field-action-B-record')).toBeEnabled();await issue('B-record',6);await advance(371000);
+  const view=await actual();expect(view.artifact_reports.find((item:{report:{artifact:{site:string}}})=>item.report.artifact.site==='B').delivery.received).toBe(371000);expect(view.actors.find((actor:{actor:string})=>actor.actor==='W')).toMatchObject({equipment_energy:16,durability:94,packs:0});expect(view.conflicting_action.assessments).toEqual([]);await expect(page.getByRole('alert')).toHaveCount(0);
+  await info.attach('lawful-work-view',{body:JSON.stringify(view,null,2),contentType:'application/json'});await page.screenshot({path:info.outputPath('inspection-repair-record.png'),fullPage:true});
+ }finally{
+  const cdp=await context.browser()!.newBrowserCDPSession(),processes=(await cdp.send('SystemInfo.getProcessInfo')).processInfo as Array<{id:number}>;await cdp.detach();await context.close();
+  if(process.platform==='win32')await expect.poll(()=>processes.filter(p=>{try{process.kill(p.id,0);return true;}catch{return false;}}),{timeout:10000}).toEqual([]);
+  await info.attach('owned-profile-lifecycle',{body:JSON.stringify({profile,origin,closed:true,processes,default_network_launch:true},null,2),contentType:'application/json'});
+ }
+});

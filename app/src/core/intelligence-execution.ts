@@ -1,3 +1,5 @@
+import type {ConflictingFacilityState} from './conflicting-action-state';
+import {is_conflicting_field_hash,conflicting_inspection_parameters} from './conflicting-action-definition';
 import {GameError} from '../contracts';
 import type {IntelligenceActivityRequest,IntelligenceFieldOrder,IntelligenceFieldActor} from '../intelligence-contracts';
 import type {IntelligenceState} from './intelligence-state';
@@ -33,13 +35,17 @@ export function issue_intelligence_activity(state:IntelligenceState,input:Intell
   // inventory are rechecked after the message arrives, not exposed as errors.
   if(state.field.orders.some(o=>o.payload.actor_ref.id===actor.id&&!state.field.deliveries.some(d=>d.received<=state.sim_time&&state.field.reports.some(r=>r.ref.id===d.report_ref.id&&r.order_ref.id===o.ref.id&&r.phase!=='accepted'))))throw new GameError('CAPACITY_CONFLICT');
   if(i.basis_delivery_refs.some(ref=>!(ref.kind==='product_delivery'?state.processing.deliveries:state.field.deliveries).some(d=>d.ref.id===ref.id&&d.received<=state.sim_time)))throw new GameError('INVALID_REQUEST');
+  if(is_conflicting_field_hash(definition.definition_hash)&&activity.action==='inspect'){
+    const known=state.field.deliveries.filter(d=>d.received<=state.sim_time).map(d=>state.field.reports.find(r=>r.ref.id===d.report_ref.id)),version=Math.max(1,...known.map(r=>r?.facility_confirmation?.version??1));
+    if(known.some(r=>r?.typed_payload.activity_ref.id===activity.id&&r.phase==='completed'&&r.facility_confirmation?.version===version))throw new GameError('CONSTRAINT_DENIED');
+  }
   if(activity.action==='repair'&&!current_preparation(state,i,state.sim_time))throw new GameError('EVIDENCE_REQUIRED');
   if(activity.conditions.length&&!carried_record_conditions(state,i,state.sim_time,activity.to))throw new GameError('EVIDENCE_REQUIRED');
   if(activity.prerequisite&&!state.field.deliveries.some(d=>d.received<=state.sim_time&&state.field.reports.some(r=>r.ref.id===d.report_ref.id&&r.phase==='completed'&&state.field.orders.some(o=>o.ref.id===r.order_ref.id&&o.payload.activity_ref.id===activity.prerequisite))))throw new GameError('EVIDENCE_REQUIRED');
   const order:IntelligenceFieldOrder={ref:{run_id:state.run_id,kind:'field_order',id:'O'+(state.field.orders.length+1),version:1},payload:structuredClone(i),issued_at:state.sim_time,arrives_at:state.sim_time+p.link_ms,status:'issued',started_at:null,terminal_at:null,completes_at:null,duration_ms:0,generation:state.generation,report_ids:[],reserved_energy:0,reserved_packs:0,work_done_ms:0,wear_charged:false,settled:false};
   state.field.orders.push(order);
 }
-function report(state:IntelligenceState,order:IntelligenceFieldOrder,actor:IntelligenceFieldActor,phase:'accepted'|'completed'|'refused'|'cutoff',at:number,definition:IntelligenceDefinition,reason:string|null=null){
+function report(state:IntelligenceState,order:IntelligenceFieldOrder,actor:IntelligenceFieldActor,phase:'accepted'|'completed'|'refused'|'cutoff',at:number,definition:IntelligenceDefinition,reason:string|null=null,facilityState?:ConflictingFacilityState){
   if(order.report_ids.length>=definition.profile.parameters.reports_per_activity)throw new GameError('ENGINE_UNCONFIRMED');
   const moving=state.field.orders.some(o=>o.payload.actor_ref.id===actor.actor&&o.status==='running'&&definition.catalogs.activities.some(a=>a.id===o.payload.activity_ref.id&&a.action==='move'));
   const resources=actor.resources,facility=actor.facility_authorized&&!moving?definition.catalogs.fixed_facilities.find(f=>f.location===actor.position.site&&f.actors.includes(actor.actor)):undefined;
@@ -50,13 +56,15 @@ function report(state:IntelligenceState,order:IntelligenceFieldOrder,actor:Intel
   const artifact=state.field.artifacts.find(a=>a.origin_event===order.ref.id+'-complete')??null;
   const activity=definition.catalogs.activities.find(a=>a.id===order.payload.activity_ref.id)!;
   const confirmation={position:structuredClone(actor.position),load:actor.load,space:actor.space,resources:{...(activity.action==='move'?{movement_energy:resources.movement_energy}:activity.action==='record'?{record_energy:resources.record_energy,record_packs:resources.record_packs,durability:resources.durability}:{work_energy:resources.work_energy,repair_packs:resources.repair_packs,durability:resources.durability}),...(facility?{}:{link_energy:resources.link_energy,link_durability:resources.link_durability})}};
-  state.field.reports.push({ref,order_ref:structuredClone(order.ref),actor:actor.actor,phase,source_event_time:{kind:'unknown'},observed:{kind:'known',value:at,evidence:id},source_published:at,source_descriptor:actor.actor+'在本次现场活动中的回报',subject:activity.label,text:activity.label+'：'+({accepted:'已接令',completed:'当地已完成',refused:'当地条件受阻',cutoff:'实体时限已到'})[phase],quality:'unknown',reliability:'unassessed',claimed_confirmation:'unverified',typed_payload:{kind:'field_status',activity_ref:structuredClone(order.payload.activity_ref),phase},provenance:{kind:'local_observation',origin_event:id},attachment_refs:[],confirmation,artifact:structuredClone(artifact),repair_condition:phase==='completed'&&activity.action==='repair'?'repaired':null,reason});
+  state.field.reports.push({ref,order_ref:structuredClone(order.ref),actor:actor.actor,phase,source_event_time:{kind:'unknown'},observed:{kind:'known',value:at,evidence:id},source_published:at,source_descriptor:actor.actor+'在本次现场活动中的回报',subject:activity.label,text:activity.label+'：'+({accepted:'已接令',completed:'当地已完成',refused:'当地条件受阻',cutoff:'实体时限已到'})[phase],quality:'unknown',reliability:'unassessed',claimed_confirmation:'unverified',typed_payload:{kind:'field_status',activity_ref:structuredClone(order.payload.activity_ref),phase},provenance:{kind:'local_observation',origin_event:id},attachment_refs:[],confirmation,artifact:structuredClone(artifact),repair_condition:phase==='completed'&&activity.action==='repair'?'repaired':null,...(phase==='completed'&&facilityState&&is_conflicting_field_hash(definition.definition_hash)&&(activity.action==='inspect'||activity.action==='repair')?{facility_confirmation:{target:'B' as const,condition:facilityState.current,version:facilityState.version}}:{}),reason});
   state.field.messages.push({actor:actor.actor,report_ref:ref,status:canSend?'sent':'unsent',sent:canSend?at:null,reason:canSend?null:'no_authorized_channel'});
   if(!canSend)return;
   state.field.deliveries.push({ref:{run_id:state.run_id,kind:'field_delivery',id:'D-'+id,version:1},report_ref:ref,sender:actor.actor,target:'HQ',sent:at,received:at+definition.profile.parameters.link_ms,facility_ref:facility?.id??null});
 }
-export function advance_field_work(state:IntelligenceState,to:number,definition:IntelligenceDefinition,control:{deadline?:number;abort_receipts?:ReadonlyArray<{actor:string;received_at:number}>}={}){
+export function advance_field_work(state:IntelligenceState,to:number,definition:IntelligenceDefinition,control:{facility?:ConflictingFacilityState;deadline?:number;abort_receipts?:ReadonlyArray<{actor:string;received_at:number}>}={}){
   if(control.deadline!==undefined&&(!Number.isSafeInteger(control.deadline)||control.deadline<1))throw new GameError('INVALID_DEFINITION');
+  const inspection=is_conflicting_field_hash(definition.definition_hash)?conflicting_inspection_parameters():undefined,facility=inspection?control.facility:undefined;
+  if(inspection&&!facility)throw new GameError('ENGINE_UNCONFIRMED');
   const p={...definition.profile.parameters,deadline:Math.min(definition.profile.parameters.deadline,control.deadline??Infinity)};
   for(const order of state.field.orders){
     const actor=state.field.actors.find(a=>a.actor===order.payload.actor_ref.id)!,activity=definition.catalogs.activities.find(a=>a.id===order.payload.activity_ref.id)!;
@@ -64,27 +72,28 @@ export function advance_field_work(state:IntelligenceState,to:number,definition:
       const at=order.arrives_at;
       const abort=control.abort_receipts?.find(receipt=>receipt.actor===actor.actor&&receipt.received_at<=at);
       if(abort){order.status='refused';order.terminal_at=at;order.settled=true;report(state,order,actor,'refused',at,definition,'local_abort_received');continue;}
-      const record=activity.action==='record',repair=activity.action==='repair',work=record||repair,capability=definition.capabilities.find(c=>c.id===activity.capability),r=actor.resources;
-      const cost=record?p.record_energy_cost:p.repair_energy_cost,packs=record?p.record_pack_cost:p.repair_pack_cost,wear=record?p.record_first_wear:p.repair_first_wear,energy=record?r.record_energy:r.work_energy;
+      const record=activity.action==='record',repair=activity.action==='repair',inspect=!!inspection&&activity.action==='inspect',work=record||repair||inspect,capability=definition.capabilities.find(c=>c.id===activity.capability),r=actor.resources;
+      const cost=inspect?inspection!.inspection_energy:record?p.record_energy_cost:p.repair_energy_cost,packs=inspect?inspection!.inspection_packs:record?p.record_pack_cost:p.repair_pack_cost,wear=inspect?inspection!.inspection_wear:record?p.record_first_wear:p.repair_first_wear,energy=record?r.record_energy:r.work_energy;
       const movement=work?null:timing(actor,activity,definition),movement_cost=movement?movement_energy(fraction(movement.length_units.reduce((sum,n)=>sum+BigInt(n),0n),1000000),definition):0;
-      if(activity.conditions.length&&!carried_record_conditions(state,order.payload,order.issued_at,activity.to)){order.status='refused';order.terminal_at=at;report(state,order,actor,'refused',at,definition,'local_evidence_unmet');continue;}
+      if(activity.conditions.length&&!carried_record_conditions(state,order.payload,order.issued_at,activity.to,facility)){order.status='refused';order.terminal_at=at;report(state,order,actor,'refused',at,definition,'local_evidence_unmet');continue;}
       if(at>=p.deadline||actor.position.site!==activity.from||work&&(!capability||!actor.qualifications.includes(capability.qualification)||!actor.equipment.includes(capability.equipment)||capability.equipment!==(record?'REC':'WORK')||energy-r.equipment_energy_reserved<cost||(record?r.record_packs:r.repair_packs)-r.packs_reserved<packs||r.durability<wear)||repair&&!carried_preparation(state,order.payload,order.issued_at)||!work&&r.movement_energy-r.movement_energy_reserved<movement_cost){order.status='refused';order.terminal_at=at;report(state,order,actor,'refused',at,definition,'local_conditions_unmet');continue;}
-      const duration=work?p.setup_ms+(record?p.record_work:p.repair_work)*p.ms_per_work:ceil_fraction(timing(actor,activity,definition).duration_ms);
+      const duration=inspect?inspection!.inspection_setup_ms+inspection!.inspection_work_ms:work?p.setup_ms+(record?p.record_work:p.repair_work)*p.ms_per_work:ceil_fraction(timing(actor,activity,definition).duration_ms);
       order.status='running';order.started_at=at;order.duration_ms=duration;order.completes_at=at+duration;order.reserved_energy=work?cost:movement_cost;
       if(work){order.reserved_packs=packs;r.equipment_energy_reserved+=order.reserved_energy;r.packs_reserved+=order.reserved_packs;}else r.movement_energy_reserved+=movement_cost;
       report(state,order,actor,'accepted',at,definition);
     }
     if(order.status!=='running')continue;
-    const end=Math.min(to,order.completes_at!,p.deadline),elapsed=Math.max(0,end-order.started_at!),record=activity.action==='record',repair=activity.action==='repair',work=record||repair,r=actor.resources;
+    const end=Math.min(to,order.completes_at!,p.deadline),elapsed=Math.max(0,end-order.started_at!),record=activity.action==='record',repair=activity.action==='repair',inspect=!!inspection&&activity.action==='inspect',work=record||repair||inspect,r=actor.resources;
     let movement_consumed=0;
-    if(work){order.work_done_ms=Math.max(0,elapsed-p.setup_ms);if(order.work_done_ms>0&&!order.wear_charged){r.durability-=record?p.record_first_wear:p.repair_first_wear;order.wear_charged=true;}}
+    if(work){order.work_done_ms=Math.max(0,elapsed-(inspect?inspection!.inspection_setup_ms:p.setup_ms));if(order.work_done_ms>0&&!order.wear_charged){r.durability-=inspect?inspection!.inspection_wear:record?p.record_first_wear:p.repair_first_wear;order.wear_charged=true;}}
     else{const path=[intelligence_site(definition,activity.from),intelligence_site(definition,activity.to)],progress=progress_on_path(path,timing(actor,activity,definition),elapsed);actor.position.point=[fraction_to_number(progress.position.x),fraction_to_number(progress.position.y)];movement_consumed=movement_energy(progress.distance,definition);}
     if(end<Math.min(order.completes_at!,p.deadline))continue;
     const complete=order.completes_at!<=p.deadline;order.status=complete?'completed':'cutoff';order.terminal_at=end;order.settled=true;
-    if(work){const duration=(record?p.record_work:p.repair_work)*p.ms_per_work,energy=Math.ceil(order.reserved_energy*order.work_done_ms/duration),packs=Math.ceil(order.reserved_packs*order.work_done_ms/duration);if(record){r.record_energy-=energy;r.record_packs-=packs;}else{r.work_energy-=energy;r.repair_packs-=packs;}r.equipment_energy_reserved-=order.reserved_energy;r.packs_reserved-=order.reserved_packs;actor.load-=packs;actor.space-=packs;
+    if(work){const duration=inspect?inspection!.inspection_work_ms:(record?p.record_work:p.repair_work)*p.ms_per_work,energy=Math.ceil(order.reserved_energy*order.work_done_ms/duration),packs=Math.ceil(order.reserved_packs*order.work_done_ms/duration);if(record){r.record_energy-=energy;r.record_packs-=packs;}else{r.work_energy-=energy;r.repair_packs-=packs;}r.equipment_energy_reserved-=order.reserved_energy;r.packs_reserved-=order.reserved_packs;actor.load-=packs;actor.space-=packs;
       if(complete&&record){const materialRef={run_id:state.run_id,kind:'record_material' as const,id:'MAT-'+order.ref.id,version:1};state.field.materials.push({ref:materialRef,site:activity.to,captured_at:end,source_event_time:{kind:'unknown'},work_ref:structuredClone(order.ref),typed_payload:{kind:'site_record',site:activity.to},body:activity.label+'的虚构采集素材。'});state.field.artifacts.push({ref:{run_id:state.run_id,kind:'mission_artifact',id:'ART-'+order.ref.id,version:1},site:activity.to,activity_ref:structuredClone(order.payload.activity_ref),created_at:end,origin_event:order.ref.id+'-complete',custody_holder:actor.actor,condition:'intact',lifecycle_state:'collected',verification_state:'not_requested',material_refs:[materialRef],custody_events:[],verification_events:[]});}
     }else{r.movement_energy-=movement_consumed;r.movement_energy_reserved-=order.reserved_energy;if(complete)actor.position.site=activity.to;}
-    report(state,order,actor,complete?'completed':'cutoff',end,definition);
+    if(complete&&repair&&facility&&!facility.applied_repairs.includes(order.ref.id)){facility.current='operable';facility.version++;facility.applied_repairs.push(order.ref.id);}
+    report(state,order,actor,complete?'completed':'cutoff',end,definition,null,facility);
   }
   // Independent actors may be advanced in one batch or several. Persist the
   // same chronological facts in both cases, with immutable refs breaking ties.

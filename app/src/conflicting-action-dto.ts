@@ -8,10 +8,24 @@ export function conflicting_action_player_view(value:unknown):boolean{
  const {conflicting_action:action,...source}=value;
  const condition=source.repair_condition;
  if(!record(condition)||condition.status==='required')return false;
- if(condition.status==='unknown'&&(!fields(condition,['site','status','confirmed_at','evidence_ref'])||condition.site!=='B'||condition.confirmed_at!==null||condition.evidence_ref!==null))return false;
+ if(!dense_array(source.field_reports)||!dense_array(source.artifact_reports))return false;
+ const facilityReports:Array<{delivery:Record<string,unknown>;report:Record<string,unknown>;confirmation:{target:'B';condition:'operable'|'faulted';version:number}}>=[];
+ for(const item of source.field_reports){
+  if(!record(item)||!record(item.report)||!record(item.delivery))return false;
+  const report=item.report,confirmation=report.facility_confirmation;
+  if(Object.hasOwn(report,'facility_confirmation')){
+   if(!record(confirmation)||!fields(confirmation,['target','condition','version'])||confirmation.target!=='B'||typeof confirmation.condition!=='string'||!['operable','faulted'].includes(confirmation.condition)||typeof confirmation.version!=='number'||![1,2].includes(confirmation.version)||report.actor!=='W'||report.phase!=='completed'||!record(report.typed_payload)||!record(report.typed_payload.activity_ref)||!['W-inspect','W-repair'].includes(String(report.typed_payload.activity_ref.id))||!record(report.confirmation)||!record(report.confirmation.position)||report.confirmation.position.site!=='B')return false;
+   if(report.typed_payload.activity_ref.id==='W-repair'&&(confirmation.condition!=='operable'||confirmation.version!==2)||confirmation.version===2&&confirmation.condition!=='operable')return false;
+   facilityReports.push({delivery:item.delivery,report,confirmation:confirmation as typeof facilityReports[number]['confirmation']});
+  }else if(record(report.typed_payload)&&record(report.typed_payload.activity_ref)&&['W-inspect','W-repair'].includes(String(report.typed_payload.activity_ref.id))&&report.phase==='completed')return false;
+ }
+ const latest=facilityReports.at(-1),expectedCondition=latest?{site:'B',status:(latest.report.typed_payload as {activity_ref:{id:string}}).activity_ref.id==='W-repair'?'confirmed_repaired':latest.confirmation.condition==='operable'?'confirmed_operable':'confirmed_faulted',confirmed_at:latest.delivery.received,evidence_ref:(latest.delivery.ref as {id:string})?.id}:{site:'B',status:'unknown',confirmed_at:null,evidence_ref:null};
+ if(!fields(condition,Object.keys(expectedCondition))||Object.entries(expectedCondition).some(([key,expected])=>condition[key]!==expected))return false;
+ if(source.artifact_reports.some(item=>!record(item)||!record(item.report)||Object.hasOwn(item.report,'facility_confirmation')))return false;
  // Reuse the unchanged legacy validator for the common frame. This temporary
  // shape is never returned to the player or written to storage.
- const common=condition.status==='unknown'?{...source,repair_condition:{site:'B',status:'required',confirmed_at:0,evidence_ref:'B23-INITIAL-B-REPAIR'}}:source;
+ const strip=(item:unknown)=>{if(!record(item)||!record(item.report))return item;const {facility_confirmation,...report}=item.report;void facility_confirmation;return {...item,report};};
+ const common={...source,field_reports:source.field_reports.map(strip),artifact_reports:source.artifact_reports.map(strip),repair_condition:{site:'B',status:'required',confirmed_at:0,evidence_ref:'B23-INITIAL-B-REPAIR'}};
  if(!source_time_player_view(common)||!fields(action,['package','reports','deliveries','independence','assessments'])||!record(action.package)||!fields(action.package,['id','version'])||action.package.id!=='B32-CONFLICTING-ACTION-01'||action.package.version!==1)return false;
  if(!record(action.independence)||!fields(action.independence,['kind'])||action.independence.kind!=='unknown'||!dense_array(action.reports)||!dense_array(action.deliveries)||!dense_array(action.assessments)||action.assessments.length>32)return false;
  const ref=(v:unknown,kind:string,version=1):v is {run_id:string;kind:string;id:string;version:number}=>record(v)&&fields(v,['run_id','kind','id','version'])&&v.run_id===value.run_id&&v.kind===kind&&valid_id(v.id)&&v.version===version;
@@ -30,7 +44,7 @@ export function conflicting_action_player_view(value:unknown):boolean{
  }
  let previousTime=0;
  for(const [index,raw]of action.assessments.entries()){
-  if(!record(raw)||!fields(raw,['ref','target_scope','explanations','preferred','basis_refs','supersedes','recorded_at',...(Object.hasOwn(raw,'reason')?['reason']:[])])||!ref(raw.ref,'working_assessment',index+1)||raw.ref.id!=='WA-B'||raw.target_scope!=='B'||!dense_array(raw.explanations)||JSON.stringify(raw.explanations)!==JSON.stringify(['operable','faulted'])||!['operable','faulted','undecided'].includes(String(raw.preferred))||Object.hasOwn(raw,'reason')&&(typeof raw.reason!=='string'||raw.reason.length>1000)||!time(raw.recorded_at)||raw.recorded_at<previousTime||raw.recorded_at>Number(value.sim_time)||!dense_array(raw.basis_refs)||raw.basis_refs.length>8)return false;
+  if(!record(raw)||!fields(raw,['ref','target_scope','explanations','preferred','basis_refs','supersedes','recorded_at',...(Object.hasOwn(raw,'reason')?['reason']:[])])||!ref(raw.ref,'working_assessment',index+1)||raw.ref.id!=='WA-B'||raw.target_scope!=='B'||!dense_array(raw.explanations)||JSON.stringify(raw.explanations)!==JSON.stringify(['operable','faulted'])||typeof raw.preferred!=='string'||!['operable','faulted','undecided'].includes(raw.preferred)||Object.hasOwn(raw,'reason')&&(typeof raw.reason!=='string'||raw.reason.length>1000)||!time(raw.recorded_at)||raw.recorded_at<previousTime||raw.recorded_at>Number(value.sim_time)||!dense_array(raw.basis_refs)||raw.basis_refs.length>8)return false;
   if(index===0?raw.supersedes!==null:!ref(raw.supersedes,'working_assessment',index)||raw.supersedes.id!=='WA-B')return false;
   const keys=new Set<string>();
   for(const basis of raw.basis_refs){if(!ref(basis,'facility_report')||!received.has(basis.id)||received.get(basis.id)!>raw.recorded_at||keys.has(basis.id))return false;keys.add(basis.id);}

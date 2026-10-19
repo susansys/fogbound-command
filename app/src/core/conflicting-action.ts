@@ -46,8 +46,8 @@ export async function apply_conflicting_action_control(state:ConflictingActionSt
   if(envelope.intent.snapshot_revision!==state.revision)throw new GameError('STALE_REVISION');
   inner.intent={kind:'restore',snapshot_revision:state.task.revision};
  }
- const task=await apply_outcome_control(state.task,inner,clock_to),revision=state.revision+1;
- return compose_conflicting_state(task,conflicting_definition_for_package(state.definition_hash),state.facility,state.assessments,[...state.inputs,{envelope:structuredClone(envelope),at:clock_to===undefined?state.sim_time:task.sim_time,revision,...(clock_to===undefined?{}:{clock_to})}],revision);
+ const facility=structuredClone(state.facility),task=await apply_outcome_control(state.task,inner,clock_to,[],facility),revision=state.revision+1;
+ return compose_conflicting_state(task,conflicting_definition_for_package(state.definition_hash),facility,state.assessments,[...state.inputs,{envelope:structuredClone(envelope),at:clock_to===undefined?state.sim_time:task.sim_time,revision,...(clock_to===undefined?{}:{clock_to})}],revision);
 }
 export async function validate_conflicting_action_state(value:Record<string,unknown>):Promise<ConflictingActionState>{
  try{

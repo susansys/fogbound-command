@@ -13,6 +13,7 @@ const original=JSON.stringify(registered),identity=registered.definition_hash;
 export const conflicting_action_definition=JSON.parse(original) as ConflictingActionDefinition;
 export const is_conflicting_field_hash=(digest:unknown)=>digest===registered.field_definition_hash;
 export const is_conflicting_task_hash=(digest:unknown)=>digest===registered.task_definition_hash;
+export const conflicting_inspection_parameters=()=>structuredClone(registered.profile.parameters);
 // These two closed internal definitions belong only to the schema12 package.
 // They never register a caller-authored variant or reuse an older task identity.
 export function conflicting_field_definition():IntelligenceDefinition{

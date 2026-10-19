@@ -8,10 +8,11 @@ import {outcome_definition_for_package} from './outcome-definition';
 import {source_time_definition} from './source-time-definition';
 import {compose_source_time_state} from './source-time-state';
 import type {ConflictingActionDefinition} from './conflicting-action-definition';
+export type ConflictingFacilityState={initial:FacilityCondition;current:FacilityCondition;version:number;applied_repairs:string[]};
 
 export type ConflictingActionState=Pick<OutcomeState,'run_id'|'revision'|'sim_time'|'mode'|'rate'|'paused'|'ended'|'finished'|'source_run'|'generation'|'origin_generation'|'phase'|'rng'|'log'|'integrity'>&{
  schema:12;scenario_kind:'play_conflicting_action';contract:'0.5.1';definition_hash:string;hashes:Record<string,string>;task:OutcomeState;source_events:SourceDelivery[];
- facility:{initial:FacilityCondition;current:FacilityCondition;version:number;applied_repairs:string[]};assessments:WorkingAssessment[];
+ facility:ConflictingFacilityState;assessments:WorkingAssessment[];
  inputs:Array<{envelope:ConflictingActionEnvelope;at:number;revision:number;clock_to?:number}>;
 };
 export async function compose_conflicting_state(task:OutcomeState,definition:ConflictingActionDefinition,facility:ConflictingActionState['facility'],assessments:WorkingAssessment[],inputs:ConflictingActionState['inputs'],revision=task.revision):Promise<ConflictingActionState>{
