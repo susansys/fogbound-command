@@ -32,13 +32,14 @@ if(process.argv[2]==='--classify-change'){
  console.log('FB01_VERIFICATION_SCOPE '+JSON.stringify(scope));process.exit(0);
 }
 
-// Fixed from actual discovery. All231 original contracts remain; MB13's
-// dynamic Worker bootstrap has one reviewed FIFO correction and updated hash.
+// Fixed from actual discovery. All231 legacy identities remain. Projection
+// raster representatives have an explicit reviewed coverage map; MB13 retains
+// its reviewed FIFO bootstrap correction. Other legacy source hashes stay fixed.
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
 const frozen={
   "baseline_sha": "cab208ebd360a55f8fcf55e150e5b7a033f02f59",
   "full_count": 298,
-  "full_keys_sha256": "b760d86fd6f7691ed7db3f308ab1f534e05d8955ac30964b3f58841f56a0393a",
+  "full_keys_sha256": "5d5858af7b396bad51afb2b75bc4883b8fdd8d7662d9e16b81bf24eb46678313",
   "legacy_count": 231,
   "legacy_keys_sha256": "272a726ad5b0eff5a06b345e202737d5bb292a20f6ed2069a785618a1efef7da",
   "legacy_files": [
@@ -124,7 +125,7 @@ const frozen={
     },
     {
       "file": "map-b-projection.spec.ts",
-      "sha256": "e3cf50b5178bd00d4176512833c94dedda6002e92b486236aaf31e5c9fd52e83"
+      "sha256": "df1d9ef07bce21529f74fbd721c409148c0ec08f017711e30800a0429567b4dc"
     },
     {
       "file": "map-b-restore.spec.ts",
@@ -339,7 +340,7 @@ function rows(report){const found=[];function visit(suite,parents=[]){for(const 
 function checkConfig(report){assert.deepEqual(report.errors,[]);assert.equal(report.config.workers,1);assert.equal(report.config.projects.length,1);assert(report.config.projects.every(project=>project.retries===0&&project.repeatEach===1));assert.equal(report.config.shard,null,'The complete portable contract runs in one job');}
 function discover(filters=[]){const result=spawnSync(process.execPath,[cli,'test','--list','--reporter=json',...filters],{encoding:'utf8',maxBuffer:8000000,env:{...process.env,PLAYWRIGHT_JSON_OUTPUT_FILE:'',PLAYWRIGHT_JSON_OUTPUT_NAME:''}});const report=JSON.parse(result.stdout);assert.equal(result.status,0,result.stderr||JSON.stringify(report.errors));checkConfig(report);return rows(report);}
 const full=discover();assert.equal(full.length,frozen.full_count);assert.equal(new Set(keys(full)).size,frozen.full_count);assert.equal(digest(keys(full)),frozen.full_keys_sha256,'Review every discovery addition/removal/title change against the fixed contract');
-for(const item of frozen.legacy_files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('browser',item.file))).digest('hex'),item.sha256,'The original231 source must remain intact: '+item.file);
+for(const item of frozen.legacy_files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('browser',item.file))).digest('hex'),item.sha256,'The reviewed231 regression source must remain intact: '+item.file);
 const legacyFiles=new Set(frozen.legacy_files.map(item=>item.file)),legacy=full.filter(row=>legacyFiles.has(row.file));assert.equal(legacy.length,frozen.legacy_count);assert.equal(digest(keys(legacy)),frozen.legacy_keys_sha256,'No original regression may be omitted');
 const nativeKeys=new Set(frozen.windows.map(item=>item.key)),native=full.filter(row=>nativeKeys.has(row.key));assert.equal(native.length,14);assert.equal(new Set(frozen.windows.map(item=>item.title)).size,14);assert.deepEqual(keys(native),[...nativeKeys].sort());
 const portable=full.filter(row=>!nativeKeys.has(row.key)),windowsHost=process.platform==='win32',expected=windowsHost?full:portable;

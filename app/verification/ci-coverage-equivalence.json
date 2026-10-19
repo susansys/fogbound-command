@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "2cd93d90fd118b141d97592b328261e132a24847",
+  "scope": "Test organization only; unchanged product runtime and static assets",
+  "discovery": {"full": 298, "portable": 284, "legacy": 231, "windows_required": 14, "workers": 1, "retries": 0},
+  "mapping": [
+    {
+      "before": "map-b-projection: 2 widths x 2 DPRs x 3 scenarios, all 12 keys",
+      "after": "Same 12 keys, actual DPR, legal marker/route/no-route geometry, coordinate readouts, regional corners/seams, resize, drag, keyboard/reset and no Game writes in every cell",
+      "shared_background": "Seven functional raster controls and two success captures remain in MOVE at each of the four viewport/DPR pairs; eight duplicate raster scans and sixteen success captures are removed",
+      "independent_functional_pixels": "map-b-entry and map-b-elevation terrain/water assertions unchanged",
+      "change": "Only the reviewed projection source hash changes in the legacy source registry; legacy keys and all other legacy hashes remain"
+    },
+    {
+      "before": "Two full default-command browser closures with different preparation/source order",
+      "after": "outcome-progress verification-first complete browser witness unchanged, including five activities, both returns, actual return+106000 finish, exact resources, personnel/artifacts/report totals and terminal disabled action",
+      "distinct_order": "outcome-ending preparation-first retains actual default command, opening lock, real pause/rate/continue, preparation before departure, three actual prefix activities, source request, actual preparation approval/assessment and enabled repair seam",
+      "honest_title_change": "preparation-first is named through the legal repair seam; it no longer claims a second complete browser success",
+      "moved_terminal_oracles": "outcome-ending.test.ts: command verification-first and preparation-first through public Game tick, exact391000/368000 boundaries, six people/two artifacts, energy8/reserved0, actor movement16/18 and link7/91, report totals4/4/2, five-activity/two-return order",
+      "limits": "Game tick cases certify command logic and boundary/accounting only; real wall clock/DOM/Worker integration remains the full browser witness"
+    },
+    {
+      "unchanged": "outcome-ending HARD-BOUNDARY persistence, narrow A/B and four partial/reload UI cases; all native14 source identities and existing per-case protections; no browser job time cap added"
+    }
+  ],
+  "parallel": {
+    "candidate": "map-b-validation nine isolated resource rejection cases only",
+    "local_trial_order": [1, 2, 2, 1],
+    "all_four_exact_nine_case_batches_passed": true,
+    "serial_mean_ms": 10879.498,
+    "parallel_mean_ms": 10375.755,
+    "saved_ms": 503.743,
+    "activation_rule": "At least2seconds and15percent benefit with no failures, retries or skipped identities",
+    "decision": "Keep serial execution: measured gain is insufficient; no cohort runner or global workers increase",
+    "limits": "Same local Windows runtime/assets; this is not a prediction of Linux CI runner savings"
+  }
+}
