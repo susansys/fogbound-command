@@ -1072,3 +1072,9 @@ checks. Browser scheduling, retries, simulations and workflow routing remain.
 The same786 cases passed locally with this command. CPU contention is a plausible
 contributor, not a certified sole root cause. Fresh fixed-SHA CI is still required;
 this adjustment does not claim a faster whole workflow.
+
+### B31 final integration with delivered CI organization
+
+The ordinary merge e1fc1aad22c4cdcf91cca59dde8c05981a093d5e has the exact ordered parents a6ec3e4a48d1fe4c0d9025c6ab1523cdcd23b4e2 (T03) and c2b4c246b5f8967da07daf6fb93789a7a635e4f5 (delivered CI optimization). T01/T02/T03 commits and their proof bytes remain ancestors. The only conflicts were this verification history and browser registration; both histories are retained, and the imported approved wrapper remains the template. Actual discovery305/portable289/native16/legacy231 has key digest e093a54d621484ebf93c87a30040e172744f4ceb52fb9f2a93cb8953ae3fa3dd. The approved map-projection source hash comes from exact imported main; all other legacy identities and14 native entries remain, with only the two B31 native entries appended.
+
+The combined local source passed828/828 core tests across74 files with one worker, typecheck0, boundary lint0 and wrapper7/7. The new b31-final-import-01 build has exactly the same160 runtime inputs and58 asset bytes as fixed07. Both source UI and native test modules, configuration and locked dependencies also match; checks/import/native-equivalence-actual-v1.json supports reuse of fixed07's freshUI5/native2 evidence. No new native execution is claimed, and the other14 Windows obligations are not called fresh. Remote full289 portable CI, final PR/main and delivery evidence remain pending; original244AT remain not_run and formalPLAY unsigned.
