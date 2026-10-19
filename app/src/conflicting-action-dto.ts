@@ -8,7 +8,7 @@ export function conflicting_action_player_view(value:unknown):boolean{
  const {conflicting_action:action,...source}=value;
  const condition=source.repair_condition;
  if(!record(condition)||condition.status==='required')return false;
- if(!dense_array(source.field_reports)||!dense_array(source.artifact_reports))return false;
+ if(!dense_array(source.field_reports)||!dense_array(source.artifact_reports)||!dense_array(source.field_activities))return false;
  const facilityReports:Array<{delivery:Record<string,unknown>;report:Record<string,unknown>;confirmation:{target:'B';condition:'operable'|'faulted';version:number}}>=[];
  for(const item of source.field_reports){
   if(!record(item)||!record(item.report)||!record(item.delivery))return false;
@@ -16,10 +16,26 @@ export function conflicting_action_player_view(value:unknown):boolean{
   if(Object.hasOwn(report,'facility_confirmation')){
    if(!record(confirmation)||!fields(confirmation,['target','condition','version'])||confirmation.target!=='B'||typeof confirmation.condition!=='string'||!['operable','faulted'].includes(confirmation.condition)||typeof confirmation.version!=='number'||![1,2].includes(confirmation.version)||report.actor!=='W'||report.phase!=='completed'||!record(report.typed_payload)||!record(report.typed_payload.activity_ref)||!['W-inspect','W-repair'].includes(String(report.typed_payload.activity_ref.id))||!record(report.confirmation)||!record(report.confirmation.position)||report.confirmation.position.site!=='B')return false;
    if(report.typed_payload.activity_ref.id==='W-repair'&&(confirmation.condition!=='operable'||confirmation.version!==2)||confirmation.version===2&&confirmation.condition!=='operable')return false;
+   if(!record(item.delivery.ref))return false;
+   const orderRef=report.order_ref,order=source.field_activities.find(candidate=>{
+    if(!record(candidate)||!record(candidate.ref)||!record(orderRef))return false;
+    const reference=candidate.ref;return ['run_id','kind','id','version'].every(key=>reference[key]===orderRef[key]);
+   });
+   if(!record(order)||order.actor!==report.actor||order.activity!==report.typed_payload.activity_ref.id||!time(order.issued_at)||!record(report.observed)||report.observed.kind!=='known'||!time(report.observed.value)||!time(item.delivery.sent)||!time(item.delivery.received))return false;
+   // Frozen B32 work plus the inherited 1s command and 1s receipt links.
+   // A locally self-consistent DTO cannot turn an acceptance into a diagnosis.
+   const work=order.activity==='W-inspect'?15000:65000;
+   if(report.observed.value<order.issued_at+1000+work||report.observed.value>900000||item.delivery.sent!==report.observed.value||item.delivery.received!==item.delivery.sent+1000)return false;
    facilityReports.push({delivery:item.delivery,report,confirmation:confirmation as typeof facilityReports[number]['confirmation']});
   }else if(record(report.typed_payload)&&record(report.typed_payload.activity_ref)&&['W-inspect','W-repair'].includes(String(report.typed_payload.activity_ref.id))&&report.phase==='completed')return false;
  }
- const latest=facilityReports.at(-1),expectedCondition=latest?{site:'B',status:(latest.report.typed_payload as {activity_ref:{id:string}}).activity_ref.id==='W-repair'?'confirmed_repaired':latest.confirmation.condition==='operable'?'confirmed_operable':'confirmed_faulted',confirmed_at:latest.delivery.received,evidence_ref:(latest.delivery.ref as {id:string})?.id}:{site:'B',status:'unknown',confirmed_at:null,evidence_ref:null};
+ for(const item of facilityReports){
+  if((item.report.typed_payload as {activity_ref:{id:string}}).activity_ref.id!=='W-inspect')continue;
+  const orderRef=item.report.order_ref as {id:string},order=source.field_activities.find(candidate=>record(candidate)&&record(candidate.ref)&&candidate.ref.id===orderRef.id) as Record<string,unknown>;
+  const repaired=facilityReports.some(previous=>(previous.report.typed_payload as {activity_ref:{id:string}}).activity_ref.id==='W-repair'&&Number(previous.delivery.received)<=Number(order.issued_at));
+  if(item.confirmation.version!==(repaired?2:1))return false;
+ }
+ const latest=facilityReports.slice().sort((a,b)=>Number(a.delivery.received)-Number(b.delivery.received)||String((a.delivery.ref as {id:string}).id).localeCompare(String((b.delivery.ref as {id:string}).id))).at(-1),expectedCondition=latest?{site:'B',status:(latest.report.typed_payload as {activity_ref:{id:string}}).activity_ref.id==='W-repair'?'confirmed_repaired':latest.confirmation.condition==='operable'?'confirmed_operable':'confirmed_faulted',confirmed_at:latest.delivery.received,evidence_ref:(latest.delivery.ref as {id:string})?.id}:{site:'B',status:'unknown',confirmed_at:null,evidence_ref:null};
  if(!fields(condition,Object.keys(expectedCondition))||Object.entries(expectedCondition).some(([key,expected])=>condition[key]!==expected))return false;
  if(source.artifact_reports.some(item=>!record(item)||!record(item.report)||Object.hasOwn(item.report,'facility_confirmation')))return false;
  // Reuse the unchanged legacy validator for the common frame. This temporary

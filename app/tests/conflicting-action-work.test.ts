@@ -170,3 +170,24 @@ test('B32 E03/E11 changing an assessment during inspection never changes its sig
   await f.issue('B-record');await f.advance(304000);expect(f.view.artifact_reports.find(item=>item.report.artifact?.site==='B')!.delivery.received).toBe(304000);expect(f.view.actors.find(actor=>actor.actor==='W')).toMatchObject({equipment_energy:22,durability:99,packs:2});
  }finally{await f.store.delete();}
 });
+
+test('B32 E07/E08 a forged completed DTO cannot turn the real acceptance into an early diagnosis',async()=>{
+ const f=await fixture('operable');
+ try{
+  await f.advance(240000);await f.issue('W-inspect');await f.advance(242000);const view=f.view;
+  expect(view.field_reports).toHaveLength(1);expect(view.field_reports[0].report.phase).toBe('accepted');expect(valid_response({request_id:'real-acceptance',ok:true,view})).toBe(true);
+  const forged=structuredClone(view),entry=forged.field_reports[0];entry.report.phase='completed';entry.report.typed_payload.phase='completed';entry.report.facility_confirmation={target:'B',condition:'operable',version:1};forged.field_activities[0].status='completed';forged.repair_condition={site:'B',status:'confirmed_operable',confirmed_at:entry.delivery.received,evidence_ref:entry.delivery.ref.id};
+  expect(valid_response({request_id:'premature-forged-completion',ok:true,view:forged})).toBe(false);expect(await f.game.get_view(view.run_id)).toEqual(view);
+  await f.advance(257000);const completed=f.view;expect(valid_response({request_id:'real-completion',ok:true,view:completed})).toBe(true);
+  for(const [key,value]of [['actor','R'],['activity','W-repair'],['issued_at',256000]] as const){const unrelated=structuredClone(completed);Reflect.set(unrelated.field_activities[0],key,value);expect(valid_response({request_id:'unrelated-order-'+key,ok:true,view:unrelated})).toBe(false);}
+  const futureVersion=structuredClone(completed);futureVersion.field_reports[1].report.facility_confirmation!.version=2;expect(valid_response({request_id:'unearned-facility-version',ok:true,view:futureVersion})).toBe(false);
+ }finally{await f.store.delete();}
+});
+
+test('B32 E07/E10 a real inspection after a delivered repair retains the lawful second facility version',async()=>{
+ const f=await fixture('faulted');
+ try{
+  await f.prepare();await f.issue('W-repair');await f.advance(307000);await f.issue('W-inspect');await f.advance(324000);
+  expect(f.view.field_reports.at(-1)?.report.facility_confirmation).toEqual({target:'B',condition:'operable',version:2});expect(f.view.actors.find(actor=>actor.actor==='W')).toMatchObject({equipment_energy:16,durability:94,packs:0});expect(valid_response({request_id:'real-second-version-inspection',ok:true,view:f.view})).toBe(true);
+ }finally{await f.store.delete();}
+});
