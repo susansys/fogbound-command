@@ -1078,3 +1078,30 @@ this adjustment does not claim a faster whole workflow.
 The ordinary merge e1fc1aad22c4cdcf91cca59dde8c05981a093d5e has the exact ordered parents a6ec3e4a48d1fe4c0d9025c6ab1523cdcd23b4e2 (T03) and c2b4c246b5f8967da07daf6fb93789a7a635e4f5 (delivered CI optimization). T01/T02/T03 commits and their proof bytes remain ancestors. The only conflicts were this verification history and browser registration; both histories are retained, and the imported approved wrapper remains the template. Actual discovery305/portable289/native16/legacy231 has key digest e093a54d621484ebf93c87a30040e172744f4ceb52fb9f2a93cb8953ae3fa3dd. The approved map-projection source hash comes from exact imported main; all other legacy identities and14 native entries remain, with only the two B31 native entries appended.
 
 The combined local source passed828/828 core tests across74 files with one worker, typecheck0, boundary lint0 and wrapper7/7. The new b31-final-import-01 build has exactly the same160 runtime inputs and58 asset bytes as fixed07. Both source UI and native test modules, configuration and locked dependencies also match; checks/import/native-equivalence-actual-v1.json supports reuse of fixed07's freshUI5/native2 evidence. No new native execution is claimed, and the other14 Windows obligations are not called fresh. Remote full289 portable CI, final PR/main and delivery evidence remain pending; original244AT remain not_run and formalPLAY unsigned.
+
+### B32 complete-route and native recovery verification
+
+B32 has a separate schema12 package and constructor-owned private facility
+fixture. The production Worker keeps its default constructor. A controlled
+operable verification artifact needs its own exact admission and inventory;
+it cannot be substituted for production recovery or the delivered archive.
+
+The first four complete public Game routes reached successful record/personnel
+verification but exposed replay timestamps beyond the actual finish after a
+coarse advance. The corrected assertion reproduced this defect, and clamping
+the wrapper's replay timestamps to the actual outcome finish made the four
+routes pass. The work-file sample then passed26 cases including cold restoration
+at four inspection nodes, original receipt replay, read-only history, and a
+self-hashed corrupted private state rejected by authoritative input replay.
+These local results do not sign the actual Windows or Worker route obligations.
+
+Actual discovery is311 cases:293 portable and18 Windows obligations. All231
+legacy cases and the16 prior Windows identities remain intact; only the two
+B32 native recovery cases were added. The wrapper's seven checks passed against
+this discovery. The new Chrome case covers inspection work and the conclusion
+at HQ; Edge covers accepted-before-work and local-complete-before-delivery.
+Both require installed default Windows browsers, a fresh retained owned profile,
+same origin, full process closure, original run/physical state/ledger preservation,
+no wall-clock catch-up, and explicit command continuation. Writing or discovering
+these cases does not claim execution or acceptance. B32 E18 real hidden, fixed
+candidate Windows execution, final CI/PR/main/artifacts and delivery remain open.

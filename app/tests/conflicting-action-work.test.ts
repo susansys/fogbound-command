@@ -4,6 +4,48 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {conflicting_action_definition} from '../src/core/conflicting-action-definition';
 import type {ConflictingActionPlayerView} from '../src/conflicting-action-contracts';
+import {state_hash,validate_state} from '../src/core/snapshot';
+
+test.each([2500,7000,16000,18000])('B32 E22 cold Game restoration at inspection %ims preserves private state, original receipt and physical ledger',async to=>{
+ const f=await fixture('operable');
+ try{
+  const issued=await f.issue('W-inspect');await f.advance(to);const before=f.view,state=await f.store.read_committed(before.run_id);if(state?.schema!==12)throw Error('Expected schema12');
+  const cold=new Game(f.store,{conflicting_facility:'faulted'}),restored=await cold.restore(before.run_id,'owned-cold-restore'),after=await f.store.read_committed(before.run_id);if(after?.schema!==12)throw Error('Expected restored schema12');
+  expect(restored.view).toMatchObject({run_id:before.run_id,sim_time:before.sim_time,paused:true,actors:before.actors,field_reports:before.field_reports,repair_condition:before.repair_condition,conflicting_action:before.conflicting_action});
+  expect(after.facility).toEqual(state.facility);expect(after.task.prefix.field).toEqual(state.task.prefix.field);expect(after.task.prefix.processing).toEqual(state.task.prefix.processing);
+  expect(await cold.get_receipt(before.run_id,issued.envelope.operation_id)).toEqual(issued.receipt);
+  expect((await cold.apply_outcome_intent(issued.envelope)).receipt).toEqual(issued.receipt);expect(await cold.get_view(before.run_id)).toEqual(restored.view);
+  const replay=await cold.get_replay(before.run_id,before.sim_time,before.revision);expect(await replay.get_view(before.run_id)).toMatchObject({sim_time:before.sim_time,can_issue:false,field_reports:before.field_reports});
+  const broken=structuredClone(after);broken.facility.current='faulted';broken.integrity=await state_hash(broken);await expect(validate_state(broken)).rejects.toMatchObject({code:'INVALID_SAVE'});
+  expect(await cold.get_view(before.run_id)).toEqual(restored.view);
+ }finally{await f.store.delete();}
+});
+
+test.each([
+ {condition:'operable',route:'inspect',record_at:304000},
+ {condition:'operable',route:'repair',record_at:354000},
+ {condition:'faulted',route:'inspect',record_at:371000},
+ {condition:'faulted',route:'repair',record_at:354000},
+] as const)('B32 E19 complete public route $condition / $route ends with both qualified records and all personnel',async row=>{
+ const f=await fixture(row.condition);
+ try{
+  await f.prepare();
+  if(row.route==='inspect'){await f.issue('W-inspect');await f.advance(257000);}
+  if(row.route==='repair'||row.condition==='faulted'){await f.issue('W-repair');await f.advance(row.route==='inspect'?324000:307000);}
+  await f.issue('B-record');await f.advance(row.record_at);
+  for(const actor of ['W','R']){
+   const ref=(kind:string,id:string)=>({run_id:f.view.run_id,kind,id,version:1});
+   await f.apply({kind:'return_and_deliver',actor_ref:ref('actor',actor),return_route_ref:ref('return_route',actor+'-B-H'),receiver_ref:ref('receiver','H'),authority_ref:ref('authority','HQ-outcome-authority'),intent_ref:ref('return_intent','RET-'+actor),basis_delivery_refs:[],allowed_followups:['return','handover_batch','verify_manifest','notify_HQ'],cleanup_scope:['return','personnel_reception','custody'],effective_window:{from:f.view.sim_time,to:900000}});
+  }
+  await f.advance(900000);
+  expect(f.view).toMatchObject({finished:true,outcome:{result:'success',missing_people:[]}});
+  expect(f.view.outcome!.qualified_artifacts).toHaveLength(2);
+  expect(f.view.outcome!.confirmed_people).toEqual(['R-person-1','R-person-2','R-person-3','W-person-1','W-person-2','W-person-3']);
+  expect(f.view.outcome!.finished_at).toBeLessThanOrEqual(593000);
+  expect(f.view.replay_nodes.every(node=>node.at<=f.view.sim_time)).toBe(true);
+  expect(valid_response({request_id:'complete-route',ok:true,view:f.view})).toBe(true);
+ }finally{await f.store.delete();}
+});
 
 async function fixture(condition:'operable'|'faulted',samePublicIdentity=false){
  const store=new Persistence('b32-owned-work-route-'+crypto.randomUUID()),game=new Game(store,{conflicting_facility:condition});let sequence=0;

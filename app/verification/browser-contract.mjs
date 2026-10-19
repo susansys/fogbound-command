@@ -38,8 +38,8 @@ if(process.argv[2]==='--classify-change'){
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
 const frozen={
   "baseline_sha": "cab208ebd360a55f8fcf55e150e5b7a033f02f59",
-  "full_count": 309,
-  "full_keys_sha256": "1f4f731a78090d86bc36c3d6749088555ba6f7e2025f31b042b07363f0d72444",
+  "full_count": 311,
+  "full_keys_sha256": "eabfa4fd4d270027258c738cc0fc3fa1f42575f154784448a8909866d7b8fdbf",
   "legacy_count": 231,
   "legacy_keys_sha256": "272a726ad5b0eff5a06b345e202737d5bb292a20f6ed2069a785618a1efef7da",
   "legacy_files": [
@@ -336,6 +336,16 @@ const frozen={
       "file": "source-time-recovery.spec.ts",
       "title": "B31 E15 edge restores the source variant before and after relation retraction",
       "key": "[\"source-time-recovery.spec.ts\",\"\",[\"source-time-recovery.spec.ts\",\"B31 E15 edge restores the source variant before and after relation retraction\"]]"
+    },
+    {
+      "file": "conflicting-action-recovery.spec.ts",
+      "title": "B32 E20 chrome restores inspection work and received conclusion",
+      "key": "[\"conflicting-action-recovery.spec.ts\",\"\",[\"conflicting-action-recovery.spec.ts\",\"B32 E20 chrome restores inspection work and received conclusion\"]]"
+    },
+    {
+      "file": "conflicting-action-recovery.spec.ts",
+      "title": "B32 E21 edge restores accepted work and undelivered completion",
+      "key": "[\"conflicting-action-recovery.spec.ts\",\"\",[\"conflicting-action-recovery.spec.ts\",\"B32 E21 edge restores accepted work and undelivered completion\"]]"
     }
   ]
 };
@@ -352,7 +362,7 @@ function discover(filters=[]){const result=spawnSync(process.execPath,[cli,'test
 const full=discover();assert.equal(full.length,frozen.full_count);assert.equal(new Set(keys(full)).size,frozen.full_count);assert.equal(digest(keys(full)),frozen.full_keys_sha256,'Review every discovery addition/removal/title change against the fixed contract');
 for(const item of frozen.legacy_files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('browser',item.file))).digest('hex'),item.sha256,'The reviewed231 regression source must remain intact: '+item.file);
 const legacyFiles=new Set(frozen.legacy_files.map(item=>item.file)),legacy=full.filter(row=>legacyFiles.has(row.file));assert.equal(legacy.length,frozen.legacy_count);assert.equal(digest(keys(legacy)),frozen.legacy_keys_sha256,'No original regression may be omitted');
-const nativeKeys=new Set(frozen.windows.map(item=>item.key)),native=full.filter(row=>nativeKeys.has(row.key));assert.equal(native.length,16);assert.equal(new Set(frozen.windows.map(item=>item.title)).size,16);assert.deepEqual(keys(native),[...nativeKeys].sort());
+const nativeKeys=new Set(frozen.windows.map(item=>item.key)),native=full.filter(row=>nativeKeys.has(row.key));assert.equal(native.length,18);assert.equal(new Set(frozen.windows.map(item=>item.title)).size,18);assert.deepEqual(keys(native),[...nativeKeys].sort());
 const portable=full.filter(row=>!nativeKeys.has(row.key)),windowsHost=process.platform==='win32',expected=windowsHost?full:portable;
 const escape=value=>value.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\$&');
 const nativeExclusionPattern=frozen.windows.map(item=>'(?:^| )'+escape(item.title)+'$').join('|'),filters=windowsHost?[]:['--grep-invert',nativeExclusionPattern];
