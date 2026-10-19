@@ -932,7 +932,7 @@ This independent maintenance change keeps all298 discovery identities except the
 honest rename of the preparation-first command case (284 portable,231 legacy,
 14 Windows obligations). The explicit mapping is
 `verification/ci-coverage-equivalence.json`. Product runtime/assets, native
-obligations, workflow, global workers1/retries0 and the six-document classifier
+obligations, browser workers1/retries0 and the six-document classifier
 remain unchanged. There is no overall browser job time cap.
 
 All12 projection cells retain coordinate/route/symbol/camera/resize and no-write
@@ -981,3 +981,13 @@ The optimization branch was mechanically imported onto verified product main
 3b5d200cd694f068da460e6f521264dbf93ede90. The measurements above remain
 historical evidence from base2cd93d9; fresh checks on the imported source and
 the new153-runtime/58-asset binding are recorded separately before delivery.
+
+The first imported candidate CI39221543619 quality job retained785 passing
+core tests and one failure: the unchanged mission-save32-version case exceeded
+its existing5000ms harness budget. The raw failure remains. The complete quality
+core command now uses --maxWorkers=1; this changes file scheduling, while keeping
+all786 cases, their existing timeout limits and explicit in-test concurrency
+checks. Browser scheduling, retries, simulations and workflow routing remain.
+The same786 cases passed locally with this command. CPU contention is a plausible
+contributor, not a certified sole root cause. Fresh fixed-SHA CI is still required;
+this adjustment does not claim a faster whole workflow.

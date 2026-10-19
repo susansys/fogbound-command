@@ -51,7 +51,7 @@ jobs:
         if: steps.scope.outputs.docs_only != 'true'
       - run: npm run lint
         if: steps.scope.outputs.docs_only != 'true'
-      - run: npm test
+      - run: npm test -- --maxWorkers=1
         if: steps.scope.outputs.docs_only != 'true'
   browser-contract:
     runs-on: ubuntu-latest
