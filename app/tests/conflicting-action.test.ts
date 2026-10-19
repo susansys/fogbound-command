@@ -67,6 +67,7 @@ test('B32 E06 internal task identities cannot be selected as legacy runs and dam
   await expect(validate_state(state.task)).rejects.toMatchObject({code:'INVALID_SAVE'});
   for(const broken of [{...state,definition_hash:outcome.definition_hash},{...state,facility:{...state.facility,current:'operable'}},{...state,hashes:{...state.hashes,task:outcome.definition_hash}}])await expect(validate_state(broken)).rejects.toMatchObject({code:'INVALID_SAVE'});
   expect(await game.get_view(view.run_id)).toEqual(view);
+  expect(await game.get_outcome_fairness(view.run_id)).toMatchObject({run_id:view.run_id,definition_hash:state.task.definition_hash,truth_exposure:false,sources:[]});
  }finally{await store.delete();}
 });
 

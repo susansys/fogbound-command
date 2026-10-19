@@ -1,4 +1,4 @@
-import {conflicting_definition_for_package,is_conflicting_action_definition} from './conflicting-action-definition';
+import {conflicting_definition_for_package,is_conflicting_action_definition,is_conflicting_task_hash} from './conflicting-action-definition';
 import {parse_working_assessment} from '../conflicting-action-protocol';
 import {initial_conflicting_state} from './conflicting-action-state';
 import {project_conflicting_action_view,apply_conflicting_action_control} from './conflicting-action';
@@ -13,7 +13,7 @@ import {hq_outcome_evidence,local_outcome_evidence,engine_outcome_evidence,decla
 import {project_outcome_view} from './outcome-knowledge';
 import {apply_outcome_control,create_outcome_rejection} from './outcome-game';
 import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_return_and_deliver,parse_outcome_envelope,parse_outcome_debrief_query,parse_outcome_truth_request,parse_outcome_evidence_request} from '../outcome-protocol';
-import {outcome_definition_for_package,outcome_decision_profile_for,is_outcome_definition,type OutcomeDefinition} from './outcome-definition';
+import {outcome_definition_for_package,load_outcome_definition,outcome_decision_profile_for,is_outcome_definition,type OutcomeDefinition} from './outcome-definition';
 import type {ReturnAndDeliver,OutcomePlayerView,OutcomeEnvelope} from '../outcome-contracts';
 import {is_record_plan,is_task_intent} from '../contracts';
 import type {
@@ -83,6 +83,12 @@ export class Game {
     }catch{throw new GameError('INVALID_SAVE');}
   }
   private async validate_stored_state(state:StoredState){
+    if(this.validated_source_tasks.has(state)&&state.schema===10&&is_conflicting_task_hash(state.definition_hash)){
+      // Only a task obtained from an already validated schema12 snapshot may
+      // reach metadata readers. The public standalone-schema gate stays shut.
+      if(!json_data(state)||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
+      await load_outcome_definition(outcome_definition_for_package(state.definition_hash));return;
+    }
     if(this.validated_source_tasks.has(state)){await this.validate_package(state);return;}
 
     await this.validate_package(state);
