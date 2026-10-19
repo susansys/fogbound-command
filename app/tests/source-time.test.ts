@@ -7,6 +7,7 @@ import {valid_response} from '../src/dto';
 import type {OutcomePlayerView,OutcomeEnvelope} from '../src/outcome-contracts';
 import type {GamePlayerView} from '../src/play-contracts';
 import Dexie from 'dexie';
+import type {SourceTimeDefinition} from '../src/core/source-time-definition';
 
 // A complete package is authored before its loader exists. This RED exercises
 // the real existing Game entry, rather than a missing future module import.
@@ -159,3 +160,101 @@ test.each(['runs','snapshots'])('B31 task metadata refuses a corrupted outer sou
   expect(await store.creation('new-after-exposure')).toBeUndefined();
  }finally{db.close();await store.delete();}
 },30000);
+
+test('B31 E07/E08/E09 only received pair-scoped credentials group reports or establish two acquisitions, and retraction proves no third source',async()=>{
+ const store=new Persistence('b31-owned-relations-'+crypto.randomUUID()),game=new Game(store);
+ try{
+  let view=await game.create_run(await sourcePackage(),'research','create');
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:view.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;return view;};
+  await advance(65000);if(!('source_reading' in view))throw Error('source projection missing');const originals=structuredClone(view.source_reading.reports);expect(view.source_reading.groups).toEqual([]);
+  expect(await advance(75000)).toMatchObject({source_reading:{groups:[{report_refs:[{id:'M1'},{id:'M2'}],basis_refs:[{id:'C12'}]}],scoped_independence:[]}});
+  expect(await advance(95000)).toMatchObject({source_reading:{scoped_independence:[{report_refs:[{id:'M1'},{id:'M3'}],count:2,basis_refs:[{id:'C13'}]}]}});
+  expect(await advance(115000)).toMatchObject({source_reading:{groups:[],scoped_independence:[{report_refs:[{id:'M1'},{id:'M3'}],count:2}],independence:{kind:'unknown'},relations:[{ref:{id:'L12'},status:'retracted',supporting_evidence_ref:{id:'C12'},retraction_ref:{id:'X12'}}]}});
+  if(!('source_reading' in view))throw Error('source projection missing');expect(view.source_reading.reports).toEqual(originals);expect(view.source_reading.deliveries).toHaveLength(6);expect(valid_response({request_id:'relations',ok:true,view})).toBe(true);
+ }finally{await store.delete();}
+});
+
+test('B31 E10 later credentials and retraction never fill earlier history or rewrite original decision knowledge',async()=>{
+ const store=new Persistence('b31-owned-relation-history-'+crypto.randomUUID()),game=new Game(store);
+ try{
+  let view=await game.create_run(await sourcePackage(),'research','create');
+  const advance=async(to:number)=>{view=(await game.control_clock({run_id:view.run_id,operation_id:'to-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;return view;};
+  await advance(65000);const beforeCredential=structuredClone(view);
+  view=(await game.apply_outcome_intent({run_id:view.run_id,operation_id:'plan-before-credential',expected_revision:view.revision,intent:{kind:'save_plan',base_plan_ref:null,draft:{purpose:'原文与依据分别阅读',repair_packs:2}}})).view;
+  if(view.scenario_kind!=='play_outcome')throw Error('outcome task missing');const decision=structuredClone(view.decision_records[0]);
+  const grouped=structuredClone(await advance(75000));await advance(95000);await advance(115000);
+  const history=await game.get_replay(view.run_id,75000,grouped.revision);expect(await history.get_view(view.run_id)).toMatchObject({can_issue:false,source_reading:{groups:[{report_refs:[{id:'M1'},{id:'M2'}]}],scoped_independence:[]}});
+  const earlier=await game.get_replay(view.run_id,65000,beforeCredential.revision);expect(await earlier.get_view(view.run_id)).toMatchObject({source_reading:{groups:[],scoped_independence:[]}});
+  const current=await game.get_view(view.run_id);expect(current).toMatchObject({source_reading:{groups:[],scoped_independence:[{count:2}]}});if(current.scenario_kind!=='play_outcome')throw Error('outcome task missing');expect(current.decision_records[0]).toEqual(decision);
+ }finally{await store.delete();}
+});
+
+async function ownedSource(mutator:(definition:SourceTimeDefinition)=>void){const value=structuredClone(await sourcePackage()) as unknown as SourceTimeDefinition;mutator(value);value.profile.parameters.extra_messages=value.catalogs.messages.length;value.profile.registry[0].value=value.catalogs.messages.length;value.hashes.profile=await hash(value.profile);value.hashes.catalogs=await hash(value.catalogs);const {definition_hash,...body}=value;void definition_hash;value.definition_hash=await hash(body);return value;}
+
+test('B31 E11/E12 conflict affects only its received pair and retransmission preserves original report identity',async()=>{
+ const definition=await ownedSource(d=>{
+  d.catalogs.evidence.push({id:'C12-independent',version:1,issuer:'ArchiveSource',authority:'source_metadata',kind:'explicit_independent_acquisition_evidence',claim:'该两份记录有两份不同采集凭证',covered_reports:['M1','M2'],visible_acquisition_records:['C12-acquire-A','C12-acquire-B'],basis:'C12-independent-basis'});
+  d.catalogs.messages.push({id:'D-C12-independent',report:'C12-independent',sender:'ArchiveSource',recipient:'HQ',sent:84000,received:85000},{id:'D-M1-repeat',report:'M1',sender:'ArchiveSource',recipient:'HQ',sent:79000,received:80000});
+ });
+ const store=new Persistence('b31-owned-pair-conflict-'+crypto.randomUUID(),[],[],[],[],[definition]),game=new Game(store);
+ try{
+  let view=await game.create_run(definition,'research','create');view=(await game.control_clock({run_id:view.run_id,operation_id:'to95',expected_revision:view.revision,intent:{kind:'advance',to:95000}})).view;
+  expect(view).toMatchObject({source_reading:{groups:[],relations:[{status:'conflicted'}],conflicts:[{report_refs:[{id:'M1'},{id:'M2'}],basis_refs:[{id:'C12'},{id:'C12-independent'}]}],scoped_independence:[{report_refs:[{id:'M1'},{id:'M3'}],count:2}],independence:{kind:'unknown'}}});
+  if(!('source_reading' in view))throw Error('source reading missing');expect(view.source_reading.reports).toHaveLength(3);expect(view.source_reading.deliveries.filter(d=>d.report_ref.id==='M1')).toHaveLength(2);expect(valid_response({request_id:'conflicted-pair',ok:true,view})).toBe(true);
+  const restored=await new Game(store).restore(view.run_id,'restore');expect(restored.view).toMatchObject({source_reading:view.source_reading});
+ }finally{await store.delete();}
+});
+
+test('B31 E12 malformed relation credentials uniformly fail the public DTO without accepting hidden, future or cross-run references',async()=>{
+ const store=new Persistence('b31-owned-invalid-relations-'+crypto.randomUUID()),game=new Game(store);
+ try{
+  let view=await game.create_run(await sourcePackage(),'research','create');view=(await game.control_clock({run_id:view.run_id,operation_id:'to115',expected_revision:view.revision,intent:{kind:'advance',to:115000}})).view;if(!('source_reading' in view))throw Error('source reading missing');
+  for(const mutate of [
+   (v:typeof view)=>{v.source_reading.evidence[0].ref.run_id='another-run';},
+   (v:typeof view)=>{Object.assign(v.source_reading.evidence[0].ref,{kind:'engine_provenance'});},
+   (v:typeof view)=>{Object.assign(v.source_reading.evidence[0].ref,{version:2});},
+   (v:typeof view)=>{v.source_reading.evidence[0].received=999999;},
+   (v:typeof view)=>{Object.assign(v.source_reading.evidence[0],{issuer:'unknown-private-issuer'});},
+   (v:typeof view)=>{Object.assign(v.source_reading.evidence[2],{target_evidence_ref:{run_id:v.run_id,kind:'source_report',id:'unknown',version:1}});},
+   (v:typeof view)=>{Object.assign(v.source_reading.scoped_independence[0],{count:3});},
+   (v:typeof view)=>{Object.assign(v.source_reading.relations[0],{private_lineage:['secret']});},
+   (v:typeof view)=>{v.source_reading.evidence.splice(0,1);},
+   (v:typeof view)=>{v.source_reading.deliveries[0].report_ref.id='unknown-private-report';},
+   (v:typeof view)=>{v.source_reading.deliveries[1].knowledge_seq=1;},
+  ]){const invalid=structuredClone(view);mutate(invalid);expect(valid_response({request_id:'bad-relation',ok:true,view:invalid})).toBe(false);}
+  expect(await game.get_view(view.run_id)).toEqual(view);
+ }finally{await store.delete();}
+});
+
+test.each(['issuer','authority','missing-target','wrong-retraction-target','future-target','duplicate-message','unknown-report','negative-receive'])('B31 E12 registered malformed credential package is rejected before creation: %s',async(kind)=>{
+ const definition=await ownedSource(d=>{
+  if(kind==='issuer')d.catalogs.evidence[0].issuer='HiddenIssuer';
+  if(kind==='authority')d.catalogs.evidence[0].authority='engine_truth';
+  if(kind==='missing-target')d.catalogs.evidence[0].from='missing';
+  if(kind==='wrong-retraction-target')d.catalogs.evidence[2].target_basis='C13';
+  if(kind==='future-target')d.catalogs.messages[0].received=125000;
+  if(kind==='duplicate-message')d.catalogs.messages[1].id=d.catalogs.messages[0].id;
+  if(kind==='unknown-report')d.catalogs.messages[0].report='hidden-report';
+  if(kind==='negative-receive')d.catalogs.messages[0].received=-1;
+ });
+ const store=new Persistence('b31-owned-invalid-definition-'+crypto.randomUUID(),[],[],[],[],[definition]);try{await expect(new Game(store).create_run(definition,'research','create')).rejects.toThrow('INVALID_DEFINITION');expect(await store.creation('create')).toBeUndefined();}finally{await store.delete();}
+});
+
+
+test.each(['C12','C13','X12'])('B31 E12 DTO rejects a consistently reordered credential received before its target original: %s',async(id)=>{
+ const store=new Persistence('b31-owned-dto-received-before-target-'+crypto.randomUUID()),game=new Game(store);
+ try{
+  let view=await game.create_run(await sourcePackage(),'research','create');view=(await game.control_clock({run_id:view.run_id,operation_id:'to115',expected_revision:view.revision,intent:{kind:'advance',to:115000}})).view;if(!('source_reading' in view))throw Error('source reading missing');
+  const invalid=structuredClone(view),reading=invalid.source_reading,moved=reading.deliveries.find(d=>d.report_ref.id===id)!;moved.sent=id==='C12'?49000:id==='C13'?59000:74000;moved.received=moved.sent+1000;
+  reading.deliveries.sort((a,b)=>a.received-b.received||a.ref.id.localeCompare(b.ref.id));reading.deliveries.forEach((d,i)=>d.knowledge_seq=i+1);
+  for(const e of reading.evidence){const d=reading.deliveries.find(d=>d.ref.id===e.delivery_ref.id)!;e.received=d.received;e.knowledge_seq=d.knowledge_seq;}
+  for(const r of reading.relations){const e=reading.evidence.find(e=>e.ref.id===r.supporting_evidence_ref.id)!;r.received=e.received;r.effective_knowledge_seq=reading.evidence.find(e=>e.ref.id===r.retraction_ref?.id)?.knowledge_seq??e.knowledge_seq;}
+  expect(valid_response({request_id:'credential-before-target',ok:true,view:invalid})).toBe(false);expect(await game.get_view(view.run_id)).toEqual(view);
+ }finally{await store.delete();}
+});
+
+
+test('B31 E07 a received C13 establishes its bounded pair even when C12 and its retraction are never delivered',async()=>{
+ const definition=await ownedSource(d=>{d.catalogs.messages=d.catalogs.messages.filter(m=>!['C12','X12'].includes(m.report));});const store=new Persistence('b31-owned-independent-without-forward-'+crypto.randomUUID(),[],[],[],[],[definition]),game=new Game(store);
+ try{let view=await game.create_run(definition,'research','create');view=(await game.control_clock({run_id:view.run_id,operation_id:'to95',expected_revision:view.revision,intent:{kind:'advance',to:95000}})).view;expect(view).toMatchObject({source_reading:{relations:[],groups:[],evidence:[{ref:{id:'C13'}}],scoped_independence:[{report_refs:[{id:'M1'},{id:'M3'}],count:2}],independence:{kind:'unknown'}}});expect(valid_response({request_id:'independent-without-forward',ok:true,view})).toBe(true);}finally{await store.delete();}
+});

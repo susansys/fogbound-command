@@ -57,8 +57,8 @@ function known_time(value:unknown):boolean{
   if(value.kind==='unknown')return fields(value,['kind']);
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
-export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition|SourceTimeDefinition> {
-  if(record(input)&&input.schema===11)return load_source_time_definition(input);
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[],sources:readonly SourceTimeDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition|SourceTimeDefinition> {
+  if(record(input)&&input.schema===11)return load_source_time_definition(input,sources);
   if(record(input)&&input.schema===10)return load_outcome_definition(input,outcomes);
   if(record(input)&&input.schema===9)return load_intelligence_definition(input,intelligence);
   if(record(input)&&input.schema===8){

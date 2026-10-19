@@ -41,9 +41,11 @@ export class Persistence {
   readonly mission_definitions:readonly MissionDefinition[];
   readonly intelligence_definitions:readonly IntelligenceDefinition[];
   readonly outcome_definitions:readonly import('./outcome-definition').OutcomeDefinition[];
-  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[],registeredMissionDefinitions:readonly MissionDefinition[]=[],registeredIntelligenceDefinitions:readonly IntelligenceDefinition[]=[],registeredOutcomeDefinitions:readonly import('./outcome-definition').OutcomeDefinition[]=[]) {
+  readonly source_definitions:readonly import('./source-time-definition').SourceTimeDefinition[];
+  constructor(readonly name: string,registeredPlayDefinitions:readonly PlayDefinition[]=[],registeredMissionDefinitions:readonly MissionDefinition[]=[],registeredIntelligenceDefinitions:readonly IntelligenceDefinition[]=[],registeredOutcomeDefinitions:readonly import('./outcome-definition').OutcomeDefinition[]=[],registeredSourceDefinitions:readonly import('./source-time-definition').SourceTimeDefinition[]=[]) {
     // Constructor injection is the owned registration seam. Worker uses defaults;
     // no request or production import endpoint can supply these definitions.
+    this.source_definitions=structuredClone(registeredSourceDefinitions);
     this.outcome_definitions=structuredClone(registeredOutcomeDefinitions);
     this.play_definitions=structuredClone(registeredPlayDefinitions);
     this.mission_definitions=structuredClone(registeredMissionDefinitions);
@@ -274,7 +276,7 @@ export class Persistence {
     // This source may belong to another run and has not passed the caller's
     // Game validation. Keep the IDB transaction alive while checking the whole
     // source package, before inspecting its original task metadata.
-    for(const value of [raw,rawSealed])if(value?.schema===11)await Dexie.waitFor(validate_state(value,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions));
+    for(const value of [raw,rawSealed])if(value?.schema===11)await Dexie.waitFor(validate_state(value,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions,this.source_definitions));
     const state=outcome_task(raw),sealed=outcome_task(rawSealed);
     const grant=(await this.db.metadata.get('outcome-truth-grant:'+source.run_id+':'+source.operation_id))?.truth_grant;
     if(state?.schema!==10||state.definition_hash!==definition_hash||!state.finished||sealed?.schema!==10||!sealed.finished||sealed.integrity!==source.run_digest||!grant||grant.ack_revision===null)throw new GameError('INVALID_SAVE');
@@ -293,7 +295,7 @@ export class Persistence {
   }
   async list_runs() {
     const entries=await this.db.runs.toArray();
-    for(const state of entries)await validate_state(state,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions);
+    for(const state of entries)await validate_state(state,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions,this.source_definitions);
     const ranked=await Promise.all(entries.map(async state=>({state,created:(await this.db.metadata.get(`created:${state.run_id}`))?.value??0,read_only:await this.is_read_only(state.run_id)})));
     ranked.sort((a,b)=>b.created-a.created||Number(a.read_only)-Number(b.read_only)||b.state.revision-a.state.revision);
     const latest=new Map<string,(typeof ranked)[number]>();
