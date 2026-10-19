@@ -56,7 +56,7 @@ export async function conflictingRecovery(carrier,{chromium,expect,info,profileR
    await expect.poll(async()=>(await current()).sim_time,{timeout:30000,intervals:[50]}).toBeGreaterThanOrEqual(issued+stage.offset);await pause();
    const before=await current(),physical=await ownedRecords(page,before.run_id),order=physical.state.task.prefix.field.orders.find(row=>row.payload.activity_ref.id==='W-inspect');
    assert.equal(physical.state.schema,12);assert.equal(physical.state.facility.initial,'faulted');
-   if(stage.name==='accepted-before-work'){expect(order.status).toBe('accepted');expect(order.work_done_ms).toBe(0);expect(before.sim_time).toBeLessThan(issued+6000);}
+   if(stage.name==='accepted-before-work'){expect(order.status).toBe('running');expect(order.work_done_ms).toBe(0);expect(order.wear_charged).toBe(false);expect(before.field_reports.filter(row=>row.report.typed_payload.activity_ref.id==='W-inspect').map(row=>row.report.phase)).toEqual(['accepted']);expect(before.actors.find(row=>row.actor==='W')).toMatchObject({equipment_energy:24,durability:100,packs:2});expect(before.sim_time).toBeLessThan(issued+6000);}
    if(stage.name==='inspection-working'){expect(order.work_done_ms).toBeGreaterThan(0);expect(order.work_done_ms).toBeLessThan(10000);}
    if(stage.name==='local-complete-before-delivery'){expect(order.status).toBe('completed');expect(order.work_done_ms).toBe(10000);expect(before.sim_time).toBeLessThan(issued+17000);expect(before.repair_condition.status).toBe('unknown');}
    if(stage.name==='conclusion-at-HQ')expect(before.repair_condition.status).toBe('confirmed_faulted');
