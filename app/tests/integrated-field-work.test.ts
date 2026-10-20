@@ -79,7 +79,7 @@ test('NB3-AT009 actual Game reads one logical GB through four phases before comm
   await advance(146750);expect((await local()).work.artifacts).toMatchObject([{source:'A',logical_size_bytes:1000000000,verified:true,completed_at:146750}]);expect(view.artifacts).toHaveLength(0);
   await advance(147750);expect(view.artifacts).toMatchObject([{source:'A',logical_size_bytes:1000000000,verified:true,observed_at:146750,received_at:147750}]);
   expect(valid_response({request_id:'actual-artifact',ok:true,view})).toBe(true);
-  for(const mutation of ['missing-report','wrong-source','wrong-report','wrong-delivery','wrong-artifact','wrong-time','duplicate-delivery']){
+  for(const mutation of ['missing-report','wrong-source','wrong-report','wrong-delivery','wrong-artifact','wrong-time','duplicate-delivery','duplicate-report']){
    const broken=structuredClone(view),artifact=broken.artifacts[0];
    if(mutation==='missing-report')broken.activity_reports=[];
    if(mutation==='wrong-source')artifact.source='B';
@@ -88,6 +88,11 @@ test('NB3-AT009 actual Game reads one logical GB through four phases before comm
    if(mutation==='wrong-artifact')artifact.id='UNKNOWN';
    if(mutation==='wrong-time')artifact.observed_at--;
    if(mutation==='duplicate-delivery')broken.artifacts.push({...artifact,id:'second-artifact'});
+   if(mutation==='duplicate-report'){
+    const report=broken.activity_reports.find(report=>report.id===artifact.delivery_ref)!;
+    broken.activity_reports.push({...report,id:'second-delivery',artifact_ref:'second-artifact'});
+    broken.artifacts.push({...artifact,id:'second-artifact',delivery_ref:'second-delivery'});
+   }
    expect(valid_response({request_id:mutation,ok:true,view:broken})).toBe(false);
   }
   expect((await local()).work.fixed_source_energy_uJ.A).toBe(218750000);expect((await local()).work.portable_energy_uJ.R).toBe(645500000);expect((await local()).work.storage_free_bytes.R).toBe(15000000000);

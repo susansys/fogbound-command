@@ -29,6 +29,8 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
   if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(new Set(view.artifacts.map(artifact=>artifact.id)).size!==view.artifacts.length||view.artifacts.some(artifact=>artifact.observed_at>artifact.received_at||artifact.received_at>view.sim_time))return false;
   if(new Set(view.activity_reports.map(report=>report.id)).size!==view.activity_reports.length||view.activity_reports.some(report=>report.observed_at>report.received_at||report.received_at>view.sim_time))return false;
+  // Field activity reports currently have one HQ delivery per immutable report.
+  if(new Set(view.activity_reports.map(report=>report.report_ref)).size!==view.activity_reports.length)return false;
   if(new Set(view.artifacts.map(artifact=>artifact.delivery_ref)).size!==view.artifacts.length)return false;
   for(const artifact of view.artifacts){
    const report=view.activity_reports.find(report=>report.id===artifact.delivery_ref);
