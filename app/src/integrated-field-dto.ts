@@ -23,7 +23,10 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
   const view=v as IntegratedFieldPlayerView,catalog=view.model_catalog,a=view.geometry,b=catalog.geometry;
   if(a.id!==b.id||a.version!==b.version||(['H','A','B'] as const).some(id=>a.points[id].some((value,index)=>value!==b.points[id][index]))||a.segments.length!==2||b.segments.length!==2||a.segments.some((segment,index)=>segment.id!==b.segments[index].id||segment.length_m!==b.segments[index].length_m)||new Set(a.segments.map(segment=>segment.id)).size!==2)return false;
   if(catalog.configurations.length!==2||new Set(catalog.configurations.map(config=>config.actor)).size!==2||new Set(catalog.configurations.map(config=>config.id)).size!==2)return false;
-  for(const config of catalog.configurations)if(config.capacity_l<=0||config.occupied_l<0||config.occupied_l>config.capacity_l||config.equipment.mass_kg<0||config.equipment.mass_kg>config.load_kg||config.equipment.battery_wh<=0||config.equipment.battery_available_j<0||config.equipment.battery_available_j>config.equipment.battery_nominal_j)return false;
+  for(const config of catalog.configurations){
+    const registered=config.actor==='R'?{id:'R-INTEGRATED-4KG',equipment:'EQ-G2-TU'}:{id:'W-INTEGRATED-3KG',equipment:'W-FICTIONAL-TOOL'};
+    if(config.id!==registered.id||config.equipment.id!==registered.equipment||config.capacity_l<=0||config.occupied_l<0||config.occupied_l>config.capacity_l||config.equipment.mass_kg<0||config.equipment.mass_kg>config.load_kg||config.equipment.battery_wh<=0||config.equipment.battery_available_j<0||config.equipment.battery_available_j>config.equipment.battery_nominal_j)return false;
+  }
   const sources=new Set(catalog.sources.map(source=>source.id+':'+source.version));
   if(sources.size!==catalog.sources.length||new Set(catalog.parameters.map(parameter=>parameter.id)).size!==catalog.parameters.length||!['A','C','T'].every(category=>catalog.parameters.some(parameter=>parameter.category===category)))return false;
   return catalog.parameters.every(parameter=>sources.has(parameter.source_ref.id+':'+parameter.source_ref.version));

@@ -5,8 +5,8 @@ import type {Envelope,Intent} from './contracts';
 import type {Transport,Response} from './transport';
 import type {GamePlayerView} from './play-contracts';
 import {error_copy} from './player-copy';
-type Props={view:IntegratedFieldPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean};
-export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelError,storageFault}:Props){
+type Props={view:IntegratedFieldPlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean;history:boolean};
+export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelError,storageFault,history}:Props){
   const catalog=view.model_catalog;
   const current=useRef(view),adoptRef=useRef(adopt),pending=useRef<Envelope|null>(null);current.current=view;adoptRef.current=adopt;
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[note,setNote]=useState(''),[uncertain,setUncertain]=useState(false);
@@ -14,15 +14,17 @@ export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelEr
     if(response.ok&&response.view?.scenario_kind==='play_integrated_field'&&response.view.run_id===current.current.run_id){adoptRef.current(response.view);return true;}return false;
   }
   async function pause(reason:'manual'|'focus_lost'|'application_hidden'){
-    if(current.current.paused)return true;
+    if(history)return false;if(current.current.paused)return true;
     try{const response=await transport.request({kind:'management_pause',reason});if(adoptResponse(response)&&response.ok&&response.view?.paused){setNote('暂停已确认');return true;}setError(response.ok?'STORAGE_UNCONFIRMED':response.code);}catch{setError('CHANNEL_UNCERTAIN');}return false;
   }
   useEffect(()=>{
+    if(history)return;
     const lost=()=>{if(current.current.mode==='command'&&!current.current.paused)void pause(document.hidden?'application_hidden':'focus_lost');};
     const hidden=()=>{if(document.hidden)lost();};window.addEventListener('blur',lost);document.addEventListener('visibilitychange',hidden);
     return()=>{window.removeEventListener('blur',lost);document.removeEventListener('visibilitychange',hidden);};
-  },[transport]);
+  },[transport,history]);
   async function send(envelope:Envelope){
+    if(history)return;
     setBusy(true);setError('');
     try{
       const response=await transport.request({kind:'operate',envelope});
@@ -32,18 +34,19 @@ export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelEr
     }catch{setError('CHANNEL_UNCERTAIN');setUncertain(true);}finally{setBusy(false);}
   }
   async function control(intent:Extract<Intent,{kind:'save'|'continue'}>){
-    if(busy||pending.current||storageFault)return;const active=current.current;
+    if(history||busy||pending.current||storageFault)return;const active=current.current;
     const envelope={run_id:active.run_id,operation_id:crypto.randomUUID(),expected_revision:active.revision,intent};pending.current=envelope;await send(envelope);
   }
   async function recover(){
-    const envelope=pending.current;if(!envelope||busy)return;setBusy(true);
+    const envelope=pending.current;if(history||!envelope||busy)return;setBusy(true);
     try{const receipt=await transport.request({kind:'receipt',run_id:envelope.run_id,operation_id:envelope.operation_id});if(!receipt.ok){setError(receipt.code);return;}if(receipt.receipt){const fresh=await transport.request({kind:'view',run_id:envelope.run_id});if(adoptResponse(fresh)){pending.current=null;setUncertain(false);setError('');setNote('原操作已确认');}}else await send(envelope);}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}
   }
-  const unavailable=busy||uncertain||storageFault;
+  const unavailable=history||busy||uncertain||storageFault;
   return <div className="app integrated-workbench"><header className="topbar"><span className="brand"><span className="brand-mark">玄</span><strong>玄枢行动</strong></span><span>总部视图 · {view.mode==='command'?'指挥时间':'研究时间'}</span><output role="timer" aria-label="行动时刻" aria-live="off">{(view.sim_time/1000).toFixed(3)} 秒</output>
       {view.mode==='command'&&(view.paused?<button disabled={unavailable||view.finished} onClick={()=>void control({kind:'continue'})}>继续行动</button>:<button disabled={unavailable} onClick={()=>{setBusy(true);void pause('manual').finally(()=>setBusy(false));}}>暂停行动</button>)}
-      <button disabled={unavailable} onClick={()=>void control({kind:'save'})}>保存行动</button><button disabled={unavailable} onClick={()=>{setBusy(true);void (async()=>{if(await pause('manual'))await onLeave();})().finally(()=>setBusy(false));}}>返回演练列表</button>
+      <button disabled={unavailable} onClick={()=>void control({kind:'save'})}>保存行动</button><button disabled={busy||uncertain} onClick={()=>{setBusy(true);void (async()=>{if(history||await pause('manual'))await onLeave();})().finally(()=>setBusy(false));}}>返回演练列表</button>
     </header>
+    {history&&<p className="integrated-receipt">正在查看历史记录，只读。</p>}
     {(error||channelError)&&<div className="fault" role="alert">{error_copy(error||channelError)}{storageFault&&<button onClick={()=>window.location.reload()}>返回最近记录</button>}{uncertain&&<button disabled={busy} onClick={()=>void recover()}>核对并重试原操作</button>}</div>}
     <div className="integrated-receipt" role="status">{note}</div>
     <main className="integrated-content"><h1>综合现场任务</h1><p>依照已经收到的材料组织行动。模型中的情景量与现实测量分开记录。</p><IntegratedFieldMap view={view}/>
