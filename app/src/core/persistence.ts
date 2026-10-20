@@ -306,7 +306,7 @@ export class Persistence {
       revision: x.revision,
       mode: x.mode,
       finished: x.finished,
-      scenario_kind: x.schema===12?'play_outcome' as const:x.schema===11?'play_outcome' as const:x.schema===10?'play_outcome' as const:x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
+      scenario_kind: x.schema===13?'play_integrated_field' as const:x.schema===12?'play_outcome' as const:x.schema===11?'play_outcome' as const:x.schema===10?'play_outcome' as const:x.schema===9?'play_intelligence' as const:x.schema===8?'play_mission' as const:x.schema===7?'play_corridor' as const:x.schema===5?'record' as const:x.schema===6?'prestart_move' as const:'move' as const,
       read_only,
       ...((x.schema===11||x.schema===12)?{source_package:{id:'B31-SOURCE-TIME-01' as const,version:1 as const}}:{}),
       ...(x.schema===12?{conflicting_package:{id:'B32-CONFLICTING-ACTION-01' as const,version:1 as const}}:{}),

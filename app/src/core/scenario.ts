@@ -1,3 +1,4 @@
+import {load_integrated_field_definition,type IntegratedFieldDefinition} from './integrated-field-definition';
 import {load_conflicting_action_definition,is_conflicting_field_hash,is_conflicting_task_hash,type ConflictingActionDefinition} from './conflicting-action-definition';
 import {load_source_time_definition,type SourceTimeDefinition} from './source-time-definition';
 import {load_outcome_definition,type OutcomeDefinition} from './outcome-definition';
@@ -58,7 +59,8 @@ function known_time(value:unknown):boolean{
   if(value.kind==='unknown')return fields(value,['kind']);
   return value.kind==='known'&&fields(value,['kind','value','evidence'])&&typeof value.value==='number'&&Number.isSafeInteger(value.value)&&value.value>=0&&valid_id(value.evidence);
 }
-export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[],sources:readonly SourceTimeDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition|SourceTimeDefinition|ConflictingActionDefinition> {
+export async function load_definition(input: unknown,registered:readonly PlayDefinition[]=[],missions:readonly MissionDefinition[]=[],intelligence:readonly IntelligenceDefinition[]=[],outcomes:readonly OutcomeDefinition[]=[],sources:readonly SourceTimeDefinition[]=[]): Promise<Definition|PlayDefinition|MissionDefinition|IntelligenceDefinition|OutcomeDefinition|SourceTimeDefinition|ConflictingActionDefinition|IntegratedFieldDefinition> {
+  if(record(input)&&input.schema===13)return load_integrated_field_definition(input);
   if(record(input)&&input.schema===12)return load_conflicting_action_definition(input);
   if(record(input)&&(is_conflicting_field_hash(input.definition_hash)||is_conflicting_task_hash(input.definition_hash)))throw new GameError('INVALID_DEFINITION');
   if(record(input)&&input.schema===11)return load_source_time_definition(input,sources);

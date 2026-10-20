@@ -11,7 +11,7 @@ import {loadRegionalBundle,sampleSimulationHeight,RegionalResourceError,type Reg
 import runtimeNotices from '../THIRD_PARTY_LICENSES/current-runtime-notices.txt?url&no-inline';
 import type {RegionalDisplaySession,MapPreferences} from './regional-display';
 type Props = {
-  view: PlayerView;
+  view: Exclude<PlayerView,{scenario_kind:'play_integrated_field'}>;
   selected: string;
   onSelect: (id: string) => void;
   planned: boolean;

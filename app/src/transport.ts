@@ -11,7 +11,7 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
   read_only?:boolean;
   source_package?:{id:'B31-SOURCE-TIME-01';version:1};
   conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};

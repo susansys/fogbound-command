@@ -1,0 +1,50 @@
+import {test,expect} from '@playwright/test';
+
+test('B33 catalogue keeps metre geometry, configuration mass and source categories visible',async({page},info)=>{
+  await page.goto('/');
+  await expect(page.getByRole('option',{name:'综合现场任务',exact:true})).toHaveCount(1);
+  await page.getByLabel('演练任务').selectOption('INTEGRATED-FIELD-PACK-3');
+  await page.getByLabel('时间方式').selectOption('research');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'综合现场任务',exact:true})).toBeVisible();
+  const catalogue=page.getByRole('region',{name:'模型与参数目录'});
+  await expect(catalogue).toContainText('条件情景值，非现实校准');
+  await expect(catalogue).toContainText('HA：100 m');
+  await expect(catalogue).toContainText('AB：100 m');
+  await expect(catalogue).toContainText('R 携行：4 kg');
+  await expect(catalogue).toContainText('平板 1.19 kg（已含电池）');
+  await expect(catalogue).toContainText('178934.4 J');
+  await catalogue.getByText('来源与版本',{exact:true}).click();
+  await expect(catalogue).toContainText('FZ-G2 mk3 AP');
+  await expect(catalogue).toContainText('资料发布日期未知');
+  await page.getByRole('main').hover();
+  await page.mouse.wheel(0,10000);
+  await expect(page.getByText(/^GB 表示模型中的逻辑字节量/)).toBeInViewport();
+  await expect(page.getByText('玄枢行动',{exact:true})).toBeInViewport();
+  await page.screenshot({path:info.outputPath('integrated-catalogue.png'),fullPage:true});
+});
+
+test('B33 command catalogue pauses, saves, reloads and resumes through the real Worker',async({page})=>{
+  await page.goto('/');
+  await page.getByLabel('演练任务').selectOption('INTEGRATED-FIELD-PACK-3');
+  await expect(page.getByLabel('时间方式')).toHaveValue('command');
+  await page.getByRole('button',{name:'开始演练',exact:true}).click();
+  const clock=page.getByRole('timer',{name:'行动时刻'});
+  const milliseconds=async()=>Math.round(Number((await clock.innerText()).replace(' 秒',''))*1000);
+  await expect.poll(milliseconds).toBeGreaterThan(0);
+  await page.getByRole('button',{name:'暂停行动',exact:true}).click();
+  await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  const paused=await milliseconds();
+  await page.waitForTimeout(500);
+  expect(await milliseconds()).toBe(paused);
+  await page.getByRole('button',{name:'保存行动',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('已保存');
+  await page.reload();
+  await page.getByRole('button',{name:'接手这场演练',exact:true}).click();
+  await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();
+  expect(await milliseconds()).toBe(paused);
+  await page.waitForTimeout(500);
+  expect(await milliseconds()).toBe(paused);
+  await page.getByRole('button',{name:'继续行动',exact:true}).click();
+  await expect.poll(milliseconds).toBeGreaterThan(paused);
+});

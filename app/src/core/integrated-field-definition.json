@@ -1,0 +1,38 @@
+{
+  "schema": 13,
+  "contract": "0.5.1",
+  "id": "INTEGRATED-FIELD-PACK-3",
+  "version": 1,
+  "scenario_kind": "play_integrated_field",
+  "model_ref": {"id": "INTEGRATED-FIELD-MODEL-3", "version": 1},
+  "geometry": {
+    "id": "INTEGRATED-FIELD-GEOMETRY-1", "version": 1,
+    "unit": "m", "metres_per_coordinate": 1,
+    "points": {"H": [50, 150], "A": [150, 150], "B": [250, 150]},
+    "segments": [{"id": "HA", "points": ["H", "A"]}, {"id": "AB", "points": ["A", "B"]}]
+  },
+  "public_rules": {"deadline": 900000, "receipt_grace": 10000},
+  "sources": [
+    {"id": "R13", "version": 1, "document_version": "FZ-G2 mk3 AP", "publication_date": null, "sales_sku": null,
+      "url": "https://ap.connect.panasonic.com/id/en/download-specifications/3044", "reading_scope": "Official 3-page specifications, p2 and p3",
+      "source_register_sha256": "62c5b06508fc5cdb86fe4e0834c57ef82666f93b393e0c87ba911d6b774d7be3"},
+    {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1, "document_version": "detail-v3.1/objects-and-parameters-v3",
+      "publication_date": null, "sales_sku": null,
+      "content_sha256": "1ab9f304c564a8b0158758f668ea723b2e456908187f3a5513b3fb2cfaca3169"}
+  ],
+  "parameters": {
+    "ha_speed": {"id": "P-MOVE-HA", "value": 1, "unit": "m/s", "category": "C", "label": "条件情景值，非现实校准", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}}
+  },
+  "parameter_sources": {
+    "r_mass": {"id": "P-R-MASS", "unit": "kg", "category": "A", "label": "公开参考规格（约值，含电池）", "source_ref": {"id": "R13", "version": 1}},
+    "deadline": {"id": "P-DEADLINE", "unit": "ms", "category": "T", "label": "技术与玩法合同", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}}
+  },
+  "configurations": [
+    {"actor": "R", "id": "R-INTEGRATED-4KG", "capacity_l": 12, "occupied_l": 5, "storage_bytes": 16000000000,
+      "equipment_item_ref": "EQ-G2-TU", "battery_wh": 49.704, "initial_available_percent": 80,
+      "items": [{"id": "EQ-G2-TU", "mass_kg": 1.19, "battery_included": true}, {"id": "R-BAG", "mass_kg": 0.75, "battery_included": false}, {"id": "R-RAINCOAT", "mass_kg": 0.85, "battery_included": false}, {"id": "R-OTHER", "mass_kg": 1.21, "battery_included": false}]},
+    {"actor": "W", "id": "W-INTEGRATED-3KG", "capacity_l": 12, "occupied_l": 5,
+      "equipment_item_ref": "W-FICTIONAL-TOOL", "battery_wh": 20, "initial_available_percent": 80,
+      "items": [{"id": "W-BAG", "mass_kg": 0.75, "battery_included": false}, {"id": "W-RAINCOAT", "mass_kg": 0.85, "battery_included": false}, {"id": "W-FICTIONAL-TOOL", "mass_kg": 1.2, "battery_included": true}, {"id": "B-SPARE-CONNECTOR", "mass_kg": 0.2, "battery_included": false}]}
+  ]
+}
