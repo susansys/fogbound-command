@@ -22,9 +22,11 @@ export async function integrated_field_definition():Promise<IntegratedFieldDefin
     load_kg(config.items);portable_energy(config.battery_wh,config.initial_available_percent);
   }
   for(const speed of Object.values(body.parameters))if(speed.unit!=='m/s'||speed.category!=='C'||!Number.isSafeInteger(speed.value*1000)||speed.value<=0)throw new GameError('INVALID_DEFINITION');
+  for(const value of Object.values(body.work_parameters))if(!Number.isSafeInteger(value*1000)||value<0)throw new GameError('INVALID_DEFINITION');
   if(body.parameters.ha_speed.unit!=='m/s'||body.parameters.ha_speed.category!=='C'||!Number.isFinite(body.parameters.ha_speed.value)||body.parameters.ha_speed.value<=0||body.parameter_sources.r_mass.unit!=='kg'||body.parameter_sources.deadline.unit!=='ms')throw new GameError('INVALID_DEFINITION');
   const hashes={model:await hash(canonical(body.model_ref)),geometry:await hash(canonical(body.geometry)),rules:await hash(canonical(body.public_rules)),configurations:await hash(canonical(body.configurations)),parameters:await hash(canonical({values:body.parameters,sources:body.parameter_sources})),sources:await hash(canonical(body.sources))};
-  return {...body,hashes,definition_hash:await hash(canonical({...body,hashes}))} as unknown as IntegratedFieldDefinition;
+  const work_hashes={...hashes,work:await hash(canonical(body.work_parameters)),data_sources:await hash(canonical(body.synthetic_data_sources)),data_payload_A:await hash(body.synthetic_data_sources[0].payload),data_payload_B:await hash(body.synthetic_data_sources[1].payload)};
+  return {...body,hashes:work_hashes,definition_hash:await hash(canonical({...body,hashes:work_hashes}))} as unknown as IntegratedFieldDefinition;
 }
 export function is_integrated_field_definition(value:{schema:number}):value is IntegratedFieldDefinition{return value.schema===13;}
 export async function load_integrated_field_definition(input:unknown):Promise<IntegratedFieldDefinition>{

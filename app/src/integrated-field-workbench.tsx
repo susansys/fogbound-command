@@ -29,12 +29,12 @@ export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelEr
     setBusy(true);setError('');
     try{
       const response=await transport.request({kind:'operate_integrated_field',envelope});
-      if(adoptResponse(response)){pending.current=null;setUncertain(false);setNote(envelope.intent.kind==='save'?'已保存至 '+(response.ok?response.view!.sim_time/1000:0)+' 秒':envelope.intent.kind==='integrated_move'?'移动命令已签发，等待当地接令及回报':envelope.intent.kind==='advance'?'时间推进已确认':'继续已确认');}
+      if(adoptResponse(response)){pending.current=null;setUncertain(false);setNote(envelope.intent.kind==='save'?'已保存至 '+(response.ok?response.view!.sim_time/1000:0)+' 秒':envelope.intent.kind==='integrated_move'?'移动命令已签发，等待当地接令及回报':envelope.intent.kind==='integrated_activity'?'现场命令已签发，等待当地接令及回报':envelope.intent.kind==='integrated_prepare'?'资料校验与准备已登记，等待共享席位确认':envelope.intent.kind==='advance'?'时间推进已确认':'继续已确认');}
       else if(!response.ok){setError(response.code);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED'].includes(response.code))setUncertain(true);else{pending.current=null;const fresh=await transport.request({kind:'view',run_id:envelope.run_id});adoptResponse(fresh);}}
       else{setError('CHANNEL_UNCERTAIN');setUncertain(true);}
     }catch{setError('CHANNEL_UNCERTAIN');setUncertain(true);}finally{setBusy(false);}
   }
-  async function control(intent:Extract<Intent,{kind:'save'|'continue'|'advance'|'integrated_move'}>){
+  async function control(intent:Extract<Intent,{kind:'save'|'continue'|'advance'|'integrated_move'|'integrated_activity'|'integrated_prepare'}>){
     if(history||busy||pending.current||storageFault)return;const active=current.current;
     const envelope={run_id:active.run_id,operation_id:crypto.randomUUID(),expected_revision:active.revision,intent};pending.current=envelope;await send(envelope);
   }
@@ -57,6 +57,19 @@ export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelEr
         <label>移动目的地<select aria-label="移动目的地" value={target} disabled={unavailable} onChange={event=>setTarget(event.target.value as 'H'|'A'|'B')}><option value="H">H</option><option value="A">A</option><option value="B">B</option></select></label>
         <button disabled={unavailable||!view.can_issue} onClick={()=>void control({kind:'integrated_move',actor,target,model_ref:view.model_catalog.model_ref})}>下达移动命令</button>
         {view.mode==='research'&&<><label>推进到时刻（秒）<input aria-label="推进到时刻（秒）" type="number" min={view.sim_time/1000} max={910} step="0.001" value={advanceTo} disabled={unavailable} onChange={event=>setAdvanceTo(event.target.value)}/></label><button disabled={unavailable||view.finished||!advanceTo.trim()||!Number.isSafeInteger(Math.round(Number(advanceTo)*1000))||Number(advanceTo)*1000<=view.sim_time||Number(advanceTo)>910} onClick={()=>void control({kind:'advance',to:Math.round(Number(advanceTo)*1000)})}>推进时间</button></>}
+      </section>
+      <section aria-label="现场读取"><h2>现场读取</h2><p>条件预计 {catalog.parameters.find(parameter=>parameter.id==='P-READ')!.value/1000} 秒：准备、复制、摘要核验、收尾四阶段。以上为作者情景值（C），依据 P-READ 来源登记版本；收尾成功并收到回报后才列入成果。</p>
+        <button disabled={unavailable||!view.can_issue||!view.actors.some(value=>value.id==='R'&&value.position.point.every((coordinate,index)=>coordinate===view.geometry.points.A[index]))} onClick={()=>{const position=view.actors.find(value=>value.id==='R')!.position;void control({kind:'integrated_activity',actor:'R',action:'read',target:'A',model_ref:view.model_catalog.model_ref,basis_refs:[{run_id:view.run_id,id:position.evidence,version:1},{run_id:view.run_id,id:'opening-A-access',version:1}]});}}>读取 A 资料</button>
+        {view.activity_reports.map(report=><p key={report.id}>{report.actor} {({read:'读取',observe:'观察',inspect:'检查',repair:'维修'})[report.action]} {report.target}：{({accepted:'当地已接令，最终结果待回报',completed:'当地已完成',refused:'当地条件不满足，未开始该作业',blocked:'实体工作已停止，未生成完整成果'})[report.phase]}；观察 {report.observed_at/1000} 秒，收到 {report.received_at/1000} 秒。</p>)}
+        {view.artifacts.map(artifact=><p key={artifact.id}>已核验成果 {artifact.source}：{artifact.logical_size_bytes/1000000000} GB；观察 {artifact.observed_at/1000} 秒，收到 {artifact.received_at/1000} 秒。</p>)}
+        <p>GB 为模型逻辑数据量。存档仅包含受控小型合成载荷与核验记录。</p>
+      </section>
+      <section aria-label="准备与维修"><h2>准备与维修</h2><p>资料校验与准备共用 INTEL 席位。维修必须引用同一计划的批准和已收到的检查结果。</p>
+        <button disabled={unavailable||!view.can_issue||view.preparation!==null} onClick={()=>void control({kind:'integrated_prepare',plan_ref:{run_id:view.run_id,id:'B33-PLAN-1',version:1},model_ref:view.model_catalog.model_ref})}>安排资料校验与准备</button>
+        <p>{view.preparation?({queued:'准备计划等待共享席位',validating:'正在校验开局资料凭证',preparing:'正在进行计划准备',approved:'同一计划准备已批准'})[view.preparation.status]:'尚未安排准备。'}</p>
+        <button disabled={unavailable||!view.can_issue||!view.preparation} onClick={()=>{if(view.preparation)void control({kind:'integrated_activity',actor:'W',action:'inspect',target:'B',plan_ref:view.preparation.plan_ref,model_ref:view.model_catalog.model_ref,basis_refs:[]});}}>W 检查 B</button>
+        <button disabled={unavailable||!view.can_issue||view.preparation?.status!=='approved'||!view.activity_reports.some(report=>report.actor==='W'&&report.action==='inspect'&&report.phase==='completed')} onClick={()=>{const prep=view.preparation,inspection=view.activity_reports.find(report=>report.actor==='W'&&report.action==='inspect'&&report.phase==='completed');if(prep?.approval_ref&&inspection)void control({kind:'integrated_activity',actor:'W',action:'repair',target:'B',plan_ref:prep.plan_ref,model_ref:view.model_catalog.model_ref,basis_refs:[{run_id:view.run_id,id:inspection.id,version:1},prep.approval_ref]});}}>W 维修 B</button>
+        <p>{view.facility_knowledge?`B 最后确认：${({faulted:'连接件故障',unverified_after_replacement:'换件后尚未功能确认',operable:'功能可用'})[view.facility_knowledge.condition]}；${view.facility_knowledge.method==='functional'?'功能复核':'诊断观察'}，版本 ${view.facility_knowledge.version}，观察 ${view.facility_knowledge.observed_at/1000} 秒，收到 ${view.facility_knowledge.received_at/1000} 秒。`:'B 当前功能状态未知；以合法回报为准。'}</p>
       </section>
       <section aria-label="模型与参数目录"><h2>模型与参数目录</h2><p className="integrated-assumption">条件情景值，非现实校准</p><p>{catalog.model_ref.id} · 版本 {catalog.model_ref.version}</p>
         <div className="integrated-catalog-grid"><section><h3>几何</h3>{catalog.geometry.segments.map(segment=><p key={segment.id}>{segment.id}：{segment.length_m} m</p>)}</section>

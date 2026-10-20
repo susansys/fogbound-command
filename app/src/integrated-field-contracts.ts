@@ -1,5 +1,8 @@
 import type {Mode} from './contracts';
-export type IntegratedFieldIntent=Extract<import('./contracts').Intent,{kind:'advance'|'tick'|'pause'|'continue'|'rate'|'mode'|'save'|'restore'}>|{kind:'integrated_move';actor:'R'|'W';target:'H'|'A'|'B';model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1}};
+export type IntegratedFieldEvidenceRef={run_id:string;id:string;version:1};
+export type IntegratedRefusalReason='missing_part'|'station_busy'|'actor_in_transit'|'position_unconfirmed'|'capacity'|'facility_unconfirmed'|'preparation_unavailable'|'facility_condition'|'deadline';
+type IntegratedModelRef={id:'INTEGRATED-FIELD-MODEL-3';version:1};
+export type IntegratedFieldIntent=Extract<import('./contracts').Intent,{kind:'advance'|'tick'|'pause'|'continue'|'rate'|'mode'|'save'|'restore'}>|{kind:'integrated_move';actor:'R'|'W';target:'H'|'A'|'B';model_ref:IntegratedModelRef}|{kind:'integrated_prepare';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef}|{kind:'integrated_activity';actor:'R';action:'read'|'observe';target:'A'|'B';model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]}|{kind:'integrated_activity';actor:'W';action:'inspect'|'repair';target:'B';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]};
 export type IntegratedFieldEnvelope={run_id:string;operation_id:string;expected_revision:number;intent:IntegratedFieldIntent};
 export type IntegratedFieldSourceRef={id:string;version:1};
 export type IntegratedFieldParameter={id:string;value:number;unit:string;category:'A'|'C'|'T';label:string;source_ref:IntegratedFieldSourceRef};
@@ -20,6 +23,10 @@ export type IntegratedFieldPlayerView={
   can_issue:boolean;next_action:string;gap:string;
   public_rules:{deadline:number;receipt_grace:number};model_catalog:IntegratedFieldCatalog;
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
+  artifacts:Array<{id:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
+  activity_reports:Array<{id:string;report_ref:string;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;
+  facility_knowledge:null|{condition:'faulted'|'unverified_after_replacement'|'operable';version:number;method:'diagnostic'|'functional';observed_at:number;received_at:number;evidence:string;report_ref:string};
+  preparation:null|{plan_ref:IntegratedFieldEvidenceRef;approval_ref:IntegratedFieldEvidenceRef|null;status:'queued'|'validating'|'preparing'|'approved';approved_at:number|null};
   geometry:IntegratedFieldCatalog['geometry'];
   replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   log:Array<{id:string;at:number;kind:string;text:string;evidence:string}>;

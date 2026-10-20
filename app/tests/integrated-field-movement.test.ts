@@ -39,7 +39,7 @@ test('NB3-AT006 R traverses each AB leg in ceil117648ms and HA in 100000ms',asyn
 test('NB3-AT007 movement business results agree across one step, boundaries and fine steps',async()=>{
  const results=[];for(const stops of [[510000],[289000,300000,408589,508589,510000],Array.from({length:222},(_,i)=>289000+i*1000)]){
  const f=await fixture();try{await f.advance(288000);await f.move('W','H');for(const to of stops)await f.advance(to);
- const state=await f.local();results.push({position:state.actors.W.position_um,ended_at:state.actors.W.motion?.ended_at,status:state.actors.W.motion?.status});
+ const state=await f.local();results.push({position:state.actors.W.position_um,ended_at:state.actors.W.motion?.ended_at,status:state.actors.W.motion?.status,portable_energy_uJ:state.work.portable_energy_uJ,fixed_source_energy_uJ:state.work.fixed_source_energy_uJ,inventory:state.work.inventory});
  }finally{await f.store.delete();}}
  expect(results[1]).toEqual(results[0]);expect(results[2]).toEqual(results[0]);
 });
