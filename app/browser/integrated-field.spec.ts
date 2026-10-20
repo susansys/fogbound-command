@@ -7,6 +7,7 @@ test('B33 catalogue keeps metre geometry, configuration mass and source categori
   await page.getByLabel('时间方式').selectOption('research');
   await page.getByRole('button',{name:'开始演练',exact:true}).click();
   await expect(page.getByRole('heading',{name:'综合现场任务',exact:true})).toBeVisible();
+  await page.locator('summary').filter({hasText:'模型与参数目录'}).click();
   const catalogue=page.getByRole('region',{name:'模型与参数目录'});
   await expect(catalogue).toContainText('条件情景值，非现实校准');
   await expect(catalogue).toContainText('HA：100 m');
@@ -17,7 +18,7 @@ test('B33 catalogue keeps metre geometry, configuration mass and source categori
   await catalogue.getByText('来源与版本',{exact:true}).click();
   await expect(catalogue).toContainText('FZ-G2 mk3 AP');
   await expect(catalogue).toContainText('资料发布日期未知');
-  await page.getByRole('main').hover();
+  await catalogue.hover();
   await page.mouse.wheel(0,10000);
   await expect(page.getByText(/^GB 表示模型中的逻辑字节量/)).toBeInViewport();
   await expect(page.getByText('玄枢行动',{exact:true})).toBeInViewport();
@@ -42,7 +43,7 @@ test('B33 catalogue keeps metre geometry, configuration mass and source categori
   await page.getByRole('button',{name:'W 维修 B',exact:true}).click();
   await page.getByLabel('推进到时刻（秒）').fill('287');await page.getByRole('button',{name:'推进时间',exact:true}).click();
   await expect(page.getByRole('region',{name:'准备与维修'})).toContainText('B 最后确认：功能可用');
-  await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
+  await page.getByRole('button',{name:'更换演练任务',exact:true}).click();
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
   await expect(page.getByText('正在查看历史记录，只读。',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'下达移动命令',exact:true})).toBeDisabled();
@@ -65,7 +66,7 @@ test('B33 command catalogue pauses, saves, reloads and resumes through the real 
   await page.getByRole('button',{name:'保存行动',exact:true}).click();
   await expect(page.getByRole('status')).toContainText('已保存');
   const saved=await page.evaluate(()=>Reflect.get(window,'__b33View') as {revision:number;paused:boolean});
-  await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
+  await page.getByRole('button',{name:'更换演练任务',exact:true}).click();
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
   await expect(page.getByText('正在查看历史记录，只读。',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeDisabled();
@@ -74,11 +75,11 @@ test('B33 command catalogue pauses, saves, reloads and resumes through the real 
   await page.evaluate(()=>{window.dispatchEvent(new Event('blur'));document.dispatchEvent(new Event('visibilitychange'));});
   await page.waitForTimeout(500);
   expect(await page.evaluate(()=>(Reflect.get(window,'__b33Requests') as Array<{kind:string}>).filter(request=>['operate','operate_integrated_field','management_pause'].includes(request.kind)).length)).toBe(requestsBefore);
-  await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
+  await page.getByRole('button',{name:'更换演练任务',exact:true}).click();
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
   const retained=await page.evaluate(()=>Reflect.get(window,'__b33View') as {revision:number;paused:boolean});
   expect(retained.revision).toBe(saved.revision);expect(retained.paused).toBe(true);
-  await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
+  await page.getByRole('button',{name:'更换演练任务',exact:true}).click();
   await page.reload();
   await page.getByRole('button',{name:'接手这场演练',exact:true}).click();
   await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeEnabled();

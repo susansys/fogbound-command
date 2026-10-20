@@ -8,7 +8,7 @@ export type IntegratedFieldSourceRef={id:string;version:1};
 export type IntegratedFieldParameter={id:string;value:number;unit:string;category:'A'|'C'|'T';label:string;source_ref:IntegratedFieldSourceRef};
 export type IntegratedFieldCatalog={
   model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1};
-  geometry:{id:string;version:1;unit:'m';metres_per_coordinate:1;
+  geometry:{id:string;version:1;unit:'m';metres_per_coordinate:1;extent:[number,number];
     points:Record<'H'|'A'|'B',[number,number]>;
     segments:Array<{id:'HA'|'AB';length_m:number}>};
   configurations:Array<{actor:'R'|'W';id:string;load_kg:number;capacity_l:number;occupied_l:number;storage_bytes?:number;

@@ -9,6 +9,11 @@ import type {Transport,Request,Response} from './transport';
 import type {RegionalDisplaySession} from './regional-display';
 import {MapView} from './map';
 import {clock,error_copy} from './player-copy';
+type HeadquartersWorkspaceProps={context:ReactNode;navigation:ReactNode;heading:string;summary:ReactNode;children:ReactNode;records?:ReactNode;footer?:ReactNode};
+// The existing B32 workspace structure, shared only as presentation.
+export function HeadquartersWorkspace({context,navigation,heading,summary,children,records,footer}:HeadquartersWorkspaceProps){
+ return <><div className="contextbar">{context}</div><div className="shell"><nav className="rail">{navigation}</nav><main className="main"><div className="workspacebar"><h1>{heading}</h1><span className="outline-tag">{summary}</span></div>{children}{records}</main></div>{footer}</>;
+}
 export type IntelligenceWorkbenchProps={view:IntelligencePlayerView|OutcomePlayerView;transport:Transport;adopt:(view:GamePlayerView)=>void;onNewRun:(view:IntelligencePlayerView|OutcomePlayerView)=>void;outcomeSlot?:ReactNode;outcomeFrame?:{records:ReactNode;footer:ReactNode;sources?:ReactNode;lead?:ReactNode};primaryStopped?:boolean;finished?:boolean;extraBusy?:boolean;extraDirty?:boolean;onBusyChange?:(busy:boolean)=>void;onWorkSelect?:(actor:string)=>void;history:boolean;liveRunId:string|null;onHistory:(value:boolean)=>void;displaySession?:RegionalDisplaySession;onLeave:()=>Promise<void>;channelError:string;storageFault:boolean;onStorageRecovered:()=>void};
 export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liveRunId,onHistory,displaySession,onLeave,channelError,storageFault,onStorageRecovered,outcomeSlot,outcomeFrame,extraBusy=false,extraDirty=false,onBusyChange,onWorkSelect,primaryStopped=false,finished=false}:IntelligenceWorkbenchProps){
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[advance,setAdvance]=useState('21'),[selected,setSelected]=useState('R'),[pauseUnknown,setPauseUnknown]=useState(false);
@@ -132,9 +137,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
     {recoveryUnknown&&<div className="fault"><span>恢复结果待核查，恢复编号、原操作与输入已保留。</span><button disabled={busy||history} onClick={()=>void queryRecovery()}>查询恢复结果</button><button disabled={busy||history} onClick={()=>void recover()}>重试原恢复操作</button></div>}
     {pauseUnknown&&<div className="fault"><span>暂停尚未得到确认，当前状态以重新核对结果为准。</span><button disabled={busy} onClick={()=>void (async()=>{setBusy(true);try{const result=await request({kind:'view',run_id:view.run_id});if(result.ok&&result.view){setPauseUnknown(false);setNotice(result.view.paused?'暂停已确认，等待明确继续。':'当前仍在进行，可再次请求暂停。');}}catch{setError('CHANNEL_UNCERTAIN');}finally{setBusy(false);}})()}>核对暂停状态</button></div>}
     {pending.current&&!busy&&!recoveryUnknown&&<div className="fault"><span>原操作结果待核查，操作编号已保留。</span><button onClick={()=>void query()}>查询原操作</button><button onClick={()=>pending.current&&void send(pending.current)}>重试原操作</button>{noReceipt&&<button onClick={()=>void recover()}>恢复最近记录并重新核对</button>}</div>}
-    <div className="contextbar"><strong>R／W · H—A—B</strong><span>{view.scenario_kind==='play_outcome'?'取得两处记录，组织两组返回总部、交付并等待核验回报。':'取得两处记录并等待合法回报；本批不包含返程、交接或整局结局。'}</span></div>
-    <div className="shell"><nav className="rail"><button className="active" onClick={()=>document.getElementById('intelligence-sources')?.focus()}>情报报告</button><button onClick={()=>document.getElementById('intelligence-history')?.focus()}>当时所知</button><button disabled={blocked} onClick={()=>void (async()=>{if(extraDirty&&!window.confirm('工作研判尚未保存，确定离开并舍弃这些输入？'))return;if(!view.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></nav>
-    <main className="main"><div className="workspacebar"><h1>{view.scenario_kind==='play_outcome'?'返回与交付任务':'情报与协作任务'}</h1><span className="outline-tag">总部视图 · {verificationCopy}</span></div>
+    <HeadquartersWorkspace context={<><strong>R／W · H—A—B</strong><span>{view.scenario_kind==='play_outcome'?'取得两处记录，组织两组返回总部、交付并等待核验回报。':'取得两处记录并等待合法回报；本批不包含返程、交接或整局结局。'}</span></>} navigation={<><button className="active" onClick={()=>document.getElementById('intelligence-sources')?.focus()}>情报报告</button><button onClick={()=>document.getElementById('intelligence-history')?.focus()}>当时所知</button><button disabled={blocked} onClick={()=>void (async()=>{if(extraDirty&&!window.confirm('工作研判尚未保存，确定离开并舍弃这些输入？'))return;if(!view.paused){await control({kind:'pause',reason:'manual'});if(!current.current.paused)return;}await onLeave();})()}>更换演练任务</button></>} heading={view.scenario_kind==='play_outcome'?'返回与交付任务':'情报与协作任务'} summary={<>总部视图 · {verificationCopy}</>} records={outcomeFrame?.records} footer={outcomeFrame?.footer}>
       {!outcomeFrame&&operationStatus}
       <div className={"workbody mission-body"+(activeGroup?" intel-layout workspace-report":"")}>{activeGroup&&reportWorkspace}<div className="intelligence-live-workspace" hidden={!!activeGroup} style={{display:activeGroup?'none':'contents'}}><MapView view={view} selected={selected} onSelect={actor=>{setSelected(actor);onWorkSelect?.(actor);}} planned={false} displaySession={history?undefined:displaySession}/>
       <aside id="intelligence-sources" tabIndex={-1} className="intelligence-sources" aria-label="总部已收原始资料">
@@ -156,9 +159,7 @@ export function IntelligenceWorkbench({view,transport,adopt,onNewRun,history,liv
         {!activeGroup&&view.source_groups.map(sourceArticle)}
         {outcomeFrame&&historyControls}
       </aside></div></div>
-      {outcomeFrame?.records}
       {!outcomeFrame&&historyControls}
-    </main></div>
-    {outcomeFrame?.footer}
+    </HeadquartersWorkspace>
   </div>;
 }

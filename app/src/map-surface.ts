@@ -6,7 +6,7 @@ import colourUrl from './map-assets/colour.png?url&no-inline';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type {PlayerView} from './contracts';
 import type {PublicMap} from './spatial';
-import {backgroundExtent,bytesDigest,fromDisplayLngLat,publicGeometryDigest,toDisplayLngLat,type MapPoint} from './map-binding';
+import {backgroundExtent,bytesDigest,fromDisplayLngLat,publicGeometryDigest,toDisplayLngLat,type MapPoint,type IntegratedDisplayGeometry} from './map-binding';
 
 export type MapSurface={
   public_geometry_digest:string;
@@ -41,7 +41,7 @@ async function verifiedImages(signal:AbortSignal):Promise<string[]>{
   return images.map(image=>URL.createObjectURL(image));
 }
 
-export async function createMapSurface(host:HTMLElement,geometry:PlayerView['geometry']|PublicMap,signal:AbortSignal,onChange:()=>void,onFailure:()=>void):Promise<MapSurface>{
+export async function createMapSurface(host:HTMLElement,geometry:PlayerView['geometry']|PublicMap|IntegratedDisplayGeometry,signal:AbortSignal,onChange:()=>void,onFailure:()=>void):Promise<MapSurface>{
   const public_geometry_digest=await publicGeometryDigest(geometry);
   const urls=await verifiedImages(signal);
   let map:GeographicMap|undefined,removed=false,observer:ResizeObserver|undefined,fitScale=1;
@@ -55,8 +55,9 @@ export async function createMapSurface(host:HTMLElement,geometry:PlayerView['geo
     map=new Map({container:host,interactive:false,attributionControl:false,bearing:0,pitch:0,renderWorldCopies:false,style:{version:8,sources:{synthetic:{type:'image',url:urls[0],coordinates:manifest.mapping.image_corners as [[number,number],[number,number],[number,number],[number,number]]}},layers:[{id:'synthetic',type:'raster',source:'synthetic',paint:{'raster-fade-duration':0}}]}});
     const active=map;
     const scale=()=>active.project(toDisplayLngLat([1,0])).x-active.project(toDisplayLngLat([0,0])).x;
-    function fit(background=false){const [x1,y1,x2,y2]=background?backgroundExtent:[0,0,...geometry.extent];active.fitBounds([toDisplayLngLat([x1,y2]),toDisplayLngLat([x2,y1])],{padding:{top:60,bottom:50,left:70,right:70},duration:0});if(!background)fitScale=scale();}
-    const surface:MapSurface={public_geometry_digest,project:p=>active.project(toDisplayLngLat(p)),unproject:p=>{const ll=active.unproject([p[0],p[1]]);return fromDisplayLngLat([ll.lng,ll.lat]);},fit,focus:p=>active.jumpTo({center:toDisplayLngLat(p)}),pan:(x,y)=>active.panBy([-x,-y],{duration:0}),zoom:(factor,point)=>{const around=point?active.unproject([point[0],point[1]]):active.getCenter(),desired=Math.max(fitScale*0.6,Math.min(fitScale*6,scale()*factor));active.easeTo({zoom:Math.max(0,Math.min(22,active.getZoom()+Math.log2(desired/scale()))),around,duration:0});},scale,fitScale:()=>fitScale,terrain:visible=>active.setLayoutProperty('synthetic','visibility',visible?'visible':'none'),variant:id=>(active.getSource('synthetic') as ImageSource).updateImage({url:urls[id==='grid'?0:1]}),remove};
+    const regionalExtent='points' in geometry?[geometry.extent[0]/2-5000,geometry.extent[1]/2-5000,geometry.extent[0]/2+5000,geometry.extent[1]/2+5000]:backgroundExtent;
+    function fit(background=false){const [x1,y1,x2,y2]=background?regionalExtent:[0,0,...geometry.extent];active.fitBounds([toDisplayLngLat([x1,y2]),toDisplayLngLat([x2,y1])],{padding:{top:60,bottom:50,left:70,right:70},duration:0});if(!background)fitScale=scale();}
+    const surface:MapSurface={public_geometry_digest,project:p=>active.project(toDisplayLngLat(p)),unproject:p=>{const ll=active.unproject([p[0],p[1]]);return fromDisplayLngLat([ll.lng,ll.lat]);},fit,focus:p=>active.jumpTo({center:toDisplayLngLat(p)}),pan:(x,y)=>active.panBy([-x,-y],{duration:0}),zoom:(factor,point)=>{const around=point?active.unproject([point[0],point[1]]):active.getCenter(),minimum='points' in geometry?Math.min(fitScale*.6,Math.min(host.clientWidth,host.clientHeight)/10000*.5):fitScale*.6,desired=Math.max(minimum,Math.min(fitScale*6,scale()*factor));active.easeTo({zoom:Math.max(0,Math.min(22,active.getZoom()+Math.log2(desired/scale()))),around,duration:0});},scale,fitScale:()=>fitScale,terrain:visible=>active.setLayoutProperty('synthetic','visibility',visible?'visible':'none'),variant:id=>(active.getSource('synthetic') as ImageSource).updateImage({url:urls[id==='grid'?0:1]}),remove};
     await new Promise<void>((resolve,reject)=>{
       const timeout=setTimeout(()=>reject(Error('Synthetic map readiness unavailable')),15000);
       const abort=()=>{clearTimeout(timeout);reject(new DOMException('Map removed','AbortError'));};

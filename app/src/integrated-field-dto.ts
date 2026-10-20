@@ -10,7 +10,7 @@ const shape=(v:unknown,required:Record<string,Check>,optional:Record<string,Chec
 const list=(check:Check,max:number):Check=>v=>Array.isArray(v)&&v.length<=max&&Object.keys(v).length===v.length&&v.every(check);
 const point:Check=v=>Array.isArray(v)&&v.length===2&&v.every(finite);
 const sourceRef:Check=v=>shape(v,{id:valid_id,version:one(1)});
-const geometry:Check=v=>shape(v,{id:valid_id,version:one(1),unit:one('m'),metres_per_coordinate:one(1),points:v=>shape(v,{H:point,A:point,B:point}),segments:list(v=>shape(v,{id:one('HA','AB'),length_m:x=>finite(x)&&Number(x)>0}),2)});
+const geometry:Check=v=>shape(v,{id:valid_id,version:one(1),unit:one('m'),metres_per_coordinate:one(1),extent:v=>point(v)&&(v as number[]).every(value=>value>0&&value<=10000),points:v=>shape(v,{H:point,A:point,B:point}),segments:list(v=>shape(v,{id:one('HA','AB'),length_m:x=>finite(x)&&Number(x)>0}),2)});
 const configuration:Check=v=>shape(v,{actor:one('R','W'),id:valid_id,load_kg:x=>finite(x)&&Number(x)>=0&&Number(x)<=8,capacity_l:finite,occupied_l:finite,equipment:v=>shape(v,{id:valid_id,mass_kg:finite,battery_included:bool,battery_wh:finite,battery_nominal_j:finite,battery_available_j:finite})},{storage_bytes:time});
 const parameter:Check=v=>shape(v,{id:valid_id,value:finite,unit:one('kg','m/s','ms'),category:one('A','C','T'),label:text,source_ref:sourceRef});
 const digest:Check=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -26,6 +26,7 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
     model_catalog:v=>shape(v,{model_ref:v=>shape(v,{id:one('INTEGRATED-FIELD-MODEL-3'),version:one(1)}),geometry,configurations:list(configuration,2),calibration_status:one('conditional_not_measured'),parameters:list(parameter,128),sources:list(source,64)}),
     replay_nodes:list(v=>shape(v,{revision:time,at:time,meaningful:bool,label:text}),10000),log:list(v=>shape(v,{id:valid_id,at:time,kind:text,text,evidence:valid_id}),10000)}))return false;
   const view=v as IntegratedFieldPlayerView,catalog=view.model_catalog,a=view.geometry,b=catalog.geometry;
+  if(a.extent.some((value,index)=>value!==b.extent[index])||Object.values(a.points).some(point=>point.some((value,index)=>value<0||value>a.extent[index])))return false;
   if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(new Set(view.artifacts.map(artifact=>artifact.id)).size!==view.artifacts.length||view.artifacts.some(artifact=>artifact.observed_at>artifact.received_at||artifact.received_at>view.sim_time))return false;
   if(new Set(view.activity_reports.map(report=>report.id)).size!==view.activity_reports.length||view.activity_reports.some(report=>report.observed_at>report.received_at||report.received_at>view.sim_time))return false;
@@ -41,6 +42,7 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
    if(completedRead?!view.artifacts.some(artifact=>artifact.id===report.artifact_ref&&artifact.delivery_ref===report.id):report.artifact_ref!==null)return false;
   }
   const readRecipe=catalog.parameters.find(parameter=>parameter.id==='P-READ');if(!readRecipe||readRecipe.category!=='C'||readRecipe.unit!=='ms'||!Number.isSafeInteger(readRecipe.value)||readRecipe.value<=0)return false;
+  for(const id of ['P-MOVE-HA','P-MOVE-AB-DRY','P-MOVE-AB-WET']){const parameter=catalog.parameters.find(parameter=>parameter.id===id);if(!parameter||parameter.category!=='C'||parameter.unit!=='m/s'||parameter.value<=0)return false;}
   if(view.preparation&&(view.preparation.plan_ref.run_id!==view.run_id||(view.preparation.status==='approved'?view.preparation.approved_at===null||view.preparation.approved_at>view.sim_time||view.preparation.approval_ref?.run_id!==view.run_id:view.preparation.approved_at!==null||view.preparation.approval_ref!==null)))return false;
   if(view.facility_knowledge){const known=view.facility_knowledge,report=view.activity_reports.find(report=>report.id===known.evidence);if(!report||report.report_ref!==known.report_ref||report.target!=='B'||report.phase!=='completed'||report.actor!=='W'||report.action!==(known.method==='functional'?'repair':'inspect')||report.observed_at!==known.observed_at||report.received_at!==known.received_at)return false;}
   if(a.id!==b.id||a.version!==b.version||(['H','A','B'] as const).some(id=>a.points[id].some((value,index)=>value!==b.points[id][index]))||a.segments.length!==2||b.segments.length!==2||a.segments.some((segment,index)=>segment.id!==b.segments[index].id||segment.length_m!==b.segments[index].length_m)||new Set(a.segments.map(segment=>segment.id)).size!==2)return false;

@@ -7,7 +7,7 @@ import {load_kg,portable_energy} from './integrated-field-quantities';
 export type IntegratedFieldDefinition=Omit<typeof raw,'schema'|'contract'|'scenario_kind'|'version'|'model_ref'|'geometry'>&{
   schema:13;contract:'0.5.1';scenario_kind:'play_integrated_field';version:1;
   model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1};
-  geometry:{id:string;version:1;unit:'m';metres_per_coordinate:1;
+  geometry:{id:string;version:1;unit:'m';metres_per_coordinate:1;extent:[number,number];
     points:Record<'H'|'A'|'B',[number,number]>;
     segments:Array<{id:'HA'|'AB';points:['H'|'A'|'B','H'|'A'|'B']}>};
   definition_hash:string;hashes:Record<string,string>;
@@ -16,6 +16,7 @@ export async function integrated_field_definition():Promise<IntegratedFieldDefin
   const body=structuredClone(raw);
   if(body.schema!==13||body.contract!=='0.5.1'||body.scenario_kind!=='play_integrated_field'||body.geometry.unit!=='m'||body.geometry.metres_per_coordinate!==1||body.model_ref.id!=='INTEGRATED-FIELD-MODEL-3'||body.model_ref.version!==1)throw new GameError('INVALID_DEFINITION');
   for(const point of Object.values(body.geometry.points))if(point.length!==2||point.some(value=>!Number.isFinite(value)))throw new GameError('INVALID_DEFINITION');
+  const extent=body.geometry.extent;if(extent.length!==2||extent.some(value=>!Number.isFinite(value)||value<=0||value>10000)||Object.values(body.geometry.points).some(point=>point.some((value,index)=>value<0||value>extent[index])))throw new GameError('INVALID_DEFINITION');
   if(body.configurations.length!==2||new Set(body.configurations.map(config=>config.actor)).size!==2)throw new GameError('INVALID_DEFINITION');
   for(const config of body.configurations){
     if(!['R','W'].includes(config.actor)||config.items.filter(item=>item.id===config.equipment_item_ref).length!==1||new Set(config.items.map(item=>item.id)).size!==config.items.length||!Number.isFinite(config.capacity_l)||!Number.isFinite(config.occupied_l)||config.occupied_l<0||config.occupied_l>config.capacity_l)throw new GameError('INVALID_DEFINITION');

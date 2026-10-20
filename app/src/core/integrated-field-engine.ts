@@ -11,7 +11,7 @@ export function project_integrated_field_view(state:IntegratedFieldState):Integr
   const r=definition.configurations.find(config=>config.actor==='R')?.items.find(item=>item.id==='EQ-G2-TU');if(!r)throw new GameError('INVALID_DEFINITION');
   const recipe=definition.work_parameters,read_ms=recipe.read_prepare_ms+Math.ceil(recipe.read_bytes/recipe.copy_bytes_per_second*1000)+Math.ceil(recipe.read_bytes/recipe.verify_bytes_per_second*1000)+recipe.read_stow_ms;
   const parameters=[{...definition.parameter_sources.r_mass,value:r.mass_kg},...Object.values(definition.parameters),{...definition.parameter_sources.read,value:read_ms},{...definition.parameter_sources.deadline,value:definition.public_rules.deadline}] as IntegratedFieldParameter[];
-  const publicGeometry={id:geometry.id,version:1 as const,unit:'m' as const,metres_per_coordinate:1 as const,points:structuredClone(geometry.points),segments:geometry.segments.map(segment=>{
+  const publicGeometry={id:geometry.id,version:1 as const,unit:'m' as const,metres_per_coordinate:1 as const,extent:structuredClone(geometry.extent),points:structuredClone(geometry.points),segments:geometry.segments.map(segment=>{
     const from=geometry.points[segment.points[0]],to=geometry.points[segment.points[1]];
     return {id:segment.id,length_m:Math.hypot(to[0]-from[0],to[1]-from[1])*geometry.metres_per_coordinate};
   })};

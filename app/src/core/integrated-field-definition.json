@@ -8,6 +8,7 @@
   "geometry": {
     "id": "INTEGRATED-FIELD-GEOMETRY-1", "version": 1,
     "unit": "m", "metres_per_coordinate": 1,
+    "extent": [400, 300],
     "points": {"H": [50, 150], "A": [150, 150], "B": [250, 150]},
     "segments": [{"id": "HA", "points": ["H", "A"]}, {"id": "AB", "points": ["A", "B"]}]
   },
