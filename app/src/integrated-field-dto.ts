@@ -18,9 +18,11 @@ const source:Check=v=>shape(v,{id:valid_id,version:one(1),document_version:text,
 export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlayerView{
   if(!shape(v,{scenario_kind:one('play_integrated_field'),run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:one('command','research'),rate:one(1,2,4),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:one('ready','queued','preparing','executing','terminating','finished','deadline'),can_issue:bool,next_action:text,gap:text,
     public_rules:v=>shape(v,{deadline:one(900000),receipt_grace:one(10000)}),geometry,
+    actors:list(v=>shape(v,{id:one('R','W'),position:v=>shape(v,{point,observed_at:time,received_at:time,evidence:valid_id})}),2),
     model_catalog:v=>shape(v,{model_ref:v=>shape(v,{id:one('INTEGRATED-FIELD-MODEL-3'),version:one(1)}),geometry,configurations:list(configuration,2),calibration_status:one('conditional_not_measured'),parameters:list(parameter,128),sources:list(source,64)}),
     replay_nodes:list(v=>shape(v,{revision:time,at:time,meaningful:bool,label:text}),10000),log:list(v=>shape(v,{id:valid_id,at:time,kind:text,text,evidence:valid_id}),10000)}))return false;
   const view=v as IntegratedFieldPlayerView,catalog=view.model_catalog,a=view.geometry,b=catalog.geometry;
+  if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(a.id!==b.id||a.version!==b.version||(['H','A','B'] as const).some(id=>a.points[id].some((value,index)=>value!==b.points[id][index]))||a.segments.length!==2||b.segments.length!==2||a.segments.some((segment,index)=>segment.id!==b.segments[index].id||segment.length_m!==b.segments[index].length_m)||new Set(a.segments.map(segment=>segment.id)).size!==2)return false;
   if(catalog.configurations.length!==2||new Set(catalog.configurations.map(config=>config.actor)).size!==2||new Set(catalog.configurations.map(config=>config.id)).size!==2)return false;
   for(const config of catalog.configurations){

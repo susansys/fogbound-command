@@ -1,4 +1,5 @@
 import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
+import {valid_integrated_field_envelope} from './integrated-field-protocol';
 import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_outcome_envelope,parse_outcome_truth_request,parse_outcome_debrief_query,parse_outcome_evidence_request} from './outcome-protocol';
 import type { Request } from "./transport";
 import type { Envelope } from "./contracts";
@@ -79,6 +80,7 @@ export function valid_request(
       Number.isSafeInteger(value.editing_seq) &&
       value.editing_seq >= 0
     );
+  if(value.kind==='operate_integrated_field')return fields(value,['kind','request_id','envelope'])&&valid_integrated_field_envelope(value.envelope)&&['integrated_move','advance','pause','continue','rate','save'].includes(value.envelope.intent.kind);
   if(value.kind==='operate_corridor')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&!['tick','restore','replace_task','mode'].includes(value.envelope.intent.kind)&&(value.envelope.intent.kind!=='issue'||'kind' in value.envelope.intent.plan&&value.envelope.intent.plan.kind==='corridor_move');
   if (value.kind === "operate")
     return (

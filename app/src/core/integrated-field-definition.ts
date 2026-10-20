@@ -21,6 +21,7 @@ export async function integrated_field_definition():Promise<IntegratedFieldDefin
     if(!['R','W'].includes(config.actor)||config.items.filter(item=>item.id===config.equipment_item_ref).length!==1||new Set(config.items.map(item=>item.id)).size!==config.items.length||!Number.isFinite(config.capacity_l)||!Number.isFinite(config.occupied_l)||config.occupied_l<0||config.occupied_l>config.capacity_l)throw new GameError('INVALID_DEFINITION');
     load_kg(config.items);portable_energy(config.battery_wh,config.initial_available_percent);
   }
+  for(const speed of Object.values(body.parameters))if(speed.unit!=='m/s'||speed.category!=='C'||!Number.isSafeInteger(speed.value*1000)||speed.value<=0)throw new GameError('INVALID_DEFINITION');
   if(body.parameters.ha_speed.unit!=='m/s'||body.parameters.ha_speed.category!=='C'||!Number.isFinite(body.parameters.ha_speed.value)||body.parameters.ha_speed.value<=0||body.parameter_sources.r_mass.unit!=='kg'||body.parameter_sources.deadline.unit!=='ms')throw new GameError('INVALID_DEFINITION');
   const hashes={model:await hash(canonical(body.model_ref)),geometry:await hash(canonical(body.geometry)),rules:await hash(canonical(body.public_rules)),configurations:await hash(canonical(body.configurations)),parameters:await hash(canonical({values:body.parameters,sources:body.parameter_sources})),sources:await hash(canonical(body.sources))};
   return {...body,hashes,definition_hash:await hash(canonical({...body,hashes}))} as unknown as IntegratedFieldDefinition;

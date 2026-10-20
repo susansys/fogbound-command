@@ -1,4 +1,6 @@
 import type {Mode} from './contracts';
+export type IntegratedFieldIntent=Extract<import('./contracts').Intent,{kind:'advance'|'tick'|'pause'|'continue'|'rate'|'mode'|'save'|'restore'}>|{kind:'integrated_move';actor:'R'|'W';target:'H'|'A'|'B';model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1}};
+export type IntegratedFieldEnvelope={run_id:string;operation_id:string;expected_revision:number;intent:IntegratedFieldIntent};
 export type IntegratedFieldSourceRef={id:string;version:1};
 export type IntegratedFieldParameter={id:string;value:number;unit:string;category:'A'|'C'|'T';label:string;source_ref:IntegratedFieldSourceRef};
 export type IntegratedFieldCatalog={
@@ -17,6 +19,7 @@ export type IntegratedFieldPlayerView={
   status:'ready'|'queued'|'preparing'|'executing'|'terminating'|'finished'|'deadline';
   can_issue:boolean;next_action:string;gap:string;
   public_rules:{deadline:number;receipt_grace:number};model_catalog:IntegratedFieldCatalog;
+  actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
   geometry:IntegratedFieldCatalog['geometry'];
   replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   log:Array<{id:string;at:number;kind:string;text:string;evidence:string}>;

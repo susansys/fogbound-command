@@ -1,19 +1,21 @@
 import type {IntegratedFieldPlayerView,IntegratedFieldParameter} from '../integrated-field-contracts';
 import type {IntegratedFieldState} from './integrated-field-state';
 import {GameError} from '../contracts';
-import type {Envelope} from '../contracts';
-import {valid_envelope} from '../protocol';
+import type {IntegratedFieldEnvelope as Envelope} from '../integrated-field-contracts';
+import {valid_integrated_field_envelope} from '../integrated-field-protocol';
 import {load_kg,portable_energy} from './integrated-field-quantities';
+import {advance_integrated_movement,issue_integrated_move} from './integrated-field-geometry';
 export function project_integrated_field_view(state:IntegratedFieldState):IntegratedFieldPlayerView{
   const {definition}=state,geometry=definition.geometry;
   const r=definition.configurations.find(config=>config.actor==='R')?.items.find(item=>item.id==='EQ-G2-TU');if(!r)throw new GameError('INVALID_DEFINITION');
-  const parameters=[{...definition.parameter_sources.r_mass,value:r.mass_kg},definition.parameters.ha_speed,{...definition.parameter_sources.deadline,value:definition.public_rules.deadline}] as IntegratedFieldParameter[];
+  const parameters=[{...definition.parameter_sources.r_mass,value:r.mass_kg},...Object.values(definition.parameters),{...definition.parameter_sources.deadline,value:definition.public_rules.deadline}] as IntegratedFieldParameter[];
   const publicGeometry={id:geometry.id,version:1 as const,unit:'m' as const,metres_per_coordinate:1 as const,points:structuredClone(geometry.points),segments:geometry.segments.map(segment=>{
     const from=geometry.points[segment.points[0]],to=geometry.points[segment.points[1]];
     return {id:segment.id,length_m:Math.hypot(to[0]-from[0],to[1]-from[1])*geometry.metres_per_coordinate};
   })};
   return {scenario_kind:'play_integrated_field',run_id:state.run_id,revision:state.revision,sim_time:state.sim_time,mode:state.mode,rate:state.rate,paused:state.paused,finished:state.finished,source_run:state.source_run,status:state.status,
-    can_issue:false,next_action:'查看本局模型与目录',gap:'',public_rules:structuredClone(definition.public_rules),
+    can_issue:state.sim_time<900000,next_action:'查看合法位置与下达移动命令',gap:'',public_rules:structuredClone(definition.public_rules),
+    actors:(['R','W'] as const).map(id=>({id,position:structuredClone(state.actors[id].known)})),
     model_catalog:{model_ref:structuredClone(definition.model_ref),geometry:publicGeometry,calibration_status:'conditional_not_measured',parameters:structuredClone(parameters),sources:structuredClone(definition.sources),configurations:definition.configurations.map(config=>{
       if(config.actor!=='R'&&config.actor!=='W')throw new GameError('INVALID_DEFINITION');
       const equipment=config.items.find(item=>item.id===config.equipment_item_ref);if(!equipment)throw new GameError('INVALID_DEFINITION');
@@ -23,22 +25,23 @@ export function project_integrated_field_view(state:IntegratedFieldState):Integr
 }
 
 export function apply_integrated_field_control(state:IntegratedFieldState,envelope:Envelope,clock_to?:number):IntegratedFieldState{
-  if(!valid_envelope(envelope,910000,true)||envelope.run_id!==state.run_id||!['tick','advance','pause','continue','rate','mode','save','restore'].includes(envelope.intent.kind))throw new GameError('INVALID_INPUT');
+  if(!valid_integrated_field_envelope(envelope)||envelope.run_id!==state.run_id||!['integrated_move','tick','advance','pause','continue','rate','mode','save','restore'].includes(envelope.intent.kind))throw new GameError('INVALID_INPUT');
   if(envelope.expected_revision!==state.revision)throw new GameError('STALE_REVISION');
   const next=structuredClone(state),intent=envelope.intent;
   const advance=(to:number)=>{
     if(!Number.isSafeInteger(to)||to>910000)throw new GameError('INVALID_INPUT');
     if(to<next.sim_time)throw new GameError('TIME_REVERSED');
     if(next.ended)throw new GameError('RUN_ENDED');
-    next.sim_time=to;
+    advance_integrated_movement(next,to);next.sim_time=to;
     if(to>=900000)next.status='deadline';
     if(to===910000){next.ended=true;next.finished=true;next.paused=true;}
   };
   if(clock_to!==undefined){
-    if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to>910000||!['pause','continue','rate','save'].includes(intent.kind)||clock_to<state.sim_time)throw new GameError('INVALID_INPUT');
+    if(state.mode!=='command'||state.paused||!Number.isSafeInteger(clock_to)||clock_to>910000||!['integrated_move','pause','continue','rate','save'].includes(intent.kind)||clock_to<state.sim_time)throw new GameError('INVALID_INPUT');
     if(clock_to>state.sim_time)advance(clock_to);
   }
-  if(intent.kind==='tick'||intent.kind==='advance'){
+  if(intent.kind==='integrated_move')issue_integrated_move(next,envelope);
+  else if(intent.kind==='tick'||intent.kind==='advance'){
     if(state.mode!==(intent.kind==='tick'?'command':'research'))throw new GameError('MODE_LOCKED');
     if(intent.kind==='tick'&&state.paused)throw new GameError('CLOCK_PAUSED');
     if(intent.to===state.sim_time)throw new GameError('TIME_NOT_ADVANCED');

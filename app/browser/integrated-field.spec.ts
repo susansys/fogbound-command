@@ -22,6 +22,14 @@ test('B33 catalogue keeps metre geometry, configuration mass and source categori
   await expect(page.getByText(/^GB 表示模型中的逻辑字节量/)).toBeInViewport();
   await expect(page.getByText('玄枢行动',{exact:true})).toBeInViewport();
   await page.screenshot({path:info.outputPath('integrated-catalogue.png'),fullPage:true});
+  await page.getByRole('button',{name:'下达移动命令',exact:true}).click();
+  await page.getByLabel('推进到时刻（秒）').fill('102');
+  await page.getByRole('button',{name:'推进时间',exact:true}).click();
+  await expect(page.getByRole('region',{name:'移动与返程'})).toContainText('R 最后确认：150, 150 m；观察 101 秒，收到 102 秒');
+  await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
+  await page.getByRole('button',{name:'查看记录',exact:true}).click();
+  await expect(page.getByText('正在查看历史记录，只读。',{exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'下达移动命令',exact:true})).toBeDisabled();
 });
 
 test('B33 command catalogue pauses, saves, reloads and resumes through the real Worker',async({page})=>{
@@ -46,10 +54,10 @@ test('B33 command catalogue pauses, saves, reloads and resumes through the real 
   await expect(page.getByText('正在查看历史记录，只读。',{exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'继续行动',exact:true})).toBeDisabled();
   await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeDisabled();
-  const requestsBefore=await page.evaluate(()=>(Reflect.get(window,'__b33Requests') as Array<{kind:string}>).filter(request=>['operate','management_pause'].includes(request.kind)).length);
+  const requestsBefore=await page.evaluate(()=>(Reflect.get(window,'__b33Requests') as Array<{kind:string}>).filter(request=>['operate','operate_integrated_field','management_pause'].includes(request.kind)).length);
   await page.evaluate(()=>{window.dispatchEvent(new Event('blur'));document.dispatchEvent(new Event('visibilitychange'));});
   await page.waitForTimeout(500);
-  expect(await page.evaluate(()=>(Reflect.get(window,'__b33Requests') as Array<{kind:string}>).filter(request=>['operate','management_pause'].includes(request.kind)).length)).toBe(requestsBefore);
+  expect(await page.evaluate(()=>(Reflect.get(window,'__b33Requests') as Array<{kind:string}>).filter(request=>['operate','operate_integrated_field','management_pause'].includes(request.kind)).length)).toBe(requestsBefore);
   await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
   const retained=await page.evaluate(()=>Reflect.get(window,'__b33View') as {revision:number;paused:boolean});

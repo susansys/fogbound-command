@@ -93,8 +93,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','operate_integrated_field','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','operate_integrated_field','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -222,6 +222,12 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       else if(input.kind==='operate_outcome'&&locked){
         const envelope=parse_outcome_envelope(input.envelope),view=await game.get_view(envelope.run_id);if(view.scenario_kind!=='play_outcome')throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;response={request_id,ok:true,...await game.apply_outcome_intent(envelope,clock_to)};
+      }
+      else if(input.kind==='operate_integrated_field'&&locked){
+        const context=await game.get_view(input.envelope.run_id);if(context.scenario_kind!=='play_integrated_field')throw new GameError('INVALID_INPUT');
+        const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
+        const result=await game.apply_integrated_intent(input.envelope,clock_to);
+        response={request_id,ok:true,...result};
       }
       else if ((input.kind === "operate"||input.kind==='operate_corridor'||input.kind==='operate_mission'||input.kind==='operate_intelligence') && locked) {
         const context=await game.get_view(input.envelope.run_id);

@@ -21,7 +21,9 @@
       "content_sha256": "1ab9f304c564a8b0158758f668ea723b2e456908187f3a5513b3fb2cfaca3169"}
   ],
   "parameters": {
-    "ha_speed": {"id": "P-MOVE-HA", "value": 1, "unit": "m/s", "category": "C", "label": "条件情景值，非现实校准", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}}
+    "ha_speed": {"id": "P-MOVE-HA", "value": 1, "unit": "m/s", "category": "C", "label": "条件情景值，非现实校准", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}},
+    "ab_dry_speed": {"id": "P-MOVE-AB-DRY", "value": 0.85, "unit": "m/s", "category": "C", "label": "条件情景值，非现实校准", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}},
+    "ab_wet_speed": {"id": "P-MOVE-AB-WET", "value": 0.70, "unit": "m/s", "category": "C", "label": "条件情景值，非现实校准", "source_ref": {"id": "B33-INTEGRATED-FIELD-DESIGN-1.0.0", "version": 1}}
   },
   "parameter_sources": {
     "r_mass": {"id": "P-R-MASS", "unit": "kg", "category": "A", "label": "公开参考规格（约值，含电池）", "source_ref": {"id": "R13", "version": 1}},

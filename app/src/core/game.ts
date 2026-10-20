@@ -1,3 +1,5 @@
+import {valid_integrated_field_envelope} from '../integrated-field-protocol';
+import type {IntegratedFieldEnvelope} from '../integrated-field-contracts';
 import {initial_integrated_field_state} from './integrated-field-state';
 import {is_integrated_field_definition} from './integrated-field-definition';
 import {project_integrated_field_view,apply_integrated_field_control} from './integrated-field-engine';
@@ -69,7 +71,7 @@ export class Game {
   private history:StoredState|null=null;
   private readonly validated_source_tasks=new WeakSet<object>();
   private readonly verified_replay_states=new Set<string>();
-  constructor(readonly store: Persistence,private readonly fixture:{conflicting_facility?:'operable'|'faulted'}={}) {}
+  constructor(readonly store: Persistence,private readonly fixture:{conflicting_facility?:'operable'|'faulted';integrated_guidance_loss_at?:number|null}={}) {}
   private remember_replay_state(integrity:string){
     this.verified_replay_states.add(integrity);
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
@@ -101,7 +103,7 @@ export class Game {
 
     await this.validate_package(state);
     if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9&&state.schema!==10&&state.schema!==11&&state.schema!==12&&state.schema!==13)return;
-    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined,facility_initial:value.schema===12?value.facility.initial:undefined,origin_generation:value.schema===13?value.origin_generation:undefined}));
+    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined,facility_initial:value.schema===12?value.facility.initial:undefined,origin_generation:value.schema===13?value.origin_generation:undefined,guidance_loss_at:value.schema===13?value.guidance_loss_at:undefined}));
     const seen=new Set<string>();let current=state;
     while(true){
       if(seen.has(current.run_id))throw new GameError('INVALID_SAVE');seen.add(current.run_id);
@@ -132,7 +134,7 @@ export class Game {
     // A history context is a reader owned by this same Game/Worker. Its
     // debrief metadata must use that owner lease, never claim a second writer.
     context.writer_owner=this.writer_owner??this;
-    if((latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11||latest.schema===12)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
+    if((latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11||latest.schema===12||latest.schema===13)&&initial.schema===latest.schema&&nodeRevision===undefined&&to===latest.sim_time){context.history=latest;return context;}
     if(nodeRevision!==undefined){
       if(!Number.isSafeInteger(nodeRevision)||nodeRevision<1||nodeRevision>latest.revision)throw new GameError('INVALID_INPUT');
       const node=await this.store.snapshot(run,nodeRevision);
@@ -207,7 +209,7 @@ export class Game {
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
-    if(is_integrated_field_definition(definition)){const state=initial_integrated_field_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_integrated_field_view(state);}
+    if(is_integrated_field_definition(definition)){const state=initial_integrated_field_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,this.fixture.integrated_guidance_loss_at??null);await this.commit(state,null,operation,creationFingerprint);return project_integrated_field_view(state);}
     if(is_conflicting_action_definition(definition)){const state=await initial_conflicting_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,source?.schema===12?source.facility.initial:this.fixture.conflicting_facility);await this.commit(state,null,operation,creationFingerprint);return project_conflicting_action_view(state);}
     if(is_source_time_definition(definition)){const state=await initial_source_time_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_source_time_view(state,this.store.source_definitions);}
     if(is_outcome_definition(definition)){const state=initial_outcome_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_outcome_view(state,this.store.outcome_definitions);}
@@ -774,6 +776,14 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
       ...(input.envelope.intent.kind==='restore'?{snapshot_revision:input.envelope.intent.snapshot_revision}:{}),
     };
   }
+  async issue_integrated_order(envelope:IntegratedFieldEnvelope,clock_to?:number):Promise<{receipt:Receipt;view:PlayerView}>{
+    if(envelope?.intent?.kind!=='integrated_move'||(await this.store.read_committed(envelope.run_id))?.schema!==13)throw new GameError('INVALID_INPUT');
+    return this.operate(envelope,clock_to);
+  }
+  async apply_integrated_intent(envelope:IntegratedFieldEnvelope,clock_to?:number):Promise<{receipt:Receipt;view:PlayerView}>{
+    if(!valid_integrated_field_envelope(envelope)||(await this.store.read_committed(envelope.run_id))?.schema!==13)throw new GameError('INVALID_INPUT');
+    return this.operate(envelope,clock_to);
+  }
   async control_clock(
     envelope: Envelope,
     clock_to?:number,
@@ -796,15 +806,16 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     return this.operate({run_id:run,operation_id,expected_revision:view.revision,intent:{kind:'tick',to}});
   }
   private async operate(
-    envelope: Envelope,
+    envelope: Envelope|IntegratedFieldEnvelope,
     clock_to?:number,
   ): Promise<{ receipt: Receipt; view: PlayerView }> {
     this.assert_current();
-    if (!valid_envelope(envelope,910000,true)) throw new GameError("INVALID_INPUT");
+    if (!valid_envelope(envelope,910000,true)&&!valid_integrated_field_envelope(envelope)) throw new GameError("INVALID_INPUT");
     await this.assert_writable(envelope.run_id);
     const state = await this.store.read_committed(envelope.run_id);
     if(!state)throw new GameError('RUN_NOT_FOUND');
     if(state.schema===13){
+      if(!valid_integrated_field_envelope(envelope))throw new GameError('INVALID_INPUT');
       await this.validate_stored_state(state);
       const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(state.run_id,envelope.operation_id);
       if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_CONFLICT');return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind,...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{})},view:project_integrated_field_view(state)};}
@@ -812,6 +823,7 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
       const candidate=apply_integrated_field_control(state,envelope,clock_to);await this.commit(candidate,state.revision,envelope.operation_id,fingerprint);
       return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind,...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{})},view:project_integrated_field_view(candidate)};
     }
+    if(!valid_envelope(envelope,910000,true))throw new GameError('INVALID_INPUT');
     if(state.schema===10||state.schema===11||state.schema===12)return this.commit_outcome_request(envelope,clock_to);
     if(state.schema===9){
       await this.validate_stored_state(state);

@@ -6,10 +6,10 @@ import type {IntegratedFieldState} from './integrated-field-state';
 import {initial_integrated_field_state} from './integrated-field-state';
 import {apply_integrated_field_control} from './integrated-field-engine';
 export async function validate_integrated_field_state(value:unknown):Promise<IntegratedFieldState>{
-  if(!record(value)||!json_data(value)||!fields(value,['schema','contract','scenario_kind','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','source_run','definition_hash','hashes','definition','rng','generation','origin_generation','phase','inputs','integrity']))throw new GameError('INVALID_SAVE');
+  if(!record(value)||!json_data(value)||!fields(value,['schema','contract','scenario_kind','run_id','revision','sim_time','mode','rate','paused','finished','ended','status','source_run','definition_hash','hashes','definition','rng','generation','origin_generation','phase','inputs','integrity','guidance_loss_at','hq_sender_free_at','actors','position_reports','pending_moves']))throw new GameError('INVALID_SAVE');
   const state=value as unknown as IntegratedFieldState,definition=await integrated_field_definition();
   if(state.schema!==13||state.contract!=='0.5.1'||state.scenario_kind!=='play_integrated_field'||!valid_id(state.run_id)||!['command','research'].includes(state.mode)||state.phase!=='committed'||!Number.isSafeInteger(state.origin_generation)||state.origin_generation<1||state.source_run!==null&&!valid_id(state.source_run)||!Array.isArray(state.inputs)||!valid_id(state.rng?.origin)||JSON.stringify(canonical(state.definition))!==JSON.stringify(canonical(definition))||state.definition_hash!==definition.definition_hash||JSON.stringify(canonical(state.hashes))!==JSON.stringify(canonical(definition.hashes))||typeof state.integrity!=='string'||await state_hash(state)!==state.integrity)throw new GameError('INVALID_SAVE');
-  let replay=initial_integrated_field_state(definition,state.run_id,state.mode,state.origin_generation,state.source_run,state.rng.origin);
+  let replay=initial_integrated_field_state(definition,state.run_id,state.mode,state.origin_generation,state.source_run,state.rng.origin,state.guidance_loss_at);
   for(const input of state.inputs){
     if(!record(input)||!fields(input,['envelope','at','revision',...(input.clock_to===undefined?[]:['clock_to'])]))throw new GameError('INVALID_SAVE');
     replay=apply_integrated_field_control(replay,input.envelope,input.clock_to);

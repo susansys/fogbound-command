@@ -17,6 +17,7 @@ export type RunSummary = {
   conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};
 };
 export type Request =
+  |{kind:'operate_integrated_field';envelope:import('./integrated-field-contracts').IntegratedFieldEnvelope}
   |{kind:'get_outcome_participants';query:import('./outcome-contracts').OutcomeParticipantQuery}
   |{kind:'append_outcome_inference';envelope:import('./outcome-contracts').OutcomeInferenceRequest}
   |{kind:'transition_outcome_debrief';envelope:import('./outcome-contracts').OutcomeDebriefTransition}
