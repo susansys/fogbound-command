@@ -26,6 +26,11 @@ test('B33 catalogue keeps metre geometry, configuration mass and source categori
   await page.getByLabel('推进到时刻（秒）').fill('102');
   await page.getByRole('button',{name:'推进时间',exact:true}).click();
   await expect(page.getByRole('region',{name:'移动与返程'})).toContainText('R 最后确认：150, 150 m；观察 101 秒，收到 102 秒');
+  for(let attempt=0;attempt<15;attempt++)await page.getByRole('button',{name:'下达移动命令',exact:true}).click();
+  await page.getByRole('button',{name:'下达移动命令',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('当前已知的预约或发送窗口冲突');
+  await expect(page.getByRole('button',{name:'核对并重试原操作',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'保存行动',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'返回演练列表',exact:true}).click();
   await page.getByRole('button',{name:'查看记录',exact:true}).click();
   await expect(page.getByText('正在查看历史记录，只读。',{exact:true})).toBeVisible();
