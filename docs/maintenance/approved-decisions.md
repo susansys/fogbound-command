@@ -13,6 +13,7 @@
 | B31 存档 | 可选来源包使用独立 schema11；旧 schema4—10 及默认入口保持各自身份，不静默迁移 | [固定状态](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/app/src/core/source-time-state.ts)、[固定验证记录](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/app/VERIFICATION.md) |
 | B32 冲突信息下行动 | 四票／24 工程例的有界薄片：原文与送达、工作判断与任务行动分别记录；仅本批范围，不代表完整第三阶段或新批次启动 | [PR #99](https://github.com/susansys/fogbound-command/pull/99)、[固定公开合同](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/app/src/conflicting-action-contracts.ts) |
 | B32 存档身份 | 使用独立 schema12，既有任务与来源包保留原身份；不以工作判断改写过去记录 | [固定状态](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/app/src/core/conflicting-action-state.ts) |
+| B33 公开实施范围 | 12 个切片串行组成一个完整交付，覆盖量与目录、移动、过程资源、环境观察、所知与研判、保存恢复；保留旧 schema4—12。开发中，未合并；切片局部完成不等于整批交付，条件数值不代表现实校准 | [SPEC #101](https://github.com/susansys/fogbound-command/issues/101)、[最终交付切片 #113](https://github.com/susansys/fogbound-command/issues/113) |
 | 工程验收边界 | 默认 Windows 真实浏览器／原生存档恢复与 Linux CI 各有证明范围；工程例不代签完整产品 244AT 或正式体验 | [B24 SPEC #66](https://github.com/susansys/fogbound-command/issues/66)、[PR #63](https://github.com/susansys/fogbound-command/pull/63) |
 
 地图 C、真实图源、模型 API、文件备份、自由问答等后续能力，不因在路线或索引中出现而成为当前实施范围。新增取舍回到正式负责人处理；本目录只在有明确公开依据后更新索引。
