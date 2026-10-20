@@ -19,8 +19,8 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
   if(!shape(v,{scenario_kind:one('play_integrated_field'),run_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,mode:one('command','research'),rate:one(1,2,4),paused:bool,finished:bool,source_run:v=>v===null||valid_id(v),status:one('ready','queued','preparing','executing','terminating','finished','deadline'),can_issue:bool,next_action:text,gap:text,
     public_rules:v=>shape(v,{deadline:one(900000),receipt_grace:one(10000)}),geometry,
     actors:list(v=>shape(v,{id:one('R','W'),position:v=>shape(v,{point,observed_at:time,received_at:time,evidence:valid_id})}),2),
-    artifacts:list(v=>shape(v,{id:valid_id,source:one('A','B'),logical_size_bytes:one(1000000000),verified:one(true),observed_at:time,received_at:time}),32),
-    activity_reports:list(v=>shape(v,{id:valid_id,report_ref:valid_id,actor:one('R','W'),action:one('read','observe','inspect','repair'),target:one('A','B'),phase:one('accepted','completed','refused','blocked'),reason:one(null,'missing_part','station_busy','actor_in_transit','position_unconfirmed','capacity','facility_unconfirmed','preparation_unavailable','facility_condition','deadline'),observed_at:time,received_at:time}),128),
+    artifacts:list(v=>shape(v,{id:valid_id,report_ref:valid_id,delivery_ref:valid_id,source:one('A','B'),logical_size_bytes:one(1000000000),verified:one(true),observed_at:time,received_at:time}),32),
+    activity_reports:list(v=>shape(v,{id:valid_id,report_ref:valid_id,artifact_ref:v=>v===null||valid_id(v),actor:one('R','W'),action:one('read','observe','inspect','repair'),target:one('A','B'),phase:one('accepted','completed','refused','blocked'),reason:one(null,'missing_part','station_busy','actor_in_transit','position_unconfirmed','capacity','facility_unconfirmed','preparation_unavailable','facility_condition','deadline'),observed_at:time,received_at:time}),128),
     facility_knowledge:v=>v===null||shape(v,{condition:one('faulted','unverified_after_replacement','operable'),version:v=>time(v)&&Number(v)>=1,method:one('diagnostic','functional'),observed_at:time,received_at:time,evidence:valid_id,report_ref:valid_id}),
     preparation:v=>v===null||shape(v,{plan_ref:v=>shape(v,{run_id:valid_id,id:one('B33-PLAN-1'),version:one(1)}),approval_ref:v=>v===null||shape(v,{run_id:valid_id,id:one('B33-PLAN-1-preparation-approval'),version:one(1)}),status:one('queued','validating','preparing','approved'),approved_at:v=>v===null||time(v)}),
     model_catalog:v=>shape(v,{model_ref:v=>shape(v,{id:one('INTEGRATED-FIELD-MODEL-3'),version:one(1)}),geometry,configurations:list(configuration,2),calibration_status:one('conditional_not_measured'),parameters:list(parameter,128),sources:list(source,64)}),
@@ -29,6 +29,15 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
   if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(new Set(view.artifacts.map(artifact=>artifact.id)).size!==view.artifacts.length||view.artifacts.some(artifact=>artifact.observed_at>artifact.received_at||artifact.received_at>view.sim_time))return false;
   if(new Set(view.activity_reports.map(report=>report.id)).size!==view.activity_reports.length||view.activity_reports.some(report=>report.observed_at>report.received_at||report.received_at>view.sim_time))return false;
+  if(new Set(view.artifacts.map(artifact=>artifact.delivery_ref)).size!==view.artifacts.length)return false;
+  for(const artifact of view.artifacts){
+   const report=view.activity_reports.find(report=>report.id===artifact.delivery_ref);
+   if(!report||report.report_ref!==artifact.report_ref||report.artifact_ref!==artifact.id||report.actor!=='R'||report.action!=='read'||report.phase!=='completed'||report.target!==artifact.source||report.observed_at!==artifact.observed_at||report.received_at!==artifact.received_at)return false;
+  }
+  for(const report of view.activity_reports){
+   const completedRead=report.actor==='R'&&report.action==='read'&&report.phase==='completed';
+   if(completedRead?!view.artifacts.some(artifact=>artifact.id===report.artifact_ref&&artifact.delivery_ref===report.id):report.artifact_ref!==null)return false;
+  }
   const readRecipe=catalog.parameters.find(parameter=>parameter.id==='P-READ');if(!readRecipe||readRecipe.category!=='C'||readRecipe.unit!=='ms'||!Number.isSafeInteger(readRecipe.value)||readRecipe.value<=0)return false;
   if(view.preparation&&(view.preparation.plan_ref.run_id!==view.run_id||(view.preparation.status==='approved'?view.preparation.approved_at===null||view.preparation.approved_at>view.sim_time||view.preparation.approval_ref?.run_id!==view.run_id:view.preparation.approved_at!==null||view.preparation.approval_ref!==null)))return false;
   if(view.facility_knowledge){const known=view.facility_knowledge,report=view.activity_reports.find(report=>report.id===known.evidence);if(!report||report.report_ref!==known.report_ref||report.target!=='B'||report.phase!=='completed'||report.actor!=='W'||report.action!==(known.method==='functional'?'repair':'inspect')||report.observed_at!==known.observed_at||report.received_at!==known.received_at)return false;}

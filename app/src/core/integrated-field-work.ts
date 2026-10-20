@@ -49,12 +49,25 @@ export function issue_integrated_activity(state:IntegratedFieldState,envelope:In
  const intent=envelope.intent;if(intent.kind!=='integrated_activity')throw new GameError('INVALID_INPUT');
  if(state.sim_time>=900000)throw new GameError('CONSTRAINT_DENIED');
  const basis=intent.basis_refs;if(basis.some(ref=>ref.run_id!==state.run_id)||new Set(basis.map(ref=>ref.id)).size!==basis.length)throw new GameError('INVALID_REQUEST');
+ const delivered=delivered_work_reports(state),legal=new Set<string>(),point=state.definition.geometry.points[intent.target];
+ const samePoint=(value:readonly number[])=>value.every((coordinate,index)=>coordinate===point[index]);
+ if(samePoint(state.actors[intent.actor].known.point))legal.add(state.actors[intent.actor].known.evidence);
+ for(const position of state.position_reports)if(position.actor===intent.actor&&position.received_at<=state.sim_time&&samePoint(position.point_um.map(value=>value/1000000)))legal.add(position.evidence);
+ if(intent.actor==='R'&&intent.action==='read'&&intent.target==='A')legal.add('opening-A-access');
+ // Resolve the registered approval identity here; the hard gate below still requires actual approval.
+ if(intent.actor==='W'&&intent.action==='repair'&&state.work.preparation)legal.add(state.work.preparation.approval_ref.id);
+ for(const {report,delivery} of delivered)if(report.actor==='W'&&report.target==='B'&&report.phase==='completed'&&(intent.actor==='W'&&intent.action==='repair'&&report.action==='inspect'||intent.actor==='R'&&intent.action==='read'&&intent.target==='B'&&report.action==='repair'&&report.facility?.condition==='operable'))legal.add(delivery.id);
+ if(basis.some(ref=>!legal.has(ref.id)))throw new GameError('INVALID_REQUEST');
  let carried_approval:Approval|null=null,carried_facility:Facility|null=null;
  if(intent.actor==='R'){
   const position=state.actors.R.known,target=state.definition.geometry.points[intent.target];
   if(!basis.some(ref=>ref.id===position.evidence)||position.point.some((value,index)=>value!==target[index]))throw new GameError('EVIDENCE_REQUIRED');
   if(intent.target==='A'){if(intent.action==='read'&&!basis.some(ref=>ref.id==='opening-A-access'))throw new GameError('EVIDENCE_REQUIRED');}
-  else{const facility=known_facility(state);if(!facility||facility.condition!=='operable'||facility.method!=='functional'||!basis.some(ref=>ref.id===facility.evidence))throw new GameError('EVIDENCE_REQUIRED');carried_facility={condition:facility.condition,version:facility.version};}
+  else{
+   const latest=known_facility(state),proof=delivered.find(({report,delivery})=>report.action==='repair'&&report.phase==='completed'&&report.target==='B'&&report.facility?.condition==='operable'&&report.facility.version===latest?.version&&basis.some(ref=>ref.id===delivery.id));
+   if(!latest||latest.condition!=='operable'||!proof?.report.facility)throw new GameError('EVIDENCE_REQUIRED');
+   carried_facility=structuredClone(proof.report.facility);
+  }
  }else{
   if(intent.plan_ref.run_id!==state.run_id||intent.plan_ref.id!=='B33-PLAN-1')throw new GameError('INVALID_REQUEST');
   if(intent.action==='repair'){
@@ -114,6 +127,7 @@ function power(state:IntegratedFieldState,actor:Actor){
  const p=state.definition.work_parameters,activity=active(state).find(activity=>activity.actor===actor);
  if(actor==='R')return activity?activity.action==='observe'?p.R_observe_watts:p.R_read_watts:p.R_idle_watts;
  if(activity)return activity.phase==='inspect'?p.W_inspect_watts:activity.phase==='isolate'?p.W_isolate_watts:activity.phase==='replace'?p.W_replace_watts:p.W_verify_watts;
+ if(state.actors.W.motion?.status==='moving')return p.W_idle_watts;
  const h=state.definition.geometry.points.H;return state.actors.W.position_um.every((value,index)=>value===h[index]*1000000)?p.W_off_watts:p.W_idle_watts;
 }
 export function advance_integrated_world(state:IntegratedFieldState,to:number){

@@ -23,8 +23,8 @@ export type IntegratedFieldPlayerView={
   can_issue:boolean;next_action:string;gap:string;
   public_rules:{deadline:number;receipt_grace:number};model_catalog:IntegratedFieldCatalog;
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
-  artifacts:Array<{id:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
-  activity_reports:Array<{id:string;report_ref:string;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;
+  artifacts:Array<{id:string;report_ref:string;delivery_ref:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
+  activity_reports:Array<{id:string;report_ref:string;artifact_ref:string|null;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;
   facility_knowledge:null|{condition:'faulted'|'unverified_after_replacement'|'operable';version:number;method:'diagnostic'|'functional';observed_at:number;received_at:number;evidence:string;report_ref:string};
   preparation:null|{plan_ref:IntegratedFieldEvidenceRef;approval_ref:IntegratedFieldEvidenceRef|null;status:'queued'|'validating'|'preparing'|'approved';approved_at:number|null};
   geometry:IntegratedFieldCatalog['geometry'];
