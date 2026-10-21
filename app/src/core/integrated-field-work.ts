@@ -38,7 +38,6 @@ function fail_unprotected_work(state:IntegratedFieldState,at:number){for(const a
 export function delivered_work_reports(state:IntegratedFieldState){return state.work.deliveries.filter(delivery=>delivery.received_at<=state.sim_time).sort((a,b)=>a.received_at-b.received_at||a.id.localeCompare(b.id)).map(delivery=>({delivery,report:state.work.reports.find(report=>report.id===delivery.report_id)!}));}
 export function delivered_work_evidence(state:IntegratedFieldState){return delivered_work_reports(state).map(({report,delivery},index)=>({id:delivery.id,report_ref:report.id,message_ref:report.id+'-message',sender:report.actor,recipient:'HQ' as const,sent_at:delivery.sent_at,knowledge_seq:index+1,artifact_ref:report.artifact?.id??null,actor:report.actor,action:report.action,target:report.target,object_ref:structuredClone(report.material.object_ref),scope_ref:structuredClone(report.material.scope_ref),configuration_ref:structuredClone(report.material.configuration_ref),phase:report.phase,reason:report.reason,observed_at:report.observed_at,received_at:delivery.received_at}));}
 export function work_knowledge(state:IntegratedFieldState){return integrated_knowledge({run_id:state.run_id,as_of:state.sim_time,reports:state.work.reports.map(report=>report.material),deliveries:delivered_work_evidence(state),relations:[]});}
-export function known_facility(state:IntegratedFieldState){return work_knowledge(state).facility_knowledge;}
 function report(state:IntegratedFieldState,activity:Pick<Activity,'operation_id'|'actor'|'action'|'target'>&Partial<Pick<Activity,'started_at'>>,phase:WorkReport['phase'],at:number,artifact:IntegratedArtifact|null=null,facility:Facility|null=null,reason:IntegratedRefusalReason|null=null){
  const target=integrated_object(state.definition,activity.target,'facility');if(artifact&&(artifact.source!==activity.target||!target.properties.some(property=>property==='data_source'))||facility&&(activity.target!=='B'||!target.properties.some(property=>property==='facility_condition')))throw new GameError('INVALID_DEFINITION');
  const actor=state.actors[activity.actor],sent_at=Math.max(at,actor.sender_free_at),received_at=sent_at+1000;actor.sender_free_at=received_at;
@@ -74,8 +73,8 @@ export function issue_integrated_activity(state:IntegratedFieldState,envelope:In
   if(!position||!basis.some(ref=>ref.id===position.evidence)||position.point.some((value,index)=>value!==target[index]))throw new GameError('EVIDENCE_REQUIRED');
   if(intent.target==='A'){if(intent.action==='read'&&!basis.some(ref=>ref.id==='opening-A-access'))throw new GameError('EVIDENCE_REQUIRED');}
   else{
-   const latest=known_facility(state),proof=delivered.find(({report,delivery})=>report.action==='repair'&&report.phase==='completed'&&report.target==='B'&&report.facility?.condition==='operable'&&report.facility.version===latest?.version&&basis.some(ref=>ref.id===delivery.id));
-   if(!latest||latest.condition!=='operable'||!proof?.report.facility)throw new GameError('EVIDENCE_REQUIRED');
+   const available=work_knowledge(state).functional_proofs,proof=delivered.find(({report,delivery})=>report.action==='repair'&&report.phase==='completed'&&report.target==='B'&&report.facility?.condition==='operable'&&available.some(candidate=>candidate.report_ref===report.id&&candidate.object_version===report.facility!.version)&&basis.some(ref=>ref.id===delivery.id));
+   if(!proof?.report.facility)throw new GameError('EVIDENCE_REQUIRED');
    carried_facility=structuredClone(proof.report.facility);
   }
  }else{
