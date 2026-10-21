@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import {create_worker_clock} from './worker-clock';
 import {source_time_definition} from './core/source-time-definition';
 import {conflicting_action_definition} from './core/conflicting-action-definition';
 import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
@@ -40,14 +41,14 @@ async function acquire_writer(): Promise<boolean> {
 let queue = Promise.resolve();
 let active:PlayerView|null=null;
 let history:Game|null=null;
-let anchor={wall:0,sim:0};
+const workerClock=create_worker_clock();
 let clockQueued=false;
 let pendingPauses=0;
-function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_integrated_field'||view.scenario_kind==='play_corridor'||view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_integrated_field'||view.scenario_kind==='play_corridor'||view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return workerClock.target(view.rate,bound);}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
-  if(!active||active.run_id!==view.run_id||active.paused!==view.paused||active.rate!==view.rate)anchor={wall:performance.now(),sim:view.sim_time};
+  if(!active||active.run_id!==view.run_id||active.paused!==view.paused||active.rate!==view.rate)workerClock.reset(view.sim_time);
   active=view;
 }
 async function pauseActiveRun(){

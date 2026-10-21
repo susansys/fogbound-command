@@ -1,0 +1,3 @@
+import {defineConfig,type Plugin} from 'vite';
+function verificationClock():Plugin{return{name:'b33-isolated-worker-clock',enforce:'pre',transform(code,id){if(!id.replaceAll('\\','/').endsWith('/src/worker-clock.ts'))return;const original='export const worker_now=()=>performance.now();';if(code.split(original).length!==2)throw Error('Verification clock source binding changed');return code.replace(original,"import {verification_now} from '../verification/integrated-field-clock';export const worker_now=verification_now;");}};}
+export default defineConfig(({mode})=>{const isolated=mode==='b33-verification';return{plugins:isolated?[verificationClock()]:[],worker:{plugins:()=>isolated?[verificationClock()]:[]}};});

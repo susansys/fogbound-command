@@ -1124,3 +1124,53 @@ same origin, full process closure, original run/physical state/ledger preservati
 no wall-clock catch-up, and explicit command continuation. Writing or discovering
 these cases does not claim execution or acceptance. B32 E18 real hidden, fixed
 candidate Windows execution, final CI/PR/main/artifacts and delivery remain open.
+
+## B33 S12 pre-delivery verification record
+
+B33 adds the independent schema13 integrated-field package while retaining
+schema4–12 identities. The original244 acceptance cases remain not_run and
+formal PLAY is unsigned. This entry records local engineering evidence before
+fixed-source review and CI; it does not claim a delivered batch.
+
+Actual browser discovery is333 identities:313 portable and20 Windows native.
+All231 legacy identities/source hashes and the prior18 native identities are
+preserved. New identities are the two persistence/UI cases, the portable
+release-isolation case, and Chrome/Edge AT047 full-process recovery cases.
+Windows native obligations cannot be signed by a Linux CI skip.
+
+S12 local checks cover nested replay/hash rejection, transaction rollback,
+paused same-condition cloning with retained RNG origin and zero-valued options,
+partition-independent complete business results, and monotonic clock anchors.
+Current fairness includes confirmed local exposures after opening without
+rewriting immutable opening fairness. Corrupt or pending exposure metadata does
+not become a definite first-fair claim. The UI includes history/current return,
+new-run confirmation, uncertain-result retry, narrow/desktop layout and keyboard
+checks. Map association mismatch, conflict and uncertain readback preserve the
+last verified record and require explicit rebind or exact reconciliation.
+
+The actual installed Windows Chrome and Edge local recovery run passed both
+registered AT047 identities. Chrome used the production performance clock,
+paused inspection, full process closure and explicit continuation. Edge used
+ordinary public research advances and five full-process save/reopen nodes:
+preparation/installed functional verification, actual partial copy, local
+artifact completion before HQ delivery, delivered SI accounts, and a terminal
+pending truth grant retried with its original envelope. Profiles are retained;
+actual owned process trees and the service were closed. A later strengthened
+map-record readback is a separate pending execution, not inferred from the
+previous screenshots.
+
+Only the explicit build mode b33-verification statically replaces the Worker
+monotonic source. Its isolated actual Worker probe passed observation31s,
+HQ delivery32s, no new commands900s, and bounded finish910s. This represents
+controlled logical time, not910 seconds of real wall time. The production
+release assets have no verification-clock marker. The portable release case
+passed3/0 in its file, including URL/storage/message selectors rejected with
+the existing exact INVALID_INPUT contract. No public clock bypass was added.
+
+Earlier failures are retained: clone selector/options/pause, exposure identity
+and payload validation, narrow header clipping, incorrect native preparation
+sampling, and incorrect new verifier rejection-code expectation. Corrections
+preserve the original business assertions. Local precommit runs retain their
+actual execution HEAD and source-input hashes. Fixed-source reviews, native
+hidden/visible evidence, final full same-SHA CI, PR/main CI, artifact binding,
+safe synchronization and graph closure must complete before delivery.

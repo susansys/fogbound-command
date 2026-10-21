@@ -33,7 +33,7 @@ export function initial_integrated_field_state(definition:IntegratedFieldDefinit
   const wet_all_time=inputs.wet_all_time??definition.sensitivity_policy[sensitivity].AB_wet_all_time;if(typeof wet_all_time!=='boolean')throw new GameError('INVALID_DEFINITION');
   if(guidance_loss_at!==null&&(!Number.isSafeInteger(guidance_loss_at)||guidance_loss_at<0||guidance_loss_at>900000))throw new GameError('INVALID_DEFINITION');
   const actor=(id:'R'|'W',point:[number,number]):IntegratedFieldActor=>({position_um:[point[0]*1000000,point[1]*1000000],motion:null,sender_free_at:0,known:{point:structuredClone(point),observed_at:0,received_at:0,evidence:'opening-'+id}});
-  return {schema:13,contract:'0.5.1',scenario_kind:'play_integrated_field',run_id,revision:1,sim_time:0,mode,rate:1,paused:mode==='research',finished:false,ended:false,status:'ready',source_run,
+  return {schema:13,contract:'0.5.1',scenario_kind:'play_integrated_field',run_id,revision:1,sim_time:0,mode,rate:1,paused:source_run!==null||mode==='research',finished:false,ended:false,status:'ready',source_run,
     definition_hash:definition.definition_hash,hashes:structuredClone(definition.hashes),definition:structuredClone(definition),guidance_loss_at,hq_sender_free_at:0,actors:{R:actor('R',definition.geometry.points.H),W:actor('W',definition.geometry.points.B)},position_reports:[],pending_moves:[],work:initial_integrated_work(definition,initial_spares,report_fixture),
     planning:initial_integrated_planning(),dag:initial_integrated_dag(),sensitivity,wet_all_time,environment:initial_integrated_environment(definition,environment_profile),rng:{algorithm:'xorshift32-v1',version:1,seed:1,state:1,origin:rng_origin,used:false},generation,origin_generation:generation,phase:'committed',inputs:[]};
 }
