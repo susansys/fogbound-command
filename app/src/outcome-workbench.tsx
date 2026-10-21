@@ -8,6 +8,11 @@ import type {OutcomeFairness} from './outcome-contracts';
 import type {Request} from './transport';
 import {parse_outcome_envelope} from './outcome-protocol';
 import {action_request_result,type CurrentAction,type ActionRequest} from './conflicting-action-progress';
+type HeadquartersReceivedRow={id:string;at:number;sender:string;text:string;kind:string};
+export function HeadquartersReceivedRecords({rows,description='按总部收到时刻排列；原文及递交分别保留',onRead}:{rows:HeadquartersReceivedRow[];description?:string;onRead?:(id:string,origin:HTMLButtonElement)=>void}){
+ return <section className='bottom-log outcome-received-log' aria-label='总部已收回报记录'><div className='log-heading'><div><strong>已收到的回报</strong><span>{rows.length} 条递交记录</span></div><span>{description}</span></div><div className='log-lines'>{rows.length===0?<p>尚未收到回报。</p>:rows.map(item=><details key={item.id}><summary><time>{clock(item.at)}</time><span>{item.sender}</span><span className='received-excerpt'>{item.text}</span><small>{item.kind}</small></summary><p>{item.text}</p><small>总部已收递交记录：{item.id}</small>{onRead&&<button onClick={event=>onRead(item.id,event.currentTarget)}>查看报告原文</button>}</details>)}</div></section>;
+}
+export function HeadquartersFooter(){return <footer className='global-footer'><span>虚构娱乐 · 地形与行动均为合成场景</span><span>以总部已收凭证组织行动</span></footer>;}
 type Props=Omit<IntelligenceWorkbenchProps,'view'|'outcomeSlot'|'outcomeFrame'|'extraBusy'|'onBusyChange'>&{view:OutcomePlayerView};
 export function OutcomeWorkbench(props:Props){
  const{view,transport,history,adopt}=props,[choice,setChoice]=useState<OutcomeActor|'abort'|null>(null),[reason,setReason]=useState(''),[busy,setBusy]=useState(false),[baseBusy,setBaseBusy]=useState(false),[error,setError]=useState(''),[unknown,setUnknown]=useState(false),[faulted,setFaulted]=useState(false);
@@ -134,7 +139,7 @@ export function OutcomeWorkbench(props:Props){
   ...view.verification_feedback.map(({report,delivery})=>({id:'feedback:'+delivery.ref.id,at:delivery.received,sender:'核验岗位',text:report.subject_actor+'组：'+phase(report.phase)+(report.reason?' · '+report.reason:''),kind:'反馈'})),
   ...view.abort_reports.map(({report,delivery})=>({id:'abort:'+delivery.ref.id,at:delivery.received,sender:report.actor,text:'中止接令回报已收到；收尾截止 '+clock(report.cleanup_deadline),kind:'收尾'})),
  ].sort((a,b)=>b.at-a.at||a.id.localeCompare(b.id));
- const records=<section className='bottom-log outcome-received-log' aria-label='总部已收回报记录'><div className='log-heading'><div><strong>已收到的回报</strong><span>{received.length} 条递交记录</span></div><span>按总部收到时刻排列；原文及递交分别保留</span></div><div className='log-lines'>{received.length===0?<p>尚未收到回报。</p>:received.map(item=><details key={item.id}><summary><time>{clock(item.at)}</time><span>{item.sender}</span><span className='received-excerpt'>{item.text}</span><small>{item.kind}</small></summary><p>{item.text}</p><small>总部已收递交记录：{item.id}</small></details>)}</div></section>;
- const footer=<footer className='global-footer'><span>虚构娱乐 · 地形与行动均为合成场景</span><span>以总部已收凭证组织行动</span></footer>;
+ const records=<HeadquartersReceivedRecords rows={received}/>;
+ const footer=<HeadquartersFooter/>;
  return <IntelligenceWorkbench {...props} transport={progressTransport} onWorkSelect={selectActor} view={view} primaryStopped={!!view.termination||view.finished} finished={view.finished} outcomeFrame={{records,footer,lead:<>{'conflicting_action' in view&&<ConflictingActionWorkbench view={view as ConflictingActionPlayerView} work={work} actionRequest={actionRequest} transport={progressTransport} history={history} blocked={busy||baseBusy||!!pending.current||props.storageFault||faulted} adopt={adopt} onBusy={setWorkingBusy} onDirty={setWorkingDirty} onStorageFault={()=>setFaulted(true)}/ >}</>,sources:<>{'source_reading' in view&&<SourceTimeReading view={view as SourceTimePlayerView}/>}</>}} outcomeSlot={<>{!view.finished&&!view.termination&&<label>下次关键操作的理由（可选）<textarea aria-label='下次关键操作的理由（可选）' maxLength={600} value={nextReason} disabled={blocked} onChange={event=>setNextReason(event.target.value)}/><small>随下一次保存准备、核实来源、申请筹备或下达活动登记；不填写也可提交。</small></label>}{slot}</>} extraBusy={busy||!!pending.current||workingBusy} extraDirty={workingDirty} onBusyChange={setBaseBusy} storageFault={props.storageFault||faulted} onStorageRecovered={()=>{setFaulted(false);props.onStorageRecovered();}}/>;
 }

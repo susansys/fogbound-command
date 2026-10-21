@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import {create_worker_clock} from './worker-clock';
 import {source_time_definition} from './core/source-time-definition';
 import {conflicting_action_definition} from './core/conflicting-action-definition';
 import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
@@ -40,14 +41,14 @@ async function acquire_writer(): Promise<boolean> {
 let queue = Promise.resolve();
 let active:PlayerView|null=null;
 let history:Game|null=null;
-let anchor={wall:0,sim:0};
+const workerClock=create_worker_clock();
 let clockQueued=false;
 let pendingPauses=0;
-function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_corridor'||view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return Math.min(bound,anchor.sim+Math.floor((performance.now()-anchor.wall)*view.rate));}
+function clockTarget(view:PlayerView){const bound=view.scenario_kind==='play_mission'?910000:view.scenario_kind==='play_integrated_field'||view.scenario_kind==='play_corridor'||view.scenario_kind==='play_intelligence'||view.scenario_kind==='play_outcome'?view.public_rules.deadline+view.public_rules.receipt_grace:610000;return workerClock.target(view.rate,bound);}
 function publish(response:Response){if(!valid_response(response))throw new GameError('STORAGE_UNCONFIRMED');scope.postMessage(response);}
 function remember(view:PlayerView){
   if(active?.run_id===view.run_id&&view.revision<active.revision)return;
-  if(!active||active.run_id!==view.run_id||active.paused!==view.paused||active.rate!==view.rate)anchor={wall:performance.now(),sim:view.sim_time};
+  if(!active||active.run_id!==view.run_id||active.paused!==view.paused||active.rate!==view.rate)workerClock.reset(view.sim_time);
   active=view;
 }
 async function pauseActiveRun(){
@@ -93,8 +94,8 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       if (!valid_request(raw)) throw new GameError("INVALID_INPUT");
       const input = raw;
       if(input.kind==='operate_mission'&&input.envelope.intent.kind==='pause'&&active?.scenario_kind==='play_mission'&&active.run_id===input.envelope.run_id)stalePauseView=active;
-      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
-      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
+      if(history&&['create','takeover','restart','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','operate_integrated_field','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('HISTORY_READ_ONLY');
+      if(blocked&&['create','operate','operate_corridor','operate_mission','operate_intelligence','operate_outcome','operate_conflicting_action','operate_integrated_field','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity'].includes(input.kind))throw new GameError('STORAGE_UNCONFIRMED');
       let response: Response;
       let rememberResult=true;
       if (
@@ -114,6 +115,13 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
         if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
         response=input.kind==='query_outcome_debrief'?{request_id,ok:true,debrief_answer:await (history??game).query_outcome_debrief(input.query)}:{request_id,ok:true,evidence_resolution:await (history??game).resolve_outcome_evidence(input.query)};
+      }
+      else if(input.kind==='get_integrated_fairness'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');response={request_id,ok:true,integrated_fairness:await (history??game).get_integrated_fairness(input.run_id)};
+      }
+      else if(input.kind==='open_integrated_debrief'||input.kind==='request_integrated_truth'||input.kind==='confirm_integrated_truth'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response=input.kind==='open_integrated_debrief'?{request_id,ok:true,integrated_debrief:await (history??game).open_integrated_debrief(input.run_id)}:input.kind==='request_integrated_truth'?{request_id,ok:true,integrated_truth:await (history??game).request_integrated_truth(input.envelope)}:{request_id,ok:true,integrated_truth_confirmation:await (history??game).confirm_integrated_truth(input.envelope)};
       }
       else if(input.kind==='get_outcome_fairness'){
         if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
@@ -147,7 +155,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         input.kind === "create"
       ) {
         if (!(await acquire_writer())) throw new GameError("WRITER_BUSY");
-        const definition=await load_definition(input.definition_ref==='B32-CONFLICTING-ACTION-01'?conflicting_action_definition:input.definition_ref==='B31-SOURCE-TIME-01'?source_time_definition:input.definition_ref?.startsWith('B24-OUTCOME-')?outcome_definition_by_ref(input.definition_ref):input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
+        const definition=await load_definition(input.definition_ref==='INTEGRATED-FIELD-PACK-3'?{schema:13,contract:'0.5.1',package_ref:{id:'INTEGRATED-FIELD-PACK-3',version:1}}:input.definition_ref==='B32-CONFLICTING-ACTION-01'?conflicting_action_definition:input.definition_ref==='B31-SOURCE-TIME-01'?source_time_definition:input.definition_ref?.startsWith('B24-OUTCOME-')?outcome_definition_by_ref(input.definition_ref):input.definition_ref==='B23-INTELLIGENCE-01'?intelligenceDefinition:input.definition_ref==='B22-MISSION-01'?missionDefinition:input.definition_ref==='B21-CORRIDOR-01'?playCorridorDefinition:input.definition_ref==='FB02-ENG-RECORD'?recordEngineeringDefinition:input.definition_ref==='ENG-PRESTART-REPLACE'?prestartEngineeringDefinition:engineeringDefinition);
         if(definition.schema===6)prestart_case({schema:definition.schema,definition_hash:definition.definition_hash},input.case_ref??'normal');
         const original=await store.creation(input.operation_id);
         if(!original)await pauseActiveRun();
@@ -156,7 +164,7 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         if(original)rememberResult=active?.run_id===view.run_id;
         response={request_id:input.request_id,ok:true,view};
       } else if(input.kind==='management_pause'&&locked&&active){
-        if(input.reason==='manual'&&active.scenario_kind!=='play_intelligence'&&active.scenario_kind!=='play_outcome')throw new GameError('INVALID_INPUT');
+        if(input.reason==='manual'&&active.scenario_kind!=='play_intelligence'&&active.scenario_kind!=='play_outcome'&&active.scenario_kind!=='play_integrated_field')throw new GameError('INVALID_INPUT');
         const view=await game.get_view(active.run_id);
         if(view.mode==='command'&&!view.paused){
           const to=clockTarget(view);
@@ -222,6 +230,12 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
       else if(input.kind==='operate_outcome'&&locked){
         const envelope=parse_outcome_envelope(input.envelope),view=await game.get_view(envelope.run_id);if(view.scenario_kind!=='play_outcome')throw new GameError('INVALID_INPUT');
         const clock_to=active?.run_id===envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;response={request_id,ok:true,...await game.apply_outcome_intent(envelope,clock_to)};
+      }
+      else if(input.kind==='operate_integrated_field'&&locked){
+        const context=await game.get_view(input.envelope.run_id);if(context.scenario_kind!=='play_integrated_field')throw new GameError('INVALID_INPUT');
+        const clock_to=active?.run_id===input.envelope.run_id&&active.mode==='command'&&!active.paused?clockTarget(active):undefined;
+        const result=await game.apply_integrated_intent(input.envelope,clock_to);
+        response={request_id,ok:true,...result};
       }
       else if ((input.kind === "operate"||input.kind==='operate_corridor'||input.kind==='operate_mission'||input.kind==='operate_intelligence') && locked) {
         const context=await game.get_view(input.envelope.run_id);

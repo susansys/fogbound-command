@@ -1,6 +1,7 @@
 import release from './regional-assets/trusted-release.json';
 import type {PlayerView} from './contracts';
 import {validate_public_map,type PublicMap} from './spatial';
+import {publicGeometryDigest,validateIntegratedDisplayGeometry,type IntegratedDisplayGeometry} from './map-binding';
 
 export type RegionAsset={file:string;bytes:number;sha256:string;kind:string;width?:number;height?:number;u?:number;v?:number;extent?:number[]};
 export type RegionManifest={schema:number;region_id:string;version:number;generator:string;generator_source_sha256:string;seed:string;config_hash:string;config:Record<string,unknown>;mapping:{version:string;domain:number[];axes:string[];unit:string;scale:number;basis:string};field:{width:number;height:number;step:number;encoding:string;order:string;minimum:number;maximum:number};bands:Array<{from:number;to:number;rgb:number[]}>;assets:RegionAsset[]};
@@ -19,9 +20,10 @@ export function sampleSimulationHeight(field:SimulationField,u:number,v:number):
   return (h00*(1-a)+h10*a)*(1-b)+(h01*(1-a)+h11*a)*b;
 }
 function assert(condition:unknown,message:string):asserts condition{if(!condition)throw new RegionalResourceError(message);}
-export function regionOrigin(geometry:PlayerView['geometry']|PublicMap):readonly[number,number]{
+export function regionOrigin(geometry:PlayerView['geometry']|PublicMap|IntegratedDisplayGeometry):readonly[number,number]{
   const [w,h]=geometry.extent;assert(Number.isFinite(w)&&Number.isFinite(h)&&w>0&&h>0&&w<=10000&&h<=10000,'合法活动范围不能关联此区域');
-  if('map_id' in geometry)validate_public_map(geometry);
+  if('points' in geometry)validateIntegratedDisplayGeometry(geometry);
+  else if('map_id' in geometry)validate_public_map(geometry);
   else for(const point of [geometry.H,geometry.T,...(geometry.N?[geometry.N]:[])])assert(point.length===2&&point.every(Number.isFinite)&&point[0]>=0&&point[0]<=w&&point[1]>=0&&point[1]<=h,'公开几何不匹配区域');
   return[w/2-5000,h/2-5000];
 }
@@ -43,7 +45,7 @@ function checkManifest(manifest:RegionManifest){
   assert(manifest.assets.length===release.assets.length&&new Set(manifest.assets.map(a=>a.file)).size===manifest.assets.length,'资源清单不完整');
   for(const asset of manifest.assets){const trusted=release.assets.find(a=>a.file===asset.file);assert(trusted&&asset.bytes===trusted.bytes&&asset.sha256===trusted.sha256&&asset.width===trusted.width&&asset.height===trusted.height&&asset.bytes>0&&asset.bytes<=2*1024*1024,'资源身份或长度不一致');}
 }
-export async function loadRegionalBundle(geometry:PlayerView['geometry']|PublicMap,upstream:AbortSignal):Promise<RegionalBundle>{
+export async function loadRegionalBundle(geometry:PlayerView['geometry']|PublicMap|IntegratedDisplayGeometry,upstream:AbortSignal):Promise<RegionalBundle>{
   const deadline=new AbortController(),signal=AbortSignal.any([upstream,deadline.signal]),timer=setTimeout(()=>deadline.abort(),15000);
   const metrics={start:performance.now(),end:0,manifestReady:0,assets:[] as Array<{file:string;bytes:number;start:number;read:number;verified:number;decoded:number}>};
   const origin=regionOrigin(geometry),images=new Map<string,ImageBitmap>();let closed=false;
@@ -72,7 +74,7 @@ export async function loadRegionalBundle(geometry:PlayerView['geometry']|PublicM
     }
     await Promise.all([consume(),consume()]);assert(values&&mask&&images.size===34&&total<=32*1024*1024,'完整区域资源未就绪');
     assert(decodedBytes*2+values.byteLength+mask.byteLength<=64*1024*1024,'地图可控缓存超目标');
-    const geometryDigest=await digest(new TextEncoder().encode(JSON.stringify(geometry)));
+    const geometryDigest='points' in geometry?await publicGeometryDigest(geometry):await digest(new TextEncoder().encode(JSON.stringify(geometry)));
     metrics.end=performance.now();return{manifest,manifestHash:release.manifest_sha256,geometryDigest,origin,values,mask,images,bytes:total,decodedBytes,metrics,release:dispose};
   }catch(error){const timedOut=deadline.signal.aborted&&!upstream.aborted;deadline.abort();dispose();throw timedOut?new RegionalResourceError('区域资源加载超时'):error;}finally{clearTimeout(timer);}
 }

@@ -1,3 +1,4 @@
+import {integrated_field_player_view,integrated_debrief_session,integrated_truth_payload,integrated_truth_confirmation,integrated_fairness} from './integrated-field-dto';
 import {conflicting_action_player_view} from './conflicting-action-dto';
 import {source_time_player_view} from './source-time-dto';
 import type {Response} from './transport';
@@ -42,6 +43,7 @@ const common_player_view:Check=v=>shape(v,{
   issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan:legacy_plan},{reason:text})),
 },{replacement:v=>shape(v,{original_command_id:valid_id,replacement_command_id:valid_id,accepted_at:time,received_at:time,evidence:text}),scenario_case:oneOf(prestart_case_refs),scenario_kind:oneOf(['record','prestart_move']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
+  if(record(v)&&v.scenario_kind==='play_integrated_field')return integrated_field_player_view(v);
   if(record(v)&&v.scenario_kind==='play_outcome')return Object.hasOwn(v,'conflicting_action')?conflicting_action_player_view(v):Object.hasOwn(v,'source_package')||Object.hasOwn(v,'source_reading')?source_time_player_view(v):outcome_player_view(v);
   if(record(v)&&v.scenario_kind==='play_intelligence')return intelligence_player_view(v);
   if(record(v)&&v.scenario_kind==='play_mission')return mission_player_view(v);
@@ -90,11 +92,15 @@ function play_player_view(v:Record<string,unknown>):boolean{
 }
 const legacy_plan:Check=v=>valid_envelope({run_id:'dto',operation_id:'dto',expected_revision:1,intent:{kind:'issue',command_id:'dto',plan:v}});
 const plan:Check=v=>valid_route_plan(v)||legacy_plan(v);
-const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity','return_and_deliver','abort_outcome','save_working_assessment'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
-const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move','play_corridor','play_mission','play_intelligence','play_outcome']),read_only:bool,source_package:v=>shape(v,{id:oneOf(['B31-SOURCE-TIME-01']),version:oneOf([1])}),conflicting_package:v=>shape(v,{id:oneOf(['B32-CONFLICTING-ACTION-01']),version:oneOf([1])})});
+const receipt:Check=v=>v===null||shape(v,{run_id:valid_id,operation_id:valid_id,revision:v=>time(v)&&Number(v)>=1,sim_time:time,fingerprint:v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v),result:oneOf(['committed']),kind:oneOf(['integrated_prepare','integrated_activity','integrated_move','integrated_abort','integrated_assess','integrated_save_plan','issue','replace_task','advance','tick','pause','continue','rate','mode','save','restore','save_plan','issue_mission','append_explanation','request_source_validation','request_preparation','issue_activity','return_and_deliver','abort_outcome','save_working_assessment'])},{snapshot_revision:v=>time(v)&&Number(v)>=1});
+const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:oneOf(['command','research']),finished:bool},{scenario_kind:oneOf(['move','record','prestart_move','play_corridor','play_mission','play_intelligence','play_outcome','play_integrated_field']),read_only:bool,source_package:v=>shape(v,{id:oneOf(['B31-SOURCE-TIME-01']),version:oneOf([1])}),conflicting_package:v=>shape(v,{id:oneOf(['B32-CONFLICTING-ACTION-01']),version:oneOf([1])})});
 const codes=['UNSUPPORTED','AUTHORITY_DENIED','EVIDENCE_REQUIRED','CONSTRAINT_HOLD','CONSTRAINT_DENIED','CAPACITY_CONFLICT','STATE_CONFIRMATION_REQUIRED','WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','STALE_ASSESSMENT','OPERATION_CONFLICT','OBJECT_VERSION_CONFLICT','OPERATION_ID_REUSED','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
+  if(Object.hasOwn(value,'integrated_debrief'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_debrief:integrated_debrief_session});
+  if(Object.hasOwn(value,'integrated_truth'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_truth:integrated_truth_payload});
+  if(Object.hasOwn(value,'integrated_truth_confirmation'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_truth_confirmation});
+  if(Object.hasOwn(value,'integrated_fairness'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_fairness});
   if(Object.hasOwn(value,'debrief_participants'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_participants:outcome_participant_receipt});
   if(Object.hasOwn(value,'debrief_inference'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_inference:outcome_inference_receipt});
   if(value.ok===false&&['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'].includes(String(value.code)))return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'])});

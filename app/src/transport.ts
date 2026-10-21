@@ -1,6 +1,7 @@
 import type { Mode, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
+import {verify_integrated_truth_digest} from './integrated-field-dto';
 import {verify_outcome_participant_receipt,verify_outcome_inference_receipt,verify_outcome_truth_digest,verify_outcome_debrief_digest} from './outcome-dto';
 import {correlation} from './protocol';
 import type {RouteDraft,PreviewPlan} from './route-contracts';
@@ -11,12 +12,17 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome';
+  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
   read_only?:boolean;
   source_package?:{id:'B31-SOURCE-TIME-01';version:1};
   conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};
 };
 export type Request =
+  |{kind:'open_integrated_debrief';run_id:string}
+  |{kind:'get_integrated_fairness';run_id:string}
+  |{kind:'request_integrated_truth';envelope:import('./integrated-field-contracts').IntegratedTruthRequest}
+  |{kind:'confirm_integrated_truth';envelope:import('./integrated-field-contracts').IntegratedTruthAcknowledgement}
+  |{kind:'operate_integrated_field';envelope:import('./integrated-field-contracts').IntegratedFieldEnvelope}
   |{kind:'get_outcome_participants';query:import('./outcome-contracts').OutcomeParticipantQuery}
   |{kind:'append_outcome_inference';envelope:import('./outcome-contracts').OutcomeInferenceRequest}
   |{kind:'transition_outcome_debrief';envelope:import('./outcome-contracts').OutcomeDebriefTransition}
@@ -58,6 +64,10 @@ export type Response =
       request_id: string;
       ok: true;
       view?: PlayerView;
+      integrated_debrief?:import('./integrated-field-contracts').IntegratedDebriefSession;
+      integrated_truth?:import('./integrated-field-contracts').IntegratedTruthPayload;
+      integrated_truth_confirmation?:import('./integrated-field-contracts').IntegratedTruthConfirmation;
+      integrated_fairness?:import('./integrated-field-contracts').IntegratedFairness;
       runs?: RunSummary[];
       plan?: PreviewPlan;
       mission_preview?:MissionPreview;
@@ -90,6 +100,7 @@ export class Transport {
       let response:Response = valid_response(event.data)?event.data:{request_id:correlation(event.data),ok:false,code:'CHANNEL_UNCERTAIN'};
       if(response.ok&&response.debrief_participants){try{if(!await verify_outcome_participant_receipt(response.debrief_participants))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.debrief_inference){try{if(!await verify_outcome_inference_receipt(response.debrief_inference))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
+      if(response.ok&&response.integrated_truth){try{if(!await verify_integrated_truth_digest(response.integrated_truth))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.outcome_truth){try{if(!await verify_outcome_truth_digest(response.outcome_truth))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&(response.debrief_answer||response.evidence_resolution)){try{if(!await verify_outcome_debrief_digest(response.debrief_answer??response.evidence_resolution))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       const waiting = this.pending.get(response.request_id);
