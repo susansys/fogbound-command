@@ -71,7 +71,7 @@ export class Game {
   private history:StoredState|null=null;
   private readonly validated_source_tasks=new WeakSet<object>();
   private readonly verified_replay_states=new Set<string>();
-  constructor(readonly store: Persistence,private readonly fixture:{conflicting_facility?:'operable'|'faulted';integrated_guidance_loss_at?:number|null;integrated_spares?:0|1}={}) {}
+  constructor(readonly store: Persistence,private readonly fixture:{conflicting_facility?:'operable'|'faulted';integrated_guidance_loss_at?:number|null;integrated_spares?:0|1;integrated_environment?:import('./integrated-field-environment').IntegratedEnvironmentProfile}={}) {}
   private remember_replay_state(integrity:string){
     this.verified_replay_states.add(integrity);
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
@@ -103,7 +103,7 @@ export class Game {
 
     await this.validate_package(state);
     if(state.schema!==6&&state.schema!==7&&state.schema!==8&&state.schema!==9&&state.schema!==10&&state.schema!==11&&state.schema!==12&&state.schema!==13)return;
-    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined,facility_initial:value.schema===12?value.facility.initial:undefined,origin_generation:value.schema===13?value.origin_generation:undefined,guidance_loss_at:value.schema===13?value.guidance_loss_at:undefined,initial_spares:value.schema===13?value.work.initial_spares:undefined}));
+    const identity=(value:StoredState)=>JSON.stringify(canonical({run_id:value.run_id,schema:value.schema,contract:value.contract,definition_hash:value.definition_hash,hashes:value.hashes,mode:value.mode,source_run:value.source_run,rng:value.rng,case_ref:value.schema===6?value.prestart?.case_ref:undefined,facility_initial:value.schema===12?value.facility.initial:undefined,origin_generation:value.schema===13?value.origin_generation:undefined,guidance_loss_at:value.schema===13?value.guidance_loss_at:undefined,initial_spares:value.schema===13?value.work.initial_spares:undefined,environment_profile:value.schema===13?value.environment.profile:undefined}));
     const seen=new Set<string>();let current=state;
     while(true){
       if(seen.has(current.run_id))throw new GameError('INVALID_SAVE');seen.add(current.run_id);
@@ -209,7 +209,7 @@ export class Game {
     if(source)await this.assert_writable(source.run_id);
     const epoch = await this.writer(),
       run_id = crypto.randomUUID();
-    if(is_integrated_field_definition(definition)){const state=initial_integrated_field_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,this.fixture.integrated_guidance_loss_at??null,this.fixture.integrated_spares??1);await this.commit(state,null,operation,creationFingerprint);return project_integrated_field_view(state);}
+    if(is_integrated_field_definition(definition)){const state=initial_integrated_field_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,this.fixture.integrated_guidance_loss_at??null,this.fixture.integrated_spares??1,source?.schema===13?source.environment.profile:this.fixture.integrated_environment??'nominal');await this.commit(state,null,operation,creationFingerprint);return project_integrated_field_view(state);}
     if(is_conflicting_action_definition(definition)){const state=await initial_conflicting_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,source?.schema===12?source.facility.initial:this.fixture.conflicting_facility);await this.commit(state,null,operation,creationFingerprint);return project_conflicting_action_view(state);}
     if(is_source_time_definition(definition)){const state=await initial_source_time_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_source_time_view(state,this.store.source_definitions);}
     if(is_outcome_definition(definition)){const state=initial_outcome_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id);await this.commit(state,null,operation,creationFingerprint);return project_outcome_view(state,this.store.outcome_definitions);}

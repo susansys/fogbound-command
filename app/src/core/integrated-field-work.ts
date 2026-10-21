@@ -3,7 +3,8 @@ import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusa
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
 import {integrated_object} from './integrated-field-definition';
 import type {IntegratedFieldState} from './integrated-field-state';
-import {integrate_movement,next_movement_boundary,settle_integrated_movement} from './integrated-field-geometry';
+import {integrate_movement,next_movement_boundary,complete_integrated_movement,settle_integrated_movement} from './integrated-field-geometry';
+import {apply_integrated_environment,next_environment_boundary} from './integrated-field-environment';
 type Site='A'|'B';type Actor='R'|'W';
 type ActivityIntent=Extract<IntegratedFieldEnvelope['intent'],{kind:'integrated_activity'}>;
 type Facility={condition:'faulted'|'unverified_after_replacement'|'operable';version:number};
@@ -135,9 +136,9 @@ function power(state:IntegratedFieldState,actor:Actor){
 }
 export function advance_integrated_world(state:IntegratedFieldState,to:number){
  let cursor=state.sim_time,steps=0;const p=state.definition.work_parameters;
- const settle=(at:number)=>{complete_work(state,at);settle_integrated_movement(state,at,new Set(active(state).map(activity=>activity.actor)));accept_work(state,at);};settle(cursor);
+ const settle=(at:number)=>{complete_work(state,at);complete_integrated_movement(state,at);apply_integrated_environment(state,at);settle_integrated_movement(state,at,new Set(active(state).map(activity=>activity.actor)));accept_work(state,at);};settle(cursor);
  while(cursor<to){
-  if(++steps>128)throw new GameError('INVALID_DEFINITION');let boundary=next_movement_boundary(state,cursor,to);
+  if(++steps>128)throw new GameError('INVALID_DEFINITION');let boundary=Math.min(next_movement_boundary(state,cursor,to),next_environment_boundary(state,cursor,to));
   for(const activity of active(state))if(activity.phase_ends_at>cursor)boundary=Math.min(boundary,activity.phase_ends_at);
   for(const order of state.work.pending)if(order.start_at>cursor)boundary=Math.min(boundary,order.start_at);
   for(const item of state.work.deliveries)if(item.received_at>cursor)boundary=Math.min(boundary,item.received_at);
