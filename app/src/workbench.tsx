@@ -160,8 +160,7 @@ export function Workbench() {
         ...(definitionRef==='ENG-PRESTART-REPLACE'?{case_ref:caseRef}:{}),
         operation_id: createOperation.current,
       });
-      if(result.ok&&result.view?.scenario_kind==='play_integrated_field')adoptView(result.view);
-      else if (result.ok && result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');adoptView(result.view);}
+      if (result.ok && result.view){const run=result.view.run_id;displaySession.current=new RegionalDisplaySession(run,displayStore,true,null,text=>{if(shownRun.current===run&&!historyActive.current)setDisplayStatus(text);});setDisplayStatus('地图关联正在核验');adoptView(result.view);}
       else if (!result.ok) setError(result.code);
     } catch {
       setError("CHANNEL_UNCERTAIN");

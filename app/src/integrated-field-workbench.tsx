@@ -45,7 +45,7 @@ export function IntegratedFieldWorkbench({view,transport,adopt,onLeave,channelEr
       if(!mounted.current||historyNow.current||current.current.run_id!==envelope.run_id)return;
       if(response.ok&&response.receipt?.run_id===envelope.run_id&&response.receipt.operation_id===envelope.operation_id&&response.receipt.kind===envelope.intent.kind&&adoptResponse(response)){
        pending.current=null;setUncertain(false);setNote(envelope.intent.kind==='save'?'已保存至 '+response.view!.sim_time/1000+' 秒':envelope.intent.kind==='integrated_move'?'移动命令已签发，等待当地接令及回报':envelope.intent.kind==='integrated_activity'?'现场命令已签发，等待当地接令及回报':envelope.intent.kind==='integrated_prepare'?'资料校验与准备已登记，等待共享席位确认':envelope.intent.kind==='advance'?'时间推进已确认':envelope.intent.kind==='rate'?'推进速度已确认':'继续已确认');
-       if(envelope.intent.kind==='save')void displaySession?.save(response.view!.revision);
+       if(envelope.intent.kind==='save'&&displaySession?.run===response.view!.run_id)void displaySession.save(response.view!.revision);
       }else if(!response.ok){setError(response.code);if(['CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','STALE_WRITER'].includes(response.code)){setUncertain(true);if(response.code!=='CHANNEL_UNCERTAIN')setLocalFault(true);}else{pending.current=null;setUncertain(false);const fresh=await transport.request({kind:'view',run_id:envelope.run_id});adoptResponse(fresh);}}
       else{setError('CHANNEL_UNCERTAIN');setUncertain(true);}
     }catch{if(mounted.current){setError('CHANNEL_UNCERTAIN');setUncertain(true);}}finally{inFlight.current=false;if(mounted.current)setBusy(false);}

@@ -1126,3 +1126,4 @@ dialog > header > button {
 .integrated-field-map .map-objects { position:absolute; }
 .integrated-field-map .scale { white-space:normal; text-align:right; }
 .integrated-field-map .height-bands { display:grid; grid-template-columns:1fr 1fr; gap:5px 8px; }
+.integrated-field-map .map-fallback { z-index:8; max-height:calc(100% - 120px); overflow:auto; }
