@@ -1,8 +1,8 @@
 import {test,expect} from '@playwright/test';
 // @ts-expect-error Artifact verifier is separately syntax-checked JavaScript.
-import {integratedAssetBoundary,integratedReleaseBoundary} from '../verification/integrated-release-boundary.mjs';
+import {integratedServedAssetBoundary,integratedReleaseBoundary} from '../verification/integrated-release-boundary.mjs';
 
-test('B33 release ignores clock selectors in URL storage and public messages',async({page},info)=>{const assets=integratedAssetBoundary('dist',false);await integratedReleaseBoundary(page,{expect,info});await info.attach('release-assets-clock-boundary.json',{body:JSON.stringify(assets),contentType:'application/json'});});
+test('B33 release ignores clock selectors in URL storage and public messages',async({page},info)=>{const assets=await integratedServedAssetBoundary(page);await integratedReleaseBoundary(page,{expect,info});await info.attach('release-assets-clock-boundary.json',{body:JSON.stringify(assets),contentType:'application/json'});});
 
 test('B33 catalogue keeps metre geometry, configuration mass and source categories visible',async({page},info)=>{
   await page.goto('/');
