@@ -53,7 +53,7 @@ export function issue_integrated_activity(state:IntegratedFieldState,envelope:In
  const basis=intent.basis_refs;if(basis.some(ref=>ref.run_id!==state.run_id)||new Set(basis.map(ref=>ref.id)).size!==basis.length)throw new GameError('INVALID_REQUEST');
  const delivered=delivered_work_reports(state),legal=new Set<string>(),point=state.definition.geometry.points[intent.target];
  const samePoint=(value:readonly number[])=>value.every((coordinate,index)=>coordinate===point[index]);
- if(samePoint(state.actors[intent.actor].known.point))legal.add(state.actors[intent.actor].known.evidence);
+ const known=state.actors[intent.actor].known;if(known&&samePoint(known.point))legal.add(known.evidence);
  for(const position of state.position_reports)if(position.actor===intent.actor&&position.received_at<=state.sim_time&&samePoint(position.point_um.map(value=>value/1000000)))legal.add(position.evidence);
  if(intent.actor==='R'&&intent.action==='read'&&intent.target==='A')legal.add('opening-A-access');
  // Resolve the registered approval identity here; the hard gate below still requires actual approval.
@@ -63,7 +63,7 @@ export function issue_integrated_activity(state:IntegratedFieldState,envelope:In
  let carried_approval:Approval|null=null,carried_facility:Facility|null=null;
  if(intent.actor==='R'){
   const position=state.actors.R.known,target=state.definition.geometry.points[intent.target];
-  if(!basis.some(ref=>ref.id===position.evidence)||position.point.some((value,index)=>value!==target[index]))throw new GameError('EVIDENCE_REQUIRED');
+  if(!position||!basis.some(ref=>ref.id===position.evidence)||position.point.some((value,index)=>value!==target[index]))throw new GameError('EVIDENCE_REQUIRED');
   if(intent.target==='A'){if(intent.action==='read'&&!basis.some(ref=>ref.id==='opening-A-access'))throw new GameError('EVIDENCE_REQUIRED');}
   else{
    const latest=known_facility(state),proof=delivered.find(({report,delivery})=>report.action==='repair'&&report.phase==='completed'&&report.target==='B'&&report.facility?.condition==='operable'&&report.facility.version===latest?.version&&basis.some(ref=>ref.id===delivery.id));

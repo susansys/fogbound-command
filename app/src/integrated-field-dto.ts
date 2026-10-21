@@ -32,7 +32,7 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
   if(catalog.objects.length!==integratedObjectDefinitions.length||new Set(catalog.objects.map(object=>object.object_ref.id)).size!==catalog.objects.length)return false;
   for(const expected of integratedObjectDefinitions){const object=catalog.objects.find(object=>object.object_ref.id===expected.id);if(!object||object.object_ref.run_id!==view.run_id||object.object_ref.kind!==expected.kind||object.scope_ref.run_id!==view.run_id||object.scope_ref.id!==expected.scope||JSON.stringify(object.properties)!==JSON.stringify(expected.properties))return false;if(expected.configuration?object.configuration_ref?.run_id!==view.run_id||object.configuration_ref.id!==expected.configuration:object.configuration_ref!==null)return false;}
   if(a.extent.some((value,index)=>value!==b.extent[index])||Object.values(a.points).some(point=>point.some((value,index)=>value<0||value>a.extent[index])))return false;
-  if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
+  if(new Set(view.actors.map(actor=>actor.id)).size!==view.actors.length||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(new Set(view.artifacts.map(artifact=>artifact.id)).size!==view.artifacts.length||view.artifacts.some(artifact=>artifact.observed_at>artifact.received_at||artifact.received_at>view.sim_time))return false;
   if(new Set(view.activity_reports.map(report=>report.id)).size!==view.activity_reports.length||view.activity_reports.some(report=>report.observed_at>report.received_at||report.received_at>view.sim_time))return false;
   // Field activity reports currently have one HQ delivery per immutable report.
@@ -43,6 +43,8 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
    if(!report||report.report_ref!==artifact.report_ref||report.artifact_ref!==artifact.id||report.actor!=='R'||report.action!=='read'||report.phase!=='completed'||report.target!==artifact.source||report.observed_at!==artifact.observed_at||report.received_at!==artifact.received_at)return false;
   }
   for(const report of view.activity_reports){
+   const subject=catalog.objects.find(object=>object.object_ref.id===report.target);
+   if(!subject||!(report.actor==='R'&&(report.action==='read'&&subject.properties.includes('data_source')||report.action==='observe'&&report.target==='A')||report.actor==='W'&&(report.action==='inspect'||report.action==='repair')&&subject.properties.includes('facility_condition')))return false;
    if(report.object_ref.run_id!==view.run_id||report.object_ref.kind!=='facility'||report.object_ref.id!==report.target||report.scope_ref.run_id!==view.run_id||report.scope_ref.id!==report.target||report.configuration_ref.run_id!==view.run_id||report.configuration_ref.id!==(report.actor==='R'?'R-INTEGRATED-4KG':'W-INTEGRATED-3KG'))return false;
    const completedRead=report.actor==='R'&&report.action==='read'&&report.phase==='completed';
    if(completedRead?!view.artifacts.some(artifact=>artifact.id===report.artifact_ref&&artifact.delivery_ref===report.id):report.artifact_ref!==null)return false;

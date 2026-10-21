@@ -6,6 +6,7 @@ import {publicGeometryDigest} from '../src/map-binding';
 import {toIntegratedRegion,fromIntegratedRegion} from '../src/integrated-field-map-binding';
 import type {IntegratedFieldPlayerView} from '../src/integrated-field-contracts';
 import {project_integrated_field_view} from '../src/core/integrated-field-engine';
+import {valid_response} from '../src/dto';
 const selector={schema:13,contract:'0.5.1',package_ref:{id:'INTEGRATED-FIELD-PACK-3',version:1}};
 test('NB3-MAP-AT005 unreported private positions and facility state cannot change the HQ scene or object catalogue',async()=>{
  const store=new Persistence('b33-owned-hq-map-pair-'+crypto.randomUUID());try{
@@ -14,6 +15,8 @@ test('NB3-MAP-AT005 unreported private positions and facility state cannot chang
   // physical transitions. Only hidden fields differ; lawful evidence is fixed.
   const other=structuredClone(state);other.actors.W.position_um=[50000000,150000000];other.work.facility={condition:'operable',version:3};other.work.inventory.available_spares=0;
   expect(project_integrated_field_view(other)).toEqual(project_integrated_field_view(state));expect(project_integrated_field_view(other).actors.find(actor=>actor.id==='W')!.position.point).toEqual([250,150]);expect(project_integrated_field_view(other).facility_knowledge).toBeNull();
+  Reflect.set(state.actors.W,'known',null);Reflect.set(other.actors.W,'known',null);const unknown=project_integrated_field_view(state);expect(unknown.actors.some(actor=>actor.id==='W')).toBe(false);expect(project_integrated_field_view(other)).toEqual(unknown);
+  expect(valid_response({request_id:'unknown-position',ok:true,view:unknown})).toBe(true);
  }finally{await store.delete();}
 });
 

@@ -42,6 +42,8 @@ export type IntegratedFieldPlayerView={
   status:'ready'|'queued'|'preparing'|'executing'|'terminating'|'finished'|'deadline';
   can_issue:boolean;next_action:string;gap:string;
   public_rules:{deadline:number;receipt_grace:number};model_catalog:IntegratedFieldCatalog;
+  // Position entries exist only when HQ has lawful evidence. Object identity
+  // remains in model_catalog.objects even when this list has no position.
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
   artifacts:Array<{id:string;report_ref:string;delivery_ref:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
   activity_reports:Array<{id:string;report_ref:string;artifact_ref:string|null;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';object_ref:IntegratedFieldObject['object_ref'];scope_ref:IntegratedFieldObject['scope_ref'];configuration_ref:NonNullable<IntegratedFieldObject['configuration_ref']>;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;

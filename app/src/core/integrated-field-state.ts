@@ -17,7 +17,7 @@ export type IntegratedFieldState={
   inputs:Array<{envelope:Envelope;at:number;revision:number;clock_to?:number}>;
 };
 export type IntegratedFieldMotion={status:'queued'|'moving'|'completed'|'blocked';target:'H'|'A'|'B';start_at:number;ended_at:number|null;legs:Array<[number,number]>;leg_index:number;leg_origin_um:[number,number];leg_progress_um:number;operation_id:string};
-export type IntegratedFieldActor={position_um:[number,number];motion:IntegratedFieldMotion|null;sender_free_at:number;known:{point:[number,number];observed_at:number;received_at:number;evidence:string}};
+export type IntegratedFieldActor={position_um:[number,number];motion:IntegratedFieldMotion|null;sender_free_at:number;known:{point:[number,number];observed_at:number;received_at:number;evidence:string}|null};
 export function initial_integrated_field_state(definition:IntegratedFieldDefinition,run_id:string,mode:Mode,generation:number,source_run:string|null,rng_origin:string,guidance_loss_at:number|null=null,initial_spares:0|1=1):IntegratedFieldState{
   if(guidance_loss_at!==null&&(!Number.isSafeInteger(guidance_loss_at)||guidance_loss_at<0||guidance_loss_at>900000))throw new GameError('INVALID_DEFINITION');
   const actor=(id:'R'|'W',point:[number,number]):IntegratedFieldActor=>({position_um:[point[0]*1000000,point[1]*1000000],motion:null,sender_free_at:0,known:{point:structuredClone(point),observed_at:0,received_at:0,evidence:'opening-'+id}});

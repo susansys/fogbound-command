@@ -18,6 +18,7 @@ test('NB3-AT017 registered HQ targets, local activity objects and report subject
   expect(next.view).toMatchObject({facility_knowledge:{condition:'faulted',method:'diagnostic',observed_at:31000,received_at:32000}});expect(valid_response({request_id:'objects-roles',ok:true,view:next.view})).toBe(true);
   const received=next.view as IntegratedFieldPlayerView;expect(received.activity_reports.at(-1)).toMatchObject({object_ref:{run_id:f.view.run_id,kind:'facility',id:'B',version:1},scope_ref:{run_id:f.view.run_id,kind:'scope',id:'B',version:1},configuration_ref:{run_id:f.view.run_id,kind:'configuration',id:'W-INTEGRATED-3KG',version:1}});
   const mismatched=structuredClone(received);mismatched.activity_reports.at(-1)!.target='A';expect(valid_response({request_id:'wrong-report-subject',ok:true,view:mismatched})).toBe(false);
+  const wrongCapability=structuredClone(received);wrongCapability.facility_knowledge=null;for(const report of wrongCapability.activity_reports){report.target='A';report.object_ref.id='A';report.scope_ref.id='A';}expect(valid_response({request_id:'wrong-report-capability',ok:true,view:wrongCapability})).toBe(false);
  }finally{await f.store.delete();}
 });
 
