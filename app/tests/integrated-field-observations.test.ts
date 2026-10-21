@@ -13,9 +13,9 @@ test.each(['long-window','short-window','early-window','zero-sent','zero-receive
  const f=await fixture();try{await f.move();await f.advance(267000);await f.activity('observe');await f.advance(289000);expect(valid_response({request_id:'original',ok:true,view:f.view})).toBe(true);const invalid=structuredClone(f.view),report=invalid.reports.find(report=>report.body.kind==='weather_observation')!,delivery=invalid.activity_reports.find(delivery=>delivery.report_ref===report.ref.id)!;
  if(mutation==='long-window')report.window.from=0;
  else if(mutation==='short-window')report.window.from=287999;
- else if(mutation==='early-window'){report.window={from:248000,to:268000};report.observed_at=report.generated_at=268000;delivery.observed_at=268000;delivery.sent_at=268000;delivery.received_at=269000;invalid.activity_reports.sort((a,b)=>a.received_at-b.received_at).forEach((entry,index)=>entry.knowledge_seq=index+1);}
+ else if(mutation==='early-window'){report.window={from:248000,to:268000};report.observed_at=report.generated_at=268000;delivery.observed_at=268000;delivery.sent_at=268000;delivery.received_at=269000;invalid.activity_reports.sort((a,b)=>a.received_at-b.received_at).forEach((entry,index)=>entry.knowledge_seq=index+1);const known=invalid.knowledge.reports.find(item=>item.report_ref===report.ref.id)!;known.observed_at=known.generated_at=268000;known.first_received_at=269000;known.age_ms=invalid.sim_time-268000;}
  else if(mutation==='zero-sent')delivery.sent_at=delivery.received_at;
- else delivery.received_at=delivery.sent_at;
+ else{delivery.received_at=delivery.sent_at;invalid.knowledge.reports.find(item=>item.report_ref===report.ref.id)!.first_received_at=delivery.received_at;}
  expect(valid_response({request_id:'invalid-timing',ok:true,view:invalid})).toBe(false);
  }finally{await f.store.delete();}
 });

@@ -1,6 +1,7 @@
 import {GameError} from '../contracts';
 import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusalReason,IntegratedMaterialReport} from '../integrated-field-contracts';
 import {material_report} from './integrated-field-reports';
+import {integrated_knowledge} from './integrated-field-knowledge';
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
 import {integrated_object} from './integrated-field-definition';
 import type {IntegratedFieldState} from './integrated-field-state';
@@ -35,10 +36,9 @@ const active=(state:IntegratedFieldState)=>state.work.activities.filter(activity
 const protected_at=(state:IntegratedFieldState,site:Site,at:number)=>!state.work.protection_loss||state.work.protection_loss.site!==site||at<state.work.protection_loss.at;
 function fail_unprotected_work(state:IntegratedFieldState,at:number){for(const activity of active(state)){if(activity.phase==='safe_stow'||!['read','repair'].includes(activity.action)||protected_at(state,activity.target,at))continue;activity.phase='safe_stow';activity.phase_started_at=at;activity.phase_ends_at=at+state.definition.work_parameters.safe_stow_ms;if(activity.action==='repair'&&state.work.inventory.reserved_spares){state.work.inventory.available_spares+=state.work.inventory.reserved_spares;state.work.inventory.reserved_spares=0;}}}
 export function delivered_work_reports(state:IntegratedFieldState){return state.work.deliveries.filter(delivery=>delivery.received_at<=state.sim_time).sort((a,b)=>a.received_at-b.received_at||a.id.localeCompare(b.id)).map(delivery=>({delivery,report:state.work.reports.find(report=>report.id===delivery.report_id)!}));}
-export function known_facility(state:IntegratedFieldState){
- const candidates=delivered_work_reports(state).filter(item=>item.report.facility).sort((a,b)=>b.report.facility!.version-a.report.facility!.version||b.report.observed_at-a.report.observed_at);
- const item=candidates[0];return item?{...item.report.facility!,method:item.report.action==='repair'?'functional' as const:'diagnostic' as const,observed_at:item.report.observed_at,received_at:item.delivery.received_at,evidence:item.delivery.id,report_ref:item.report.id}:null;
-}
+export function delivered_work_evidence(state:IntegratedFieldState){return delivered_work_reports(state).map(({report,delivery},index)=>({id:delivery.id,report_ref:report.id,message_ref:report.id+'-message',sender:report.actor,recipient:'HQ' as const,sent_at:delivery.sent_at,knowledge_seq:index+1,artifact_ref:report.artifact?.id??null,actor:report.actor,action:report.action,target:report.target,object_ref:structuredClone(report.material.object_ref),scope_ref:structuredClone(report.material.scope_ref),configuration_ref:structuredClone(report.material.configuration_ref),phase:report.phase,reason:report.reason,observed_at:report.observed_at,received_at:delivery.received_at}));}
+export function work_knowledge(state:IntegratedFieldState){return integrated_knowledge({run_id:state.run_id,as_of:state.sim_time,reports:state.work.reports.map(report=>report.material),deliveries:delivered_work_evidence(state),relations:[]});}
+export function known_facility(state:IntegratedFieldState){return work_knowledge(state).facility_knowledge;}
 function report(state:IntegratedFieldState,activity:Pick<Activity,'operation_id'|'actor'|'action'|'target'>&Partial<Pick<Activity,'started_at'>>,phase:WorkReport['phase'],at:number,artifact:IntegratedArtifact|null=null,facility:Facility|null=null,reason:IntegratedRefusalReason|null=null){
  const target=integrated_object(state.definition,activity.target,'facility');if(artifact&&(artifact.source!==activity.target||!target.properties.some(property=>property==='data_source'))||facility&&(activity.target!=='B'||!target.properties.some(property=>property==='facility_condition')))throw new GameError('INVALID_DEFINITION');
  const actor=state.actors[activity.actor],sent_at=Math.max(at,actor.sender_free_at),received_at=sent_at+1000;actor.sender_free_at=received_at;
