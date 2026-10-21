@@ -17,3 +17,9 @@
 | B32 实际验证边界 | main 的 872 核心／293 可移植浏览器成功与 Windows 18 项候选见证分开；main 按完整来源／构建绑定复用，不称再跑 18 项 | [候选 CI](https://github.com/susansys/fogbound-command/actions/runs/39301408530)、[main CI](https://github.com/susansys/fogbound-command/actions/runs/39311064383)及[验证记录](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/app/VERIFICATION.md)分别归属 |
 | B32 保留的观察限制 | 真实隐藏／恢复见证披露一次显示空闲计时重置；旧失败及历史启动异常根因未唯一确定。Agent 路线受既有学习影响，不代表真人 PLAY | 保留原失败和环境边界，不倒签修复或完整体验通过；主事件登记依正式负责人记录，不由文档填预期序号 |
 | 正式体验与完整验收 | 现有工程演练不能签收完整 244AT、正式玩家信息压力或现实拟真 | 待对应正式标准和实际证据，不由文档整理补填通过 |
+
+## B33 交付后的保留边界
+
+[PR #116](https://github.com/susansys/fogbound-command/pull/116) 已完成工程交付，主事件已正式登记为第 10 次工程交付；文档不重复计数，也不启动下一批。985 核心／313 可移植浏览器结果只归属实际候选及 main CI；本机 Windows 恢复和真实隐藏／继续证据另列，不用 Linux skip 代签。
+
+[固定验证记录](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/VERIFICATION.md) 的 S12 段落是交付前快照，文中当时待验项须与最终 PR／CI／交付记录区分；原克隆、曝光元数据、窄屏及验证前置失败保持历史记录，不能据后续成功倒签全部旧根因已修。受控逻辑时钟不是同等时长的真实墙钟体验；原 244AT 与正式 PLAY 仍未签收。
