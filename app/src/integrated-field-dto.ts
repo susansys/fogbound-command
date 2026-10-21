@@ -82,7 +82,7 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
    for(const receipt of termination.receipts){
     if(receipt.ref.run_id!==view.run_id||receipt.observed_at<termination.issued_at||receipt.received_at>view.sim_time||receipt.received_at<receipt.observed_at+1000)return false;
     if(receipt.ref.kind==='position_report'){const actor=view.actors.find(actor=>actor.id===receipt.actor);if(!actor||!receipt.position||actor.position.evidence!==receipt.ref.id||actor.position.observed_at!==receipt.observed_at||actor.position.received_at!==receipt.received_at||actor.position.point.some((value,index)=>value!==receipt.position![index]))return false;}
-    else{const original=view.reports.find(report=>report.ref.id===receipt.ref.id),delivery=view.activity_reports.find(delivery=>delivery.report_ref===receipt.ref.id);if(receipt.position!==null||!original||original.actor!==receipt.actor||original.phase!=='blocked'||!delivery||delivery.reason!=='termination'||original.observed_at!==receipt.observed_at||delivery.received_at!==receipt.received_at)return false;}
+    else{const original=view.reports.find(report=>report.ref.id===receipt.ref.id),delivery=view.activity_reports.find(delivery=>delivery.report_ref===receipt.ref.id);if(receipt.position!==null||!original||original.actor!==receipt.actor||original.phase!=='blocked'||!delivery||!['termination','protection_unavailable'].includes(delivery.reason??'')||original.observed_at!==receipt.observed_at||delivery.received_at!==receipt.received_at)return false;}
    }
   }
   if(new Set(view.artifacts.map(artifact=>artifact.delivery_ref)).size!==view.artifacts.length)return false;

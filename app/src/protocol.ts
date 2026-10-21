@@ -80,7 +80,7 @@ export function valid_request(
       Number.isSafeInteger(value.editing_seq) &&
       value.editing_seq >= 0
     );
-  if(value.kind==='operate_integrated_field')return fields(value,['kind','request_id','envelope'])&&valid_integrated_field_envelope(value.envelope)&&['integrated_prepare','integrated_activity','integrated_move','advance','pause','continue','rate','save'].includes(value.envelope.intent.kind);
+  if(value.kind==='operate_integrated_field')return fields(value,['kind','request_id','envelope'])&&valid_integrated_field_envelope(value.envelope)&&['integrated_prepare','integrated_activity','integrated_move','integrated_abort','advance','pause','continue','rate','save'].includes(value.envelope.intent.kind);
   if(value.kind==='operate_corridor')return fields(value,['kind','request_id','envelope'])&&valid_envelope(value.envelope,910000,true)&&!['tick','restore','replace_task','mode'].includes(value.envelope.intent.kind)&&(value.envelope.intent.kind!=='issue'||'kind' in value.envelope.intent.plan&&value.envelope.intent.plan.kind==='corridor_move');
   if (value.kind === "operate")
     return (
