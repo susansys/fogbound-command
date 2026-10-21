@@ -9,6 +9,17 @@ test('NB3-AT025 observation occupies 268 through 288 seconds and HQ receives the
  }finally{await f.store.delete();}
 });
 
+test.each(['long-window','short-window','early-window','zero-sent','zero-received'])('observation DTO rejects %s in a real received Game view',async mutation=>{
+ const f=await fixture();try{await f.move();await f.advance(267000);await f.activity('observe');await f.advance(289000);expect(valid_response({request_id:'original',ok:true,view:f.view})).toBe(true);const invalid=structuredClone(f.view),report=invalid.reports.find(report=>report.body.kind==='weather_observation')!,delivery=invalid.activity_reports.find(delivery=>delivery.report_ref===report.ref.id)!;
+ if(mutation==='long-window')report.window.from=0;
+ else if(mutation==='short-window')report.window.from=287999;
+ else if(mutation==='early-window'){report.window={from:248000,to:268000};report.observed_at=report.generated_at=268000;delivery.observed_at=268000;delivery.sent_at=268000;delivery.received_at=269000;invalid.activity_reports.sort((a,b)=>a.received_at-b.received_at).forEach((entry,index)=>entry.knowledge_seq=index+1);}
+ else if(mutation==='zero-sent')delivery.sent_at=delivery.received_at;
+ else delivery.received_at=delivery.sent_at;
+ expect(valid_response({request_id:'invalid-timing',ok:true,view:invalid})).toBe(false);
+ }finally{await f.store.delete();}
+});
+
 test('NB3-AT026 observing and reading cannot share R labour and a short reference check is not a long-window statistic',async()=>{
  const f=await fixture();try{await f.move();await f.advance(267000);await f.activity('observe');await f.advance(270000);await f.activity('read');await f.advance(289000);expect(f.view.activity_reports).toEqual(expect.arrayContaining([expect.objectContaining({action:'read',phase:'refused',reason:'station_busy'})]));expect(f.view.artifacts).toEqual([]);const state=await f.local();expect(state.work.activities.filter(activity=>activity.action==='read')).toEqual([]);expect(state.work.portable_energy_uJ.R).toBe(618000000);const weather=materials(f.view).find(report=>report.body.kind==='weather_observation')!;expect(weather.window).toEqual({from:268000,to:288000});expect(Reflect.has(weather.body,'hourly_average')).toBe(false);expect(Reflect.has(weather.body,'confidence')).toBe(false);
  }finally{await f.store.delete();}
