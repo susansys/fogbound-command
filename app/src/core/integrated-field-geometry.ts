@@ -12,7 +12,8 @@ function speed_um_per_ms(state:IntegratedFieldState,actor:IntegratedFieldActor):
  const parameters=state.definition.parameters;
  return (onAB(state,actor)?state.environment.ground==='wet'?parameters.ab_wet_speed.value:parameters.ab_dry_speed.value:parameters.ha_speed.value)*1000;
 }
-function positionReport(state:IntegratedFieldState,id:ActorId,at:number,label:string,operation_id=state.actors[id].motion!.operation_id){const actor=state.actors[id],received_at=Math.max(at,actor.sender_free_at)+1000;actor.sender_free_at=received_at;state.position_reports.push({actor:id,point_um:structuredClone(actor.position_um),observed_at:at,received_at,evidence:operation_id+'-'+label});}
+function positionReport(state:IntegratedFieldState,id:ActorId,at:number,label:string,operation_id=state.actors[id].motion!.operation_id){const actor=state.actors[id],received_at=Math.max(at,actor.sender_free_at)+1000;actor.sender_free_at=received_at;const report={actor:id,point_um:structuredClone(actor.position_um),observed_at:at,received_at,evidence:operation_id+'-'+label};state.position_reports.push(report);return report;}
+export function report_integrated_stop(state:IntegratedFieldState,id:ActorId,at:number,operation_id:string){return positionReport(state,id,at,'blocked',operation_id);}
 export function issue_integrated_move(state:IntegratedFieldState,envelope:Envelope){
  const intent=envelope.intent;if(intent.kind!=='integrated_move')throw new GameError('INVALID_INPUT');
  if(state.sim_time>=900000)throw new GameError('CONSTRAINT_DENIED');

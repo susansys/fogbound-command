@@ -4,7 +4,7 @@ import {record,fields} from '../protocol';
 import {hash} from './scenario';
 import {canonical,json_data} from './snapshot';
 import {load_kg,portable_energy} from './integrated-field-quantities';
-import {integratedObjectDefinitions,integratedKnowledgePolicy,type IntegratedObjectDefinition} from '../integrated-field-contracts';
+import {integratedObjectDefinitions,integratedKnowledgePolicy,integratedTerminationPolicy,type IntegratedObjectDefinition} from '../integrated-field-contracts';
 import {validate_environment_inputs} from './integrated-field-environment';
 export type IntegratedFieldDefinition=Omit<typeof raw,'schema'|'contract'|'scenario_kind'|'version'|'model_ref'|'geometry'>&{
   schema:13;contract:'0.5.1';scenario_kind:'play_integrated_field';version:1;
@@ -15,9 +15,10 @@ export type IntegratedFieldDefinition=Omit<typeof raw,'schema'|'contract'|'scena
   definition_hash:string;hashes:Record<string,string>;
   objects:readonly IntegratedObjectDefinition[];
   knowledge_policy:typeof integratedKnowledgePolicy;
+  termination_policy:typeof integratedTerminationPolicy;
 };
 export async function integrated_field_definition():Promise<IntegratedFieldDefinition>{
-  const body={...structuredClone(raw),objects:structuredClone(integratedObjectDefinitions),knowledge_policy:structuredClone(integratedKnowledgePolicy)};
+  const body={...structuredClone(raw),objects:structuredClone(integratedObjectDefinitions),knowledge_policy:structuredClone(integratedKnowledgePolicy),termination_policy:structuredClone(integratedTerminationPolicy)};
   validate_environment_inputs(body);
   if(body.schema!==13||body.contract!=='0.5.1'||body.scenario_kind!=='play_integrated_field'||body.geometry.unit!=='m'||body.geometry.metres_per_coordinate!==1||body.model_ref.id!=='INTEGRATED-FIELD-MODEL-3'||body.model_ref.version!==1)throw new GameError('INVALID_DEFINITION');
   for(const point of Object.values(body.geometry.points))if(point.length!==2||point.some(value=>!Number.isFinite(value)))throw new GameError('INVALID_DEFINITION');
@@ -31,7 +32,7 @@ export async function integrated_field_definition():Promise<IntegratedFieldDefin
   for(const value of Object.values(body.work_parameters))if(!Number.isSafeInteger(value*1000)||value<0)throw new GameError('INVALID_DEFINITION');
   if(body.parameters.ha_speed.unit!=='m/s'||body.parameters.ha_speed.category!=='C'||!Number.isFinite(body.parameters.ha_speed.value)||body.parameters.ha_speed.value<=0||body.parameter_sources.r_mass.unit!=='kg'||body.parameter_sources.deadline.unit!=='ms')throw new GameError('INVALID_DEFINITION');
   const hashes={model:await hash(canonical(body.model_ref)),geometry:await hash(canonical(body.geometry)),rules:await hash(canonical(body.public_rules)),configurations:await hash(canonical(body.configurations)),parameters:await hash(canonical({values:body.parameters,sources:body.parameter_sources})),sources:await hash(canonical(body.sources))};
-  const work_hashes={...hashes,knowledge:await hash(canonical(body.knowledge_policy)),objects:await hash(canonical(body.objects)),environment:await hash(canonical(body.environment_inputs)),work:await hash(canonical(body.work_parameters)),data_sources:await hash(canonical(body.synthetic_data_sources)),data_payload_A:await hash(body.synthetic_data_sources[0].payload),data_payload_B:await hash(body.synthetic_data_sources[1].payload)};
+  const work_hashes={...hashes,termination:await hash(canonical(body.termination_policy)),knowledge:await hash(canonical(body.knowledge_policy)),objects:await hash(canonical(body.objects)),environment:await hash(canonical(body.environment_inputs)),work:await hash(canonical(body.work_parameters)),data_sources:await hash(canonical(body.synthetic_data_sources)),data_payload_A:await hash(body.synthetic_data_sources[0].payload),data_payload_B:await hash(body.synthetic_data_sources[1].payload)};
   return {...body,hashes:work_hashes,definition_hash:await hash(canonical({...body,hashes:work_hashes}))} as unknown as IntegratedFieldDefinition;
 }
 export function integrated_object(definition:IntegratedFieldDefinition,id:string,kind:IntegratedObjectDefinition['kind']):IntegratedObjectDefinition{

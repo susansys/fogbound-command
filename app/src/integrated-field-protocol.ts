@@ -6,6 +6,7 @@ export function valid_integrated_field_envelope(value:unknown):value is Integrat
  if(valid_envelope(value,910000,true))return ['advance','tick','pause','continue','rate','mode','save','restore'].includes(value.intent.kind);
  if(!record(value)||!fields(value,['run_id','operation_id','expected_revision','intent'])||!valid_id(value.run_id)||!valid_id(value.operation_id)||!Number.isSafeInteger(value.expected_revision)||Number(value.expected_revision)<1||!record(value.intent))return false;
  const intent=value.intent;
+ if(intent.kind==='integrated_abort')return fields(intent,['kind','model_ref',...(Object.hasOwn(intent,'reason')?['reason']:[])])&&model(intent.model_ref)&&(!Object.hasOwn(intent,'reason')||typeof intent.reason==='string'&&intent.reason.trim().length>0&&intent.reason.length<=600);
  if(intent.kind==='integrated_prepare')return fields(intent,['kind','plan_ref','model_ref'])&&ref(intent.plan_ref)&&model(intent.model_ref);
  if(intent.kind==='integrated_activity'){
   const worker=intent.actor==='W';
