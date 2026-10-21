@@ -1,3 +1,4 @@
+import {initial_integrated_planning,type IntegratedPlanningState} from './integrated-field-plans';
 import {GameError,type Mode} from '../contracts';
 import type {IntegratedFieldEnvelope as Envelope} from '../integrated-field-contracts';
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
@@ -15,6 +16,7 @@ export type IntegratedFieldState={
   pending_moves:Array<{actor:'R'|'W';target:'H'|'A'|'B';start_at:number;operation_id:string}>;
   position_reports:Array<{actor:'R'|'W';point_um:[number,number];observed_at:number;received_at:number;evidence:string}>;
   work:IntegratedWorkState;
+  planning:IntegratedPlanningState;
   environment:IntegratedEnvironmentState;
   inputs:Array<{envelope:Envelope;at:number;revision:number;clock_to?:number}>;
 };
@@ -25,5 +27,5 @@ export function initial_integrated_field_state(definition:IntegratedFieldDefinit
   const actor=(id:'R'|'W',point:[number,number]):IntegratedFieldActor=>({position_um:[point[0]*1000000,point[1]*1000000],motion:null,sender_free_at:0,known:{point:structuredClone(point),observed_at:0,received_at:0,evidence:'opening-'+id}});
   return {schema:13,contract:'0.5.1',scenario_kind:'play_integrated_field',run_id,revision:1,sim_time:0,mode,rate:1,paused:mode==='research',finished:false,ended:false,status:'ready',source_run,
     definition_hash:definition.definition_hash,hashes:structuredClone(definition.hashes),definition:structuredClone(definition),guidance_loss_at,hq_sender_free_at:0,actors:{R:actor('R',definition.geometry.points.H),W:actor('W',definition.geometry.points.B)},position_reports:[],pending_moves:[],work:initial_integrated_work(definition,initial_spares,report_fixture),
-    environment:initial_integrated_environment(definition,environment_profile),rng:{algorithm:'xorshift32-v1',version:1,seed:1,state:1,origin:rng_origin,used:false},generation,origin_generation:generation,phase:'committed',inputs:[]};
+    planning:initial_integrated_planning(),environment:initial_integrated_environment(definition,environment_profile),rng:{algorithm:'xorshift32-v1',version:1,seed:1,state:1,origin:rng_origin,used:false},generation,origin_generation:generation,phase:'committed',inputs:[]};
 }

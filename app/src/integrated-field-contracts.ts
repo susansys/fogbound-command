@@ -30,7 +30,39 @@ export type IntegratedKnowledge={as_of:number;reports:Array<{report_ref:string;o
 type IntegratedModelRef={id:'INTEGRATED-FIELD-MODEL-3';version:1};
 export type IntegratedTerminationView={decision_ref:IntegratedFieldEvidenceRef&{kind:'termination_decision'};issued_at:number;reason:string|null;status:'terminating'|'confirmed';receipts:Array<{actor:'R'|'W';ref:IntegratedFieldEvidenceRef&{kind:'report'|'position_report'};observed_at:number;received_at:number;position:[number,number]|null}>};
 type IntegratedAbortIntent={kind:'integrated_abort';model_ref:IntegratedModelRef;reason?:string};
-export type IntegratedFieldIntent=IntegratedAbortIntent|Extract<import('./contracts').Intent,{kind:'advance'|'tick'|'pause'|'continue'|'rate'|'mode'|'save'|'restore'}>|{kind:'integrated_move';actor:'R'|'W';target:'H'|'A'|'B';model_ref:IntegratedModelRef}|{kind:'integrated_prepare';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef}|{kind:'integrated_activity';actor:'R';action:'read'|'observe';target:'A'|'B';model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]}|{kind:'integrated_activity';actor:'W';action:'inspect'|'repair';target:'B';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]};
+export const integratedPlanningPolicy={version:1,assessment_versions:32,basis_limit:8,plan_versions:32,problems:{facility_B:{target_scope:'B',question_type:'facility_condition',explanations:['operable','faulted','unverified_after_replacement'],report_scopes:['B'],assumption_ids:[]},field_task:{target_scope:'HA-AB',question_type:'field_action_conditions',explanations:['ready','requires_check','blocked'],report_scopes:['A','B'],assumption_ids:['P-MOVE-HA','P-MOVE-AB-DRY','P-MOVE-AB-WET','P-READ','P-STOW']}}} as const;
+export type IntegratedProblemId=keyof typeof integratedPlanningPolicy.problems;
+export type IntegratedPreference='undecided'|'operable'|'faulted'|'unverified_after_replacement'|'ready'|'requires_check'|'blocked';
+export type IntegratedPlanningRef<K extends 'working_assessment'|'field_plan'>={run_id:string;kind:K;id:string;version:number};
+export type IntegratedPlanningBasis=IntegratedFieldEvidenceRef&{kind:'report'|'delivery'};
+export type IntegratedAssumptionRef=IntegratedFieldEvidenceRef&{kind:'parameter'};
+export type IntegratedAssessment={ref:IntegratedPlanningRef<'working_assessment'>;problem_id:IntegratedProblemId;target_scope:'B'|'HA-AB';question_type:'facility_condition'|'field_action_conditions';explanations:IntegratedPreference[];preferred:IntegratedPreference;basis_refs:IntegratedPlanningBasis[];assumption_refs:IntegratedAssumptionRef[];as_of:number;supersedes:IntegratedPlanningRef<'working_assessment'>|null;reason?:string};
+export type IntegratedActionPayload={kind:'integrated_move';actor:'R'|'W';target:'H'|'A'|'B';model_ref:IntegratedModelRef}|{kind:'integrated_prepare';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef}|{kind:'integrated_activity';actor:'R';action:'read'|'observe';target:'A'|'B';model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]}|{kind:'integrated_activity';actor:'W';action:'inspect'|'repair';target:'B';plan_ref:IntegratedFieldEvidenceRef;model_ref:IntegratedModelRef;basis_refs:IntegratedFieldEvidenceRef[]};
+export type IntegratedActionIntent=IntegratedActionPayload&{saved_plan_ref?:IntegratedPlanningRef<'field_plan'>};
+export function integrated_plan_gates(action:IntegratedActionPayload):string[]{
+ const gates=['HQ_authority','same_model_configuration','deadline','local_acceptance'];if(action.kind!=='integrated_prepare')gates.push('message_service');
+ if(action.kind==='integrated_activity'){gates.push('legal_position');if(action.action==='read'){gates.push('local_capacity_and_protection');if(action.target==='B')gates.push('delivered_functional_version','local_same_functional_version');}if(action.action==='repair')gates.push('same_plan_approval','delivered_diagnostic','local_spare_and_protection');}
+ else if(action.kind==='integrated_move')gates.push('local_guidance');else gates.push('shared_INTEL_slot');return gates;
+}
+export type IntegratedPlanEstimate={lower_ms:number|null;upper_ms:number|null;classification:'conditional_not_measured'|'unknown';excludes:'queue_and_local_refusal'};
+export function integrated_plan_estimate(view:Pick<IntegratedFieldPlayerView,'actors'|'geometry'>&{parameters:readonly IntegratedFieldParameter[]},action:IntegratedActionPayload):IntegratedPlanEstimate{
+ const value=(id:string)=>view.parameters.find(parameter=>parameter.id===id)?.value;
+ let lower:number|undefined,upper:number|undefined;
+ if(action.kind==='integrated_move'){
+  const from=view.actors.find(actor=>actor.id===action.actor)?.position.point[0],to=view.geometry.points[action.target][0],middle=view.geometry.points.A[0],ha=value('P-MOVE-HA'),dry=value('P-MOVE-AB-DRY'),wet=value('P-MOVE-AB-WET'),link=value('P-LINK');
+  if(from!==undefined&&ha&&dry&&wet&&link){const haDistance=Math.max(0,Math.min(Math.max(from,to),middle)-Math.min(from,to)),abDistance=Math.abs(to-from)-haDistance;lower=Math.ceil(haDistance/ha*1000)+Math.ceil(abDistance/dry*1000)+link;upper=Math.ceil(haDistance/ha*1000)+Math.ceil(abDistance/wet*1000)+link;}
+ }else{
+  const id=action.kind==='integrated_prepare'?'P-PREPARE':action.action==='read'?'P-READ':action.action==='observe'?'P-OBSERVE':action.action==='inspect'?'P-INSPECT':'P-REPAIR',duration=value(id),link=action.kind==='integrated_prepare'?0:value('P-LINK');if(duration!==undefined&&link!==undefined)lower=upper=duration+link;
+ }
+ return{lower_ms:lower??null,upper_ms:upper??null,classification:lower===undefined?'unknown':'conditional_not_measured',excludes:'queue_and_local_refusal'};
+}
+
+export type IntegratedSavedPlan={ref:IntegratedPlanningRef<'field_plan'>;assessment_ref:IntegratedPlanningRef<'working_assessment'>;as_of:number;supersedes:IntegratedPlanningRef<'field_plan'>|null;evidence_version_refs:IntegratedFieldEvidenceRef[];action:IntegratedActionPayload;model_ref:IntegratedModelRef;definition_hash:string;model_hash:string;configuration_ref:IntegratedFieldObject['configuration_ref'];path_refs:Array<IntegratedFieldEvidenceRef&{kind:'road'}>;parameter_snapshot:IntegratedFieldParameter[];position_snapshot:IntegratedFieldPlayerView['actors'];estimate:IntegratedPlanEstimate;hard_gates:string[];conditions:string[];unknowns:string[];note?:string};
+export type IntegratedPlanIssue={plan_ref:IntegratedPlanningRef<'field_plan'>;operation_id:string;issued_at:number;payload:IntegratedActionIntent};
+export type IntegratedPlanningView={catalog:typeof integratedPlanningPolicy;assessments:IntegratedAssessment[];plans:Array<{plan:IntegratedSavedPlan;has_new_material:boolean}>;issues:IntegratedPlanIssue[]};
+export type IntegratedAssessmentIntent={kind:'integrated_assess';model_ref:IntegratedModelRef;base_ref:IntegratedPlanningRef<'working_assessment'>|null;draft:{problem_id:IntegratedProblemId;preferred?:IntegratedPreference;basis_refs:IntegratedPlanningBasis[];assumption_refs:IntegratedAssumptionRef[];reason?:string}};
+export type IntegratedSavePlanIntent={kind:'integrated_save_plan';model_ref:IntegratedModelRef;base_ref:IntegratedPlanningRef<'field_plan'>|null;assessment_ref:IntegratedPlanningRef<'working_assessment'>;action:IntegratedActionPayload;note?:string};
+export type IntegratedFieldIntent=IntegratedAssessmentIntent|IntegratedSavePlanIntent|IntegratedActionIntent|IntegratedAbortIntent|Extract<import('./contracts').Intent,{kind:'advance'|'tick'|'pause'|'continue'|'rate'|'mode'|'save'|'restore'}>;
 export type IntegratedFieldEnvelope={run_id:string;operation_id:string;expected_revision:number;intent:IntegratedFieldIntent};
 export type IntegratedFieldSourceRef={id:string;version:1};
 export type IntegratedFieldParameter={id:string;value:number;unit:string;category:'A'|'C'|'T';label:string;source_ref:IntegratedFieldSourceRef};
@@ -42,6 +74,7 @@ export type IntegratedFieldCatalog={
     segments:Array<{id:'HA'|'AB';length_m:number}>};
   configurations:Array<{actor:'R'|'W';id:string;load_kg:number;capacity_l:number;occupied_l:number;storage_bytes?:number;
     equipment:{id:string;mass_kg:number;battery_included:boolean;battery_wh:number;battery_nominal_j:number;battery_available_j:number}}>;
+  definition_hash:string;model_hash:string;
   calibration_status:'conditional_not_measured';parameters:IntegratedFieldParameter[];
   sources:Array<{id:string;version:number;document_version:string;publication_date:null;sales_sku:null;url?:string;reading_scope?:string;source_register_sha256?:string;content_sha256?:string}>;
 };
@@ -56,6 +89,7 @@ export type IntegratedFieldPlayerView={
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
   reports:IntegratedMaterialReport[];
   knowledge:IntegratedKnowledge;
+  planning:IntegratedPlanningView;
   termination:IntegratedTerminationView|null;
   artifacts:Array<{id:string;report_ref:string;delivery_ref:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
   activity_reports:Array<{id:string;report_ref:string;message_ref:string;sender:'R'|'W';recipient:'HQ';sent_at:number;knowledge_seq:number;artifact_ref:string|null;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';object_ref:IntegratedFieldObject['object_ref'];scope_ref:IntegratedFieldObject['scope_ref'];configuration_ref:NonNullable<IntegratedFieldObject['configuration_ref']>;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;
