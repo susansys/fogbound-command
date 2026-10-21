@@ -9,8 +9,8 @@ import type {Request} from './transport';
 import {parse_outcome_envelope} from './outcome-protocol';
 import {action_request_result,type CurrentAction,type ActionRequest} from './conflicting-action-progress';
 type HeadquartersReceivedRow={id:string;at:number;sender:string;text:string;kind:string};
-export function HeadquartersReceivedRecords({rows,description='按总部收到时刻排列；原文及递交分别保留'}:{rows:HeadquartersReceivedRow[];description?:string}){
- return <section className='bottom-log outcome-received-log' aria-label='总部已收回报记录'><div className='log-heading'><div><strong>已收到的回报</strong><span>{rows.length} 条递交记录</span></div><span>{description}</span></div><div className='log-lines'>{rows.length===0?<p>尚未收到回报。</p>:rows.map(item=><details key={item.id}><summary><time>{clock(item.at)}</time><span>{item.sender}</span><span className='received-excerpt'>{item.text}</span><small>{item.kind}</small></summary><p>{item.text}</p><small>总部已收递交记录：{item.id}</small></details>)}</div></section>;
+export function HeadquartersReceivedRecords({rows,description='按总部收到时刻排列；原文及递交分别保留',onRead}:{rows:HeadquartersReceivedRow[];description?:string;onRead?:(id:string,origin:HTMLButtonElement)=>void}){
+ return <section className='bottom-log outcome-received-log' aria-label='总部已收回报记录'><div className='log-heading'><div><strong>已收到的回报</strong><span>{rows.length} 条递交记录</span></div><span>{description}</span></div><div className='log-lines'>{rows.length===0?<p>尚未收到回报。</p>:rows.map(item=><details key={item.id}><summary><time>{clock(item.at)}</time><span>{item.sender}</span><span className='received-excerpt'>{item.text}</span><small>{item.kind}</small></summary><p>{item.text}</p><small>总部已收递交记录：{item.id}</small>{onRead&&<button onClick={event=>onRead(item.id,event.currentTarget)}>查看报告原文</button>}</details>)}</div></section>;
 }
 export function HeadquartersFooter(){return <footer className='global-footer'><span>虚构娱乐 · 地形与行动均为合成场景</span><span>以总部已收凭证组织行动</span></footer>;}
 type Props=Omit<IntelligenceWorkbenchProps,'view'|'outcomeSlot'|'outcomeFrame'|'extraBusy'|'onBusyChange'>&{view:OutcomePlayerView};

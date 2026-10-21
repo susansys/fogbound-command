@@ -1,5 +1,6 @@
 import {GameError} from '../contracts';
-import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusalReason} from '../integrated-field-contracts';
+import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusalReason,IntegratedMaterialReport} from '../integrated-field-contracts';
+import {material_report} from './integrated-field-reports';
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
 import {integrated_object} from './integrated-field-definition';
 import type {IntegratedFieldState} from './integrated-field-state';
@@ -10,10 +11,13 @@ type ActivityIntent=Extract<IntegratedFieldEnvelope['intent'],{kind:'integrated_
 type Facility={condition:'faulted'|'unverified_after_replacement'|'operable';version:number};
 type Approval={plan_ref:IntegratedFieldEvidenceRef;approval_ref:IntegratedFieldEvidenceRef;approved_at:number};
 export type IntegratedArtifact={id:string;source:Site;logical_size_bytes:number;verified:true;completed_at:number;synthetic_payload_ref:string;logical_checksum_ref:string;model_integrity_digest:string};
-type Activity={operation_id:string;actor:Actor;action:'read'|'observe'|'inspect'|'repair';target:Site;phase:'prepare'|'copy'|'verify'|'stow'|'observe'|'inspect'|'isolate'|'replace'|'functional_verify'|'completed'|'blocked';started_at:number;phase_started_at:number;phase_ends_at:number;copied_bytes:number;verified_bytes:number;ended_at:number|null};
-type WorkReport={id:string;operation_id:string;actor:Actor;action:Activity['action'];target:Site;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;generated_at:number;artifact:IntegratedArtifact|null;facility:Facility|null};
+type Activity={operation_id:string;actor:Actor;action:'read'|'observe'|'inspect'|'repair';target:Site;phase:'prepare'|'copy'|'verify'|'stow'|'observe'|'inspect'|'isolate'|'replace'|'functional_verify'|'safe_stow'|'completed'|'blocked';started_at:number;phase_started_at:number;phase_ends_at:number;copied_bytes:number;verified_bytes:number;ended_at:number|null};
+type WorkReport={id:string;operation_id:string;actor:Actor;action:Activity['action'];target:Site;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;generated_at:number;artifact:IntegratedArtifact|null;facility:Facility|null;material:IntegratedMaterialReport};
+export type IntegratedProtectionLoss={site:Site;at:number};
+export type IntegratedReportFixture={protection_loss?:IntegratedProtectionLoss|null;repeat_terminal_delivery?:boolean};
 export type IntegratedWorkState={
  initial_spares:0|1;
+ protection_loss:IntegratedProtectionLoss|null;repeat_terminal_delivery:boolean;
  pending:Array<{operation_id:string;start_at:number;intent:ActivityIntent;carried_approval:Approval|null;carried_facility:Facility|null}>;
  activities:Activity[];artifacts:IntegratedArtifact[];reports:WorkReport[];
  deliveries:Array<{id:string;report_id:string;sent_at:number;received_at:number;recipient:'HQ'}>;
@@ -22,22 +26,25 @@ export type IntegratedWorkState={
  processing_busy_until:number;
  preparation:null|{plan_ref:IntegratedFieldEvidenceRef;approval_ref:IntegratedFieldEvidenceRef;status:'queued'|'validating'|'preparing'|'approved';start_at:number;validation_end:number;preparation_end:number;approved_at:number|null};
 };
-export function initial_integrated_work(definition:IntegratedFieldDefinition,initial_spares:0|1=1):IntegratedWorkState{if(initial_spares!==0&&initial_spares!==1)throw new GameError('INVALID_DEFINITION');return{initial_spares,pending:[],activities:[],artifacts:[],reports:[],deliveries:[],portable_energy_uJ:{R:0,W:0},fixed_source_energy_uJ:{A:0,B:0},storage_free_bytes:{R:definition.configurations.find(config=>config.actor==='R')!.storage_bytes!,H:16000000000},facility:{condition:'faulted',version:1},inventory:{available_spares:initial_spares,reserved_spares:0,installed_new:0,installed_old:1,recovered_old:0},processing_busy_until:definition.work_parameters.intel_busy_until_ms,preparation:null};}
+export function initial_integrated_work(definition:IntegratedFieldDefinition,initial_spares:0|1=1,fixture:IntegratedReportFixture={}):IntegratedWorkState{if(initial_spares!==0&&initial_spares!==1)throw new GameError('INVALID_DEFINITION');const loss=fixture.protection_loss??null;if(loss&&(!['A','B'].includes(loss.site)||!Number.isSafeInteger(loss.at)||loss.at<0||loss.at>900000)||fixture.repeat_terminal_delivery!==undefined&&typeof fixture.repeat_terminal_delivery!=='boolean')throw new GameError('INVALID_DEFINITION');return{initial_spares,protection_loss:loss?structuredClone(loss):null,repeat_terminal_delivery:fixture.repeat_terminal_delivery??false,pending:[],activities:[],artifacts:[],reports:[],deliveries:[],portable_energy_uJ:{R:0,W:0},fixed_source_energy_uJ:{A:0,B:0},storage_free_bytes:{R:definition.configurations.find(config=>config.actor==='R')!.storage_bytes!,H:16000000000},facility:{condition:'faulted',version:1},inventory:{available_spares:initial_spares,reserved_spares:0,installed_new:0,installed_old:1,recovered_old:0},processing_busy_until:definition.work_parameters.intel_busy_until_ms,preparation:null};}
 export function integrate_energy_uJ(previous:number,watts:number,elapsed_ms:number):number{
  const amount=watts*1000*elapsed_ms,next=previous+amount;
  if(!Number.isSafeInteger(previous)||previous<0||!Number.isFinite(watts)||watts<0||!Number.isSafeInteger(elapsed_ms)||elapsed_ms<0||!Number.isSafeInteger(amount)||!Number.isSafeInteger(next))throw new GameError('INVALID_DEFINITION');return next;
 }
 const active=(state:IntegratedFieldState)=>state.work.activities.filter(activity=>!['completed','blocked'].includes(activity.phase));
-export function delivered_work_reports(state:IntegratedFieldState){return state.work.deliveries.filter(delivery=>delivery.received_at<=state.sim_time).map(delivery=>({delivery,report:state.work.reports.find(report=>report.id===delivery.report_id)!}));}
+const protected_at=(state:IntegratedFieldState,site:Site,at:number)=>!state.work.protection_loss||state.work.protection_loss.site!==site||at<state.work.protection_loss.at;
+function fail_unprotected_work(state:IntegratedFieldState,at:number){for(const activity of active(state)){if(activity.phase==='safe_stow'||!['read','repair'].includes(activity.action)||protected_at(state,activity.target,at))continue;activity.phase='safe_stow';activity.phase_started_at=at;activity.phase_ends_at=at+state.definition.work_parameters.safe_stow_ms;if(activity.action==='repair'&&state.work.inventory.reserved_spares){state.work.inventory.available_spares+=state.work.inventory.reserved_spares;state.work.inventory.reserved_spares=0;}}}
+export function delivered_work_reports(state:IntegratedFieldState){return state.work.deliveries.filter(delivery=>delivery.received_at<=state.sim_time).sort((a,b)=>a.received_at-b.received_at||a.id.localeCompare(b.id)).map(delivery=>({delivery,report:state.work.reports.find(report=>report.id===delivery.report_id)!}));}
 export function known_facility(state:IntegratedFieldState){
  const candidates=delivered_work_reports(state).filter(item=>item.report.facility).sort((a,b)=>b.report.facility!.version-a.report.facility!.version||b.report.observed_at-a.report.observed_at);
  const item=candidates[0];return item?{...item.report.facility!,method:item.report.action==='repair'?'functional' as const:'diagnostic' as const,observed_at:item.report.observed_at,received_at:item.delivery.received_at,evidence:item.delivery.id,report_ref:item.report.id}:null;
 }
-function report(state:IntegratedFieldState,activity:Pick<Activity,'operation_id'|'actor'|'action'|'target'>,phase:WorkReport['phase'],at:number,artifact:IntegratedArtifact|null=null,facility:Facility|null=null,reason:IntegratedRefusalReason|null=null){
+function report(state:IntegratedFieldState,activity:Pick<Activity,'operation_id'|'actor'|'action'|'target'>&Partial<Pick<Activity,'started_at'>>,phase:WorkReport['phase'],at:number,artifact:IntegratedArtifact|null=null,facility:Facility|null=null,reason:IntegratedRefusalReason|null=null){
  const target=integrated_object(state.definition,activity.target,'facility');if(artifact&&(artifact.source!==activity.target||!target.properties.some(property=>property==='data_source'))||facility&&(activity.target!=='B'||!target.properties.some(property=>property==='facility_condition')))throw new GameError('INVALID_DEFINITION');
  const actor=state.actors[activity.actor],sent_at=Math.max(at,actor.sender_free_at),received_at=sent_at+1000;actor.sender_free_at=received_at;
- const id=activity.operation_id+'-'+phase+'-report';state.work.reports.push({id,operation_id:activity.operation_id,actor:activity.actor,action:activity.action,target:activity.target,phase,reason,observed_at:at,generated_at:at,artifact:artifact?structuredClone(artifact):null,facility:facility?structuredClone(facility):null});
+ const id=activity.operation_id+'-'+phase+'-report',material=material_report(state,{...activity,id,phase,at,started_at:activity.started_at??at,reason,artifact,facility});state.work.reports.push({id,operation_id:activity.operation_id,actor:activity.actor,action:activity.action,target:activity.target,phase,reason,observed_at:at,generated_at:at,artifact:artifact?structuredClone(artifact):null,facility:facility?structuredClone(facility):null,material});
  state.work.deliveries.push({id:activity.operation_id+'-'+phase+'-delivery',report_id:id,sent_at,received_at,recipient:'HQ'});
+ if(state.work.repeat_terminal_delivery&&phase!=='accepted'){state.work.deliveries.push({id:activity.operation_id+'-'+phase+'-redelivery',report_id:id,sent_at:received_at,received_at:received_at+1000,recipient:'HQ'});actor.sender_free_at=received_at+1000;}
 }
 export function issue_integrated_prepare(state:IntegratedFieldState,envelope:IntegratedFieldEnvelope){
  const intent=envelope.intent;if(intent.kind!=='integrated_prepare')throw new GameError('INVALID_INPUT');
@@ -87,7 +94,8 @@ function complete_work(state:IntegratedFieldState,at:number){
  if(prep){if(at===prep.start_at)prep.status='validating';if(at===prep.validation_end)prep.status='preparing';if(at===prep.preparation_end){prep.status='approved';prep.approved_at=at;}}
  for(const activity of active(state)){
   if(activity.phase_ends_at===at){
-   if(activity.phase==='prepare'){activity.phase='copy';activity.phase_ends_at=at+Math.ceil(p.read_bytes/p.copy_bytes_per_second*1000);}
+   if(activity.phase==='safe_stow'){activity.phase='blocked';activity.ended_at=at;report(state,activity,'blocked',at,null,null,'protection_unavailable');}
+   else if(activity.phase==='prepare'){activity.phase='copy';activity.phase_ends_at=at+Math.ceil(p.read_bytes/p.copy_bytes_per_second*1000);}
    else if(activity.phase==='copy'){activity.phase='verify';activity.phase_ends_at=at+Math.ceil(p.read_bytes/p.verify_bytes_per_second*1000);}
    else if(activity.phase==='verify'){activity.phase='stow';activity.phase_ends_at=at+p.read_stow_ms;}
    else if(activity.phase==='isolate'){activity.phase='replace';activity.phase_ends_at=at+p.replace_ms;}
@@ -107,7 +115,7 @@ function complete_work(state:IntegratedFieldState,at:number){
    }
    activity.phase_started_at=at;
   }
-  if(at>=900000&&activity.phase!=='completed'){activity.phase='blocked';activity.ended_at=at;report(state,activity,'blocked',at);}
+  if(at>=900000&&activity.phase!=='completed'&&activity.phase!=='blocked'&&activity.phase!=='safe_stow'){activity.phase='blocked';activity.ended_at=at;report(state,activity,'blocked',at);}
  }
 }
 function accept_work(state:IntegratedFieldState,at:number){
@@ -117,7 +125,7 @@ function accept_work(state:IntegratedFieldState,at:number){
   const localTarget=integrated_object(state.definition,intent.target,'facility');integrated_object(state.definition,intent.actor,'actor');if(intent.action==='read'&&!localTarget.properties.some(property=>property==='data_source')||(intent.action==='inspect'||intent.action==='repair')&&!localTarget.properties.some(property=>property==='facility_condition'))throw new GameError('INVALID_DEFINITION');
   const occupied=active(state).some(activity=>activity.actor===intent.actor||activity.target===intent.target);
   let reason:IntegratedRefusalReason|null=null;
-  if(at>=900000)reason='deadline';else if(occupied)reason='station_busy';else if(state.actors[intent.actor].motion?.status==='moving')reason='actor_in_transit';else if(position.some((value,index)=>value!==target[index]*1000000))reason='position_unconfirmed';
+  if(at>=900000)reason='deadline';else if(occupied)reason='station_busy';else if(state.actors[intent.actor].motion?.status==='moving')reason='actor_in_transit';else if(position.some((value,index)=>value!==target[index]*1000000))reason='position_unconfirmed';else if((intent.action==='read'||intent.action==='repair')&&!protected_at(state,intent.target,at))reason='protection_unavailable';
   else if(intent.action==='read'&&state.work.storage_free_bytes.R<p.read_bytes)reason='capacity';
   else if(intent.action==='read'&&intent.target==='B'&&(!order.carried_facility||state.work.facility.condition!=='operable'||state.work.facility.version!==order.carried_facility.version))reason='facility_unconfirmed';
   else if(intent.action==='repair'){if(!order.carried_approval)reason='preparation_unavailable';else if(state.work.inventory.available_spares<1)reason='missing_part';else if(state.work.facility.condition!=='faulted')reason='facility_condition';else if(at+p.isolate_ms+p.replace_ms+p.functional_verify_ms+10000>900000)reason='deadline';}
@@ -129,6 +137,7 @@ function accept_work(state:IntegratedFieldState,at:number){
 }
 function power(state:IntegratedFieldState,actor:Actor){
  const p=state.definition.work_parameters,activity=active(state).find(activity=>activity.actor===actor);
+ if(activity?.phase==='safe_stow')return actor==='R'?p.R_idle_watts:p.W_idle_watts;
  if(actor==='R')return activity?activity.action==='observe'?p.R_observe_watts:p.R_read_watts:p.R_idle_watts;
  if(activity)return activity.phase==='inspect'?p.W_inspect_watts:activity.phase==='isolate'?p.W_isolate_watts:activity.phase==='replace'?p.W_replace_watts:p.W_verify_watts;
  if(state.actors.W.motion?.status==='moving')return p.W_idle_watts;
@@ -136,17 +145,18 @@ function power(state:IntegratedFieldState,actor:Actor){
 }
 export function advance_integrated_world(state:IntegratedFieldState,to:number){
  let cursor=state.sim_time,steps=0;const p=state.definition.work_parameters;
- const settle=(at:number)=>{complete_work(state,at);complete_integrated_movement(state,at);apply_integrated_environment(state,at);settle_integrated_movement(state,at,new Set(active(state).map(activity=>activity.actor)));accept_work(state,at);};settle(cursor);
+ const settle=(at:number)=>{complete_work(state,at);complete_integrated_movement(state,at);apply_integrated_environment(state,at);fail_unprotected_work(state,at);settle_integrated_movement(state,at,new Set(active(state).map(activity=>activity.actor)));accept_work(state,at);};settle(cursor);
  while(cursor<to){
   if(++steps>128)throw new GameError('INVALID_DEFINITION');let boundary=Math.min(next_movement_boundary(state,cursor,to),next_environment_boundary(state,cursor,to));
   for(const activity of active(state))if(activity.phase_ends_at>cursor)boundary=Math.min(boundary,activity.phase_ends_at);
   for(const order of state.work.pending)if(order.start_at>cursor)boundary=Math.min(boundary,order.start_at);
   for(const item of state.work.deliveries)if(item.received_at>cursor)boundary=Math.min(boundary,item.received_at);
+  if(state.work.protection_loss&&state.work.protection_loss.at>cursor)boundary=Math.min(boundary,state.work.protection_loss.at);
   if(state.work.preparation)for(const at of [state.work.preparation.start_at,state.work.preparation.validation_end,state.work.preparation.preparation_end])if(at>cursor)boundary=Math.min(boundary,at);
   if(boundary<=cursor)throw new GameError('INVALID_SAVE');const elapsed=boundary-cursor,running=active(state);
   state.work.portable_energy_uJ.R=integrate_energy_uJ(state.work.portable_energy_uJ.R,power(state,'R'),elapsed);state.work.portable_energy_uJ.W=integrate_energy_uJ(state.work.portable_energy_uJ.W,power(state,'W'),elapsed);
   integrate_movement(state,cursor,boundary);
-  for(const activity of running)if(activity.action==='read'){
+  for(const activity of running)if(activity.action==='read'&&activity.phase!=='safe_stow'){
    state.work.fixed_source_energy_uJ[activity.target]=integrate_energy_uJ(state.work.fixed_source_energy_uJ[activity.target],p.fixed_source_watts,elapsed);
    if(activity.phase==='copy')activity.copied_bytes=Math.min(p.read_bytes,activity.copied_bytes+p.copy_bytes_per_second*elapsed/1000);
    if(activity.phase==='verify')activity.verified_bytes=Math.min(p.read_bytes,activity.verified_bytes+p.verify_bytes_per_second*elapsed/1000);
