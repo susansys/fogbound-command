@@ -1,4 +1,5 @@
 import {test,expect} from 'vitest';
+import {integrated_plan_estimate} from '../src/integrated-field-contracts';
 import {Game} from '../src/core/game';import {Persistence} from '../src/core/persistence';import {valid_response} from '../src/dto';import {valid_request} from '../src/protocol';
 import type {IntegratedFieldEnvelope,IntegratedFieldPlayerView,IntegratedPlanningBasis,IntegratedPlanningRef,IntegratedPreference,IntegratedProblemId} from '../src/integrated-field-contracts';import type {IntegratedFieldState} from '../src/core/integrated-field-state';
 async function fixture(){
@@ -11,6 +12,24 @@ async function fixture(){
  const prepare=async()=>{const plan_ref=ref('B33-PLAN-1');await apply({kind:'integrated_prepare',plan_ref,model_ref:model()});await apply({kind:'integrated_activity',actor:'W',action:'inspect',target:'B',plan_ref,model_ref:model(),basis_refs:[]});await apply({kind:'integrated_move',actor:'R',target:'A',model_ref:model()});await advance(103000);await apply({kind:'integrated_activity',actor:'R',action:'observe',target:'A',model_ref:model(),basis_refs:[ref(view.actors.find(actor=>actor.id==='R')!.position.evidence)]});await advance(165000);};
  return{store,game,apply,advance,prepare,assess,ref,basis,model,get view(){return view;},state:async()=>await store.read_committed(view.run_id) as IntegratedFieldState};
 }
+
+test('planning DTO rejects invented or future action evidence, lost paths and rewritten historical positions',async()=>{
+ const f=await fixture();try{await f.prepare();await f.assess();await f.apply({kind:'integrated_save_plan',model_ref:f.model(),base_ref:null,assessment_ref:f.view.planning.assessments[0].ref,action:{kind:'integrated_activity',actor:'R',action:'read',target:'B',model_ref:f.model(),basis_refs:[]}});
+ const old=f.view.planning.plans[0].plan;const inspection=f.view.activity_reports.find(report=>report.action==='inspect'&&report.phase==='completed')!;await f.apply({kind:'integrated_activity',actor:'W',action:'repair',target:'B',plan_ref:f.view.preparation!.plan_ref,model_ref:f.model(),basis_refs:[f.ref(inspection.id),f.view.preparation!.approval_ref!]});await f.advance(300000);expect(valid_response({request_id:'historical-plan',ok:true,view:f.view})).toBe(true);
+ const functional=f.view.activity_reports.find(report=>report.phase==='completed'&&report.action==='repair')!;expect(functional.received_at).toBeGreaterThan(old.as_of);
+ for(const id of ['invented-evidence',functional.id]){const view=structuredClone(f.view),plan=view.planning.plans[0].plan;if(plan.action.kind!=='integrated_activity')throw Error('fixture');plan.action.basis_refs=[f.ref(id)];plan.evidence_version_refs=[f.ref(id)];expect.soft(valid_response({request_id:'forged-action-evidence',ok:true,view}),id).toBe(false);}
+ await f.apply({kind:'integrated_save_plan',model_ref:f.model(),base_ref:old.ref,assessment_ref:f.view.planning.assessments[0].ref,action:{kind:'integrated_move',actor:'R',target:'B',model_ref:f.model()}});
+ for(const mutate of [(view:IntegratedFieldPlayerView)=>{view.planning.plans[1].plan.path_refs=[];},(view:IntegratedFieldPlayerView)=>{const plan=view.planning.plans[1].plan;plan.position_snapshot.find(actor=>actor.id==='R')!.position.point=[120,150];plan.estimate=integrated_plan_estimate({parameters:plan.parameter_snapshot,actors:plan.position_snapshot,geometry:view.geometry},plan.action);},(view:IntegratedFieldPlayerView)=>{view.planning.plans[1].plan.position_snapshot=[];}]){const view=structuredClone(f.view);mutate(view);expect.soft(valid_response({request_id:'forged-path-position',ok:true,view})).toBe(false);}
+ const snapshot=structuredClone(f.view.planning.plans[1].plan.position_snapshot);await f.apply({kind:'integrated_move',actor:'R',target:'B',model_ref:f.model()});await f.advance(500000);expect(f.view.actors.find(actor=>actor.id==='R')!.position.point).toEqual(f.view.geometry.points.B);expect(f.view.planning.plans[1].plan.position_snapshot).toEqual(snapshot);expect(valid_response({request_id:'past-position-still-valid',ok:true,view:f.view})).toBe(true);
+ }finally{await f.store.delete();}
+});
+
+test('new planning boundaries reject sparse arrays with extra enumerable properties without throwing',async()=>{
+ const f=await fixture();try{await f.prepare();await f.assess();const sparse=Object.assign(new Array(1),{extra:f.basis('invented')});
+ const request={request_id:'sparse-planning',kind:'operate_integrated_field',envelope:{run_id:f.view.run_id,operation_id:crypto.randomUUID(),expected_revision:f.view.revision,intent:{kind:'integrated_assess',model_ref:f.model(),base_ref:null,draft:{problem_id:'field_task',basis_refs:sparse,assumption_refs:[]}}}};expect.soft(valid_request(request)).toBe(false);
+ const view=structuredClone(f.view);view.planning.assessments[0].basis_refs=sparse;let accepted:unknown;expect(()=>{accepted=valid_response({request_id:'sparse-view',ok:true,view});}).not.toThrow();expect(accepted).toBe(false);
+ }finally{await f.store.delete();}
+});
 
 test('NB3-AT037 assessments preserve undecided and immutable32 versions; reject excess, invalid cross-scope and unreceived bases',async()=>{
  const f=await fixture();try{await f.prepare();const diagnostic=f.view.reports.find(report=>report.method==='diagnostic')!,weather=f.view.reports.find(report=>report.method==='reference_comparison')!;await f.assess('field_task',undefined,[f.basis(diagnostic.ref.id),f.basis(weather.ref.id)]);const first=structuredClone(f.view.planning.assessments[0]);expect(first).toMatchObject({target_scope:'HA-AB',problem_id:'field_task',preferred:'undecided',as_of:165000,basis_refs:[{kind:'report',id:diagnostic.ref.id},{kind:'report',id:weather.ref.id}],assumption_refs:[{kind:'parameter',id:'P-MOVE-AB-WET'}],supersedes:null});expect(Object.hasOwn(first,'reason')).toBe(false);
