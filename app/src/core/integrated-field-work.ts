@@ -1,6 +1,7 @@
 import {GameError} from '../contracts';
 import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusalReason} from '../integrated-field-contracts';
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
+import {integrated_object} from './integrated-field-definition';
 import type {IntegratedFieldState} from './integrated-field-state';
 import {integrate_movement,next_movement_boundary,settle_integrated_movement} from './integrated-field-geometry';
 type Site='A'|'B';type Actor='R'|'W';
@@ -32,6 +33,7 @@ export function known_facility(state:IntegratedFieldState){
  const item=candidates[0];return item?{...item.report.facility!,method:item.report.action==='repair'?'functional' as const:'diagnostic' as const,observed_at:item.report.observed_at,received_at:item.delivery.received_at,evidence:item.delivery.id,report_ref:item.report.id}:null;
 }
 function report(state:IntegratedFieldState,activity:Pick<Activity,'operation_id'|'actor'|'action'|'target'>,phase:WorkReport['phase'],at:number,artifact:IntegratedArtifact|null=null,facility:Facility|null=null,reason:IntegratedRefusalReason|null=null){
+ const target=integrated_object(state.definition,activity.target,'facility');if(artifact&&(artifact.source!==activity.target||!target.properties.some(property=>property==='data_source'))||facility&&(activity.target!=='B'||!target.properties.some(property=>property==='facility_condition')))throw new GameError('INVALID_DEFINITION');
  const actor=state.actors[activity.actor],sent_at=Math.max(at,actor.sender_free_at),received_at=sent_at+1000;actor.sender_free_at=received_at;
  const id=activity.operation_id+'-'+phase+'-report';state.work.reports.push({id,operation_id:activity.operation_id,actor:activity.actor,action:activity.action,target:activity.target,phase,reason,observed_at:at,generated_at:at,artifact:artifact?structuredClone(artifact):null,facility:facility?structuredClone(facility):null});
  state.work.deliveries.push({id:activity.operation_id+'-'+phase+'-delivery',report_id:id,sent_at,received_at,recipient:'HQ'});
@@ -111,6 +113,7 @@ function accept_work(state:IntegratedFieldState,at:number){
  const pending=state.work.pending.filter(order=>order.start_at===at);state.work.pending=state.work.pending.filter(order=>order.start_at!==at);
  for(const order of pending){
   const intent=order.intent,p=state.definition.work_parameters,target=state.definition.geometry.points[intent.target],position=state.actors[intent.actor].position_um;
+  const localTarget=integrated_object(state.definition,intent.target,'facility');integrated_object(state.definition,intent.actor,'actor');if(intent.action==='read'&&!localTarget.properties.some(property=>property==='data_source')||(intent.action==='inspect'||intent.action==='repair')&&!localTarget.properties.some(property=>property==='facility_condition'))throw new GameError('INVALID_DEFINITION');
   const occupied=active(state).some(activity=>activity.actor===intent.actor||activity.target===intent.target);
   let reason:IntegratedRefusalReason|null=null;
   if(at>=900000)reason='deadline';else if(occupied)reason='station_busy';else if(state.actors[intent.actor].motion?.status==='moving')reason='actor_in_transit';else if(position.some((value,index)=>value!==target[index]*1000000))reason='position_unconfirmed';

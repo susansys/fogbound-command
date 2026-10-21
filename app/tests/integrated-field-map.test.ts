@@ -5,7 +5,17 @@ import {regionOrigin,sampleSimulationHeight} from '../src/regional-terrain';
 import {publicGeometryDigest} from '../src/map-binding';
 import {toIntegratedRegion,fromIntegratedRegion} from '../src/integrated-field-map-binding';
 import type {IntegratedFieldPlayerView} from '../src/integrated-field-contracts';
+import {project_integrated_field_view} from '../src/core/integrated-field-engine';
 const selector={schema:13,contract:'0.5.1',package_ref:{id:'INTEGRATED-FIELD-PACK-3',version:1}};
+test('NB3-MAP-AT005 unreported private positions and facility state cannot change the HQ scene or object catalogue',async()=>{
+ const store=new Persistence('b33-owned-hq-map-pair-'+crypto.randomUUID());try{
+  const game=new Game(store),view=await game.create_run(selector,'research',crypto.randomUUID()),state=await store.read_committed(view.run_id);if(state?.schema!==13)throw Error('Expected integrated state');
+  // Projection-only alternatives; never loaded as Game states or used to prove
+  // physical transitions. Only hidden fields differ; lawful evidence is fixed.
+  const other=structuredClone(state);other.actors.W.position_um=[50000000,150000000];other.work.facility={condition:'operable',version:3};other.work.inventory.available_spares=0;
+  expect(project_integrated_field_view(other)).toEqual(project_integrated_field_view(state));expect(project_integrated_field_view(other).actors.find(actor=>actor.id==='W')!.position.point).toEqual([250,150]);expect(project_integrated_field_view(other).facility_knowledge).toBeNull();
+ }finally{await store.delete();}
+});
 
 test('NB3-MAP-AT002 actual metre geometry uses its own extent and independent regional control points',async()=>{
  const store=new Persistence('b33-owned-map-binding-'+crypto.randomUUID());try{

@@ -1,5 +1,6 @@
 import {record,valid_id} from './protocol';
 import type {IntegratedFieldPlayerView} from './integrated-field-contracts';
+import {integratedObjectDefinitions} from './integrated-field-contracts';
 type Check=(value:unknown)=>boolean;
 const text:Check=v=>typeof v==='string'&&v.length<=2000;
 const finite:Check=v=>typeof v==='number'&&Number.isFinite(v);
@@ -10,6 +11,8 @@ const shape=(v:unknown,required:Record<string,Check>,optional:Record<string,Chec
 const list=(check:Check,max:number):Check=>v=>Array.isArray(v)&&v.length<=max&&Object.keys(v).length===v.length&&v.every(check);
 const point:Check=v=>Array.isArray(v)&&v.length===2&&v.every(finite);
 const sourceRef:Check=v=>shape(v,{id:valid_id,version:one(1)});
+const objectRef:Check=v=>shape(v,{run_id:valid_id,kind:one('facility','road','environment','actor','equipment','component'),id:valid_id,version:one(1)});
+const registeredObject:Check=v=>shape(v,{object_ref:objectRef,scope_ref:v=>shape(v,{run_id:valid_id,kind:one('scope'),id:one('H','A','B','HA','AB','HA-AB'),version:one(1)}),configuration_ref:v=>v===null||shape(v,{run_id:valid_id,kind:one('configuration'),id:one('R-INTEGRATED-4KG','W-INTEGRATED-3KG'),version:one(1)}),properties:list(one('received_evidence','reception','processing','data_source','facility_condition','ground_condition','rain','fog','position','component_inventory','configuration'),2)});
 const geometry:Check=v=>shape(v,{id:valid_id,version:one(1),unit:one('m'),metres_per_coordinate:one(1),extent:v=>point(v)&&(v as number[]).every(value=>value>0&&value<=10000),points:v=>shape(v,{H:point,A:point,B:point}),segments:list(v=>shape(v,{id:one('HA','AB'),length_m:x=>finite(x)&&Number(x)>0}),2)});
 const configuration:Check=v=>shape(v,{actor:one('R','W'),id:valid_id,load_kg:x=>finite(x)&&Number(x)>=0&&Number(x)<=8,capacity_l:finite,occupied_l:finite,equipment:v=>shape(v,{id:valid_id,mass_kg:finite,battery_included:bool,battery_wh:finite,battery_nominal_j:finite,battery_available_j:finite})},{storage_bytes:time});
 const parameter:Check=v=>shape(v,{id:valid_id,value:finite,unit:one('kg','m/s','ms'),category:one('A','C','T'),label:text,source_ref:sourceRef});
@@ -20,12 +23,14 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
     public_rules:v=>shape(v,{deadline:one(900000),receipt_grace:one(10000)}),geometry,
     actors:list(v=>shape(v,{id:one('R','W'),position:v=>shape(v,{point,observed_at:time,received_at:time,evidence:valid_id})}),2),
     artifacts:list(v=>shape(v,{id:valid_id,report_ref:valid_id,delivery_ref:valid_id,source:one('A','B'),logical_size_bytes:one(1000000000),verified:one(true),observed_at:time,received_at:time}),32),
-    activity_reports:list(v=>shape(v,{id:valid_id,report_ref:valid_id,artifact_ref:v=>v===null||valid_id(v),actor:one('R','W'),action:one('read','observe','inspect','repair'),target:one('A','B'),phase:one('accepted','completed','refused','blocked'),reason:one(null,'missing_part','station_busy','actor_in_transit','position_unconfirmed','capacity','facility_unconfirmed','preparation_unavailable','facility_condition','deadline'),observed_at:time,received_at:time}),128),
+    activity_reports:list(v=>shape(v,{id:valid_id,report_ref:valid_id,artifact_ref:v=>v===null||valid_id(v),object_ref:objectRef,scope_ref:v=>shape(v,{run_id:valid_id,kind:one('scope'),id:one('A','B'),version:one(1)}),configuration_ref:v=>shape(v,{run_id:valid_id,kind:one('configuration'),id:one('R-INTEGRATED-4KG','W-INTEGRATED-3KG'),version:one(1)}),actor:one('R','W'),action:one('read','observe','inspect','repair'),target:one('A','B'),phase:one('accepted','completed','refused','blocked'),reason:one(null,'missing_part','station_busy','actor_in_transit','position_unconfirmed','capacity','facility_unconfirmed','preparation_unavailable','facility_condition','deadline'),observed_at:time,received_at:time}),128),
     facility_knowledge:v=>v===null||shape(v,{condition:one('faulted','unverified_after_replacement','operable'),version:v=>time(v)&&Number(v)>=1,method:one('diagnostic','functional'),observed_at:time,received_at:time,evidence:valid_id,report_ref:valid_id}),
     preparation:v=>v===null||shape(v,{plan_ref:v=>shape(v,{run_id:valid_id,id:one('B33-PLAN-1'),version:one(1)}),approval_ref:v=>v===null||shape(v,{run_id:valid_id,id:one('B33-PLAN-1-preparation-approval'),version:one(1)}),status:one('queued','validating','preparing','approved'),approved_at:v=>v===null||time(v)}),
-    model_catalog:v=>shape(v,{model_ref:v=>shape(v,{id:one('INTEGRATED-FIELD-MODEL-3'),version:one(1)}),geometry,configurations:list(configuration,2),calibration_status:one('conditional_not_measured'),parameters:list(parameter,128),sources:list(source,64)}),
+    model_catalog:v=>shape(v,{model_ref:v=>shape(v,{id:one('INTEGRATED-FIELD-MODEL-3'),version:one(1)}),objects:list(registeredObject,14),geometry,configurations:list(configuration,2),calibration_status:one('conditional_not_measured'),parameters:list(parameter,128),sources:list(source,64)}),
     replay_nodes:list(v=>shape(v,{revision:time,at:time,meaningful:bool,label:text}),10000),log:list(v=>shape(v,{id:valid_id,at:time,kind:text,text,evidence:valid_id}),10000)}))return false;
   const view=v as IntegratedFieldPlayerView,catalog=view.model_catalog,a=view.geometry,b=catalog.geometry;
+  if(catalog.objects.length!==integratedObjectDefinitions.length||new Set(catalog.objects.map(object=>object.object_ref.id)).size!==catalog.objects.length)return false;
+  for(const expected of integratedObjectDefinitions){const object=catalog.objects.find(object=>object.object_ref.id===expected.id);if(!object||object.object_ref.run_id!==view.run_id||object.object_ref.kind!==expected.kind||object.scope_ref.run_id!==view.run_id||object.scope_ref.id!==expected.scope||JSON.stringify(object.properties)!==JSON.stringify(expected.properties))return false;if(expected.configuration?object.configuration_ref?.run_id!==view.run_id||object.configuration_ref.id!==expected.configuration:object.configuration_ref!==null)return false;}
   if(a.extent.some((value,index)=>value!==b.extent[index])||Object.values(a.points).some(point=>point.some((value,index)=>value<0||value>a.extent[index])))return false;
   if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.actors.some(actor=>actor.position.observed_at>actor.position.received_at||actor.position.received_at>view.sim_time))return false;
   if(new Set(view.artifacts.map(artifact=>artifact.id)).size!==view.artifacts.length||view.artifacts.some(artifact=>artifact.observed_at>artifact.received_at||artifact.received_at>view.sim_time))return false;
@@ -38,6 +43,7 @@ export function integrated_field_player_view(v:unknown):v is IntegratedFieldPlay
    if(!report||report.report_ref!==artifact.report_ref||report.artifact_ref!==artifact.id||report.actor!=='R'||report.action!=='read'||report.phase!=='completed'||report.target!==artifact.source||report.observed_at!==artifact.observed_at||report.received_at!==artifact.received_at)return false;
   }
   for(const report of view.activity_reports){
+   if(report.object_ref.run_id!==view.run_id||report.object_ref.kind!=='facility'||report.object_ref.id!==report.target||report.scope_ref.run_id!==view.run_id||report.scope_ref.id!==report.target||report.configuration_ref.run_id!==view.run_id||report.configuration_ref.id!==(report.actor==='R'?'R-INTEGRATED-4KG':'W-INTEGRATED-3KG'))return false;
    const completedRead=report.actor==='R'&&report.action==='read'&&report.phase==='completed';
    if(completedRead?!view.artifacts.some(artifact=>artifact.id===report.artifact_ref&&artifact.delivery_ref===report.id):report.artifact_ref!==null)return false;
   }

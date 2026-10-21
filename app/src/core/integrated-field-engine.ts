@@ -1,16 +1,18 @@
-import type {IntegratedFieldPlayerView,IntegratedFieldParameter} from '../integrated-field-contracts';
+import type {IntegratedFieldPlayerView,IntegratedFieldParameter,IntegratedFieldObject} from '../integrated-field-contracts';
 import type {IntegratedFieldState} from './integrated-field-state';
 import {GameError} from '../contracts';
 import type {IntegratedFieldEnvelope as Envelope} from '../integrated-field-contracts';
 import {valid_integrated_field_envelope} from '../integrated-field-protocol';
 import {load_kg,portable_energy} from './integrated-field-quantities';
 import {issue_integrated_move} from './integrated-field-geometry';
+import {integrated_object} from './integrated-field-definition';
 import {advance_integrated_world,issue_integrated_activity,issue_integrated_prepare,delivered_work_reports,known_facility} from './integrated-field-work';
 export function project_integrated_field_view(state:IntegratedFieldState):IntegratedFieldPlayerView{
   const {definition}=state,geometry=definition.geometry;
   const r=definition.configurations.find(config=>config.actor==='R')?.items.find(item=>item.id==='EQ-G2-TU');if(!r)throw new GameError('INVALID_DEFINITION');
   const recipe=definition.work_parameters,read_ms=recipe.read_prepare_ms+Math.ceil(recipe.read_bytes/recipe.copy_bytes_per_second*1000)+Math.ceil(recipe.read_bytes/recipe.verify_bytes_per_second*1000)+recipe.read_stow_ms;
   const parameters=[{...definition.parameter_sources.r_mass,value:r.mass_kg},...Object.values(definition.parameters),{...definition.parameter_sources.read,value:read_ms},{...definition.parameter_sources.deadline,value:definition.public_rules.deadline}] as IntegratedFieldParameter[];
+  const objects:IntegratedFieldObject[]=definition.objects.map(object=>({object_ref:{run_id:state.run_id,kind:object.kind,id:object.id,version:1},scope_ref:{run_id:state.run_id,kind:'scope',id:object.scope,version:1},configuration_ref:object.configuration?{run_id:state.run_id,kind:'configuration',id:object.configuration,version:1}:null,properties:[...object.properties]}));
   const publicGeometry={id:geometry.id,version:1 as const,unit:'m' as const,metres_per_coordinate:1 as const,extent:structuredClone(geometry.extent),points:structuredClone(geometry.points),segments:geometry.segments.map(segment=>{
     const from=geometry.points[segment.points[0]],to=geometry.points[segment.points[1]];
     return {id:segment.id,length_m:Math.hypot(to[0]-from[0],to[1]-from[1])*geometry.metres_per_coordinate};
@@ -19,9 +21,9 @@ export function project_integrated_field_view(state:IntegratedFieldState):Integr
     can_issue:state.sim_time<900000,next_action:'查看合法位置与下达移动命令',gap:'',public_rules:structuredClone(definition.public_rules),
     actors:(['R','W'] as const).map(id=>({id,position:structuredClone(state.actors[id].known)})),
     artifacts:delivered_work_reports(state).filter(item=>item.report.artifact).map(({report,delivery})=>({id:report.artifact!.id,report_ref:report.id,delivery_ref:delivery.id,source:report.artifact!.source,logical_size_bytes:report.artifact!.logical_size_bytes,verified:true as const,observed_at:report.observed_at,received_at:delivery.received_at})),
-    activity_reports:delivered_work_reports(state).map(({report,delivery})=>({id:delivery.id,report_ref:report.id,artifact_ref:report.artifact?.id??null,actor:report.actor,action:report.action,target:report.target,phase:report.phase,reason:report.reason,observed_at:report.observed_at,received_at:delivery.received_at})),
+    activity_reports:delivered_work_reports(state).map(({report,delivery})=>{const target=objects.find(object=>object.object_ref.id===report.target)!,actor=objects.find(object=>object.object_ref.id===report.actor)!;return{id:delivery.id,report_ref:report.id,artifact_ref:report.artifact?.id??null,actor:report.actor,action:report.action,target:report.target,object_ref:{...target.object_ref},scope_ref:{...target.scope_ref},configuration_ref:{...actor.configuration_ref!},phase:report.phase,reason:report.reason,observed_at:report.observed_at,received_at:delivery.received_at};}),
     facility_knowledge:known_facility(state),preparation:state.work.preparation?{plan_ref:structuredClone(state.work.preparation.plan_ref),approval_ref:state.work.preparation.status==='approved'?structuredClone(state.work.preparation.approval_ref):null,status:state.work.preparation.status,approved_at:state.work.preparation.approved_at}:null,
-    model_catalog:{model_ref:structuredClone(definition.model_ref),geometry:publicGeometry,calibration_status:'conditional_not_measured',parameters:structuredClone(parameters),sources:structuredClone(definition.sources),configurations:definition.configurations.map(config=>{
+    model_catalog:{model_ref:structuredClone(definition.model_ref),objects,geometry:publicGeometry,calibration_status:'conditional_not_measured',parameters:structuredClone(parameters),sources:structuredClone(definition.sources),configurations:definition.configurations.map(config=>{
       if(config.actor!=='R'&&config.actor!=='W')throw new GameError('INVALID_DEFINITION');
       const equipment=config.items.find(item=>item.id===config.equipment_item_ref);if(!equipment)throw new GameError('INVALID_DEFINITION');
       const energy=portable_energy(config.battery_wh,config.initial_available_percent);
@@ -32,6 +34,7 @@ export function project_integrated_field_view(state:IntegratedFieldState):Integr
 export function apply_integrated_field_control(state:IntegratedFieldState,envelope:Envelope,clock_to?:number):IntegratedFieldState{
   if(!valid_integrated_field_envelope(envelope)||envelope.run_id!==state.run_id||!['integrated_prepare','integrated_activity','integrated_move','tick','advance','pause','continue','rate','mode','save','restore'].includes(envelope.intent.kind))throw new GameError('INVALID_INPUT');
   if(envelope.expected_revision!==state.revision)throw new GameError('STALE_REVISION');
+  if(envelope.intent.kind==='integrated_move'||envelope.intent.kind==='integrated_activity'){integrated_object(state.definition,envelope.intent.actor,'actor');integrated_object(state.definition,envelope.intent.target,'facility');}
   const next=structuredClone(state),intent=envelope.intent;
   const advance=(to:number)=>{
     if(!Number.isSafeInteger(to)||to>910000)throw new GameError('INVALID_INPUT');
