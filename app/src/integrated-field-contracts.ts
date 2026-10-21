@@ -1,4 +1,8 @@
 import type {Mode} from './contracts';
+export const integratedSensitivityPolicy={nominal:{work_scale:1,throughput_scale:1,AB_wet_all_time:false},'AB-wet-all-time':{work_scale:1,throughput_scale:1,AB_wet_all_time:true},'work-1.5':{work_scale:1.5,throughput_scale:1,AB_wet_all_time:false},'throughput-half':{work_scale:1,throughput_scale:0.5,AB_wet_all_time:false},'combined-slow':{work_scale:1.5,throughput_scale:0.5,AB_wet_all_time:true}} as const;
+export type IntegratedSensitivity=keyof typeof integratedSensitivityPolicy;
+export const integratedWorkConfigurations={standard:{work_scale:1,throughput_scale:1},'work-1.5':{work_scale:1.5,throughput_scale:1},'throughput-half':{work_scale:1,throughput_scale:0.5},'work-1.5-throughput-half':{work_scale:1.5,throughput_scale:0.5}} as const;
+export function integrated_work_configuration(profile:IntegratedSensitivity):keyof typeof integratedWorkConfigurations{return profile==='nominal'||profile==='AB-wet-all-time'?'standard':profile==='combined-slow'?'work-1.5-throughput-half':profile;}
 // Definition identities, not live property versions or private inventories.
 export const integratedObjectDefinitions=[
  {id:'HQ',kind:'facility',scope:'H',configuration:null,properties:['received_evidence']},
@@ -19,6 +23,15 @@ export const integratedObjectDefinitions=[
 export type IntegratedObjectDefinition=typeof integratedObjectDefinitions[number];
 export type IntegratedFieldObject={object_ref:{run_id:string;kind:IntegratedObjectDefinition['kind'];id:IntegratedObjectDefinition['id'];version:1};scope_ref:{run_id:string;kind:'scope';id:IntegratedObjectDefinition['scope'];version:1};configuration_ref:null|{run_id:string;kind:'configuration';id:NonNullable<IntegratedObjectDefinition['configuration']>;version:1};properties:Array<IntegratedObjectDefinition['properties'][number]>};
 export type IntegratedFieldEvidenceRef={run_id:string;id:string;version:1};
+export const integratedProcessPolicy={id:'B33-RETURN-PROCESS',version:1,stream:'return_processing',link_ms:1000,handover_phase:'H-HANDOVER',verification_phase:'INTEL-VERIFY',H_slots:1,INTEL_slots:1,report_kinds:['actor_progress','artifact_verification']} as const;
+export type IntegratedProcessRef<K extends 'report'|'delivery'|'message'|'command'|'artifact'|'process'|'phase'|'parameter_set'>=IntegratedFieldEvidenceRef&{kind:K};
+export type IntegratedProcessReport={ref:IntegratedProcessRef<'report'>;command_ref:IntegratedProcessRef<'command'>;reporter:'H'|'INTEL';actor:'R'|'W';method:'handover'|'HQ_verify';object_ref:{run_id:string;kind:'facility';id:'H'|'INTEL';version:1};scope_ref:{run_id:string;kind:'scope';id:'H';version:1};configuration_ref:NonNullable<IntegratedFieldObject['configuration_ref']>;model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1};definition_hash:string;process_ref:IntegratedProcessRef<'process'>&{hash:string};phase_ref:IntegratedProcessRef<'phase'>;parameter_set_ref:IntegratedProcessRef<'parameter_set'>&{hash:string};occupancy_refs:Array<{run_id:string;kind:'facility'|'actor';id:'H'|'INTEL'|'R'|'W';version:1}>;observed_at:number;generated_at:number;source_reported_at:number|null;source_time_status:{status:'known';basis_ref:IntegratedProcessRef<'report'>}|{status:'unknown';reason:'not_provided'};precision_kind:'model_exact';window:{from:number;to:number};time_basis:{observed_ref:IntegratedProcessRef<'report'>;generated_ref:IntegratedProcessRef<'report'>};body:
+ |{kind:'actor_progress';stage:'handover';phase:'completed';qualified:boolean;artifact_refs:Array<IntegratedProcessRef<'artifact'>>;recovered_old:number}
+ |{kind:'artifact_verification';stage:'HQ_verify';handover_ref:IntegratedProcessRef<'report'>;verified:boolean;artifact_refs:Array<IntegratedProcessRef<'artifact'>>;logical_size_bytes:number}
+ |{kind:'actor_progress';stage:'HQ_verify';phase:'completed';handover_ref:IntegratedProcessRef<'report'>;maintenance_verified:boolean;recovered_old:number}};
+export type IntegratedProcessDelivery={ref:IntegratedProcessRef<'delivery'>;report_ref:IntegratedProcessRef<'report'>;message_ref:IntegratedProcessRef<'message'>;stream:'return_processing';sender:'H'|'INTEL';recipient:'INTEL'|'HQ';sent_at:number;received_at:number;knowledge_seq:number};
+export type IntegratedReturnDelivery={ref:IntegratedProcessRef<'delivery'>;command_ref:IntegratedProcessRef<'command'>;message_ref:IntegratedProcessRef<'message'>;sender:'HQ';recipient:'R'|'W'|'H';sent_at:number;received_at:number};
+export type IntegratedReturnNotification={actor:'R'|'W';request_seq:number;operation_id:string;command_ref:IntegratedProcessRef<'command'>;message_ref:IntegratedProcessRef<'message'>;deliveries:[IntegratedReturnDelivery,IntegratedReturnDelivery]};
 export const integratedKnowledgePolicy={version:2,facility_precedence:'observed_at',functional_qualification:'delivered_unrevoked_report_version',revocation_issuer:'W',revocation_authority:'own_facility_observation',scope:'B'} as const;
 export const integratedTerminationPolicy={version:1,authority:'HQ-task-management',target_order:['R','W'],link_service_ms:1000,stow_parameter:'safe_stow_ms',non_preemptible:['replace','functional_verify'],completed_phase_before_notification:true} as const;
 export type IntegratedRefusalReason='missing_part'|'station_busy'|'actor_in_transit'|'position_unconfirmed'|'capacity'|'facility_unconfirmed'|'preparation_unavailable'|'facility_condition'|'deadline'|'protection_unavailable'|'termination';
@@ -67,6 +80,7 @@ export type IntegratedFieldEnvelope={run_id:string;operation_id:string;expected_
 export type IntegratedFieldSourceRef={id:string;version:1};
 export type IntegratedFieldParameter={id:string;value:number;unit:string;category:'A'|'C'|'T';label:string;source_ref:IntegratedFieldSourceRef};
 export type IntegratedFieldCatalog={
+  execution_profile:{id:keyof typeof integratedWorkConfigurations;configuration_hash:string};
   model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1};
   objects:IntegratedFieldObject[];
   geometry:{id:string;version:1;unit:'m';metres_per_coordinate:1;extent:[number,number];
@@ -90,6 +104,9 @@ export type IntegratedFieldPlayerView={
   reports:IntegratedMaterialReport[];
   knowledge:IntegratedKnowledge;
   planning:IntegratedPlanningView;
+  process_reports:IntegratedProcessReport[];process_deliveries:IntegratedProcessDelivery[];
+  handover_receipts:Array<{actor:'R'|'W';ref:IntegratedProcessRef<'delivery'>;report_ref:IntegratedProcessRef<'report'>;message_ref:IntegratedProcessRef<'message'>;generated_at:number;sent_at:number;received_at:number;verified_at:number;qualified:boolean;artifact_refs:string[];recovered_old:number}>;
+  result:null|{outcome:'success'|'failure'|'aborted'|'unconfirmed';at:number;finished_seq:number;missing:string[];evaluation:'not_evaluable'};
   termination:IntegratedTerminationView|null;
   artifacts:Array<{id:string;report_ref:string;delivery_ref:string;source:'A'|'B';logical_size_bytes:number;verified:true;observed_at:number;received_at:number}>;
   activity_reports:Array<{id:string;report_ref:string;message_ref:string;sender:'R'|'W';recipient:'HQ';sent_at:number;knowledge_seq:number;artifact_ref:string|null;actor:'R'|'W';action:'read'|'observe'|'inspect'|'repair';target:'A'|'B';object_ref:IntegratedFieldObject['object_ref'];scope_ref:IntegratedFieldObject['scope_ref'];configuration_ref:NonNullable<IntegratedFieldObject['configuration_ref']>;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;received_at:number}>;
@@ -99,3 +116,13 @@ export type IntegratedFieldPlayerView={
   replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   log:Array<{id:string;at:number;kind:string;text:string;evidence:string}>;
 };
+export type IntegratedTerminalIdentity={run_id:string;run_digest:string;finished_seq:number};
+export type IntegratedTruthRequest=IntegratedTerminalIdentity&{expected_meta_revision:number;operation_id:string};
+export type IntegratedTruthAcknowledgement=IntegratedTruthRequest&{payload_digest:string};
+export type IntegratedTruthGrant=IntegratedTerminalIdentity&{operation_id:string;request_digest:string;payload_digest:string;metadata_revision:number;ack_revision:number|null};
+export type IntegratedExposureSource=IntegratedTerminalIdentity&{operation_id:string;payload_digest:string;ack_revision:number};
+export type IntegratedFairness={run_id:string;definition_hash:string;truth_exposure:boolean;sources:IntegratedExposureSource[]};
+export type IntegratedDebriefSession=IntegratedTerminalIdentity&{definition_hash:string;metadata_revision:number;truth_exposure:boolean;pending_grant:null|{operation_id:string;metadata_revision:number;payload_digest:string};result:NonNullable<IntegratedFieldPlayerView['result']>;records:Array<{id:string;layer:'known_then'|'declared_reason';at:number;text:string;report_ref:string|null;history:{run_id:string;revision:number;at:number}}>};
+export type IntegratedTruthFacts={at:number;process_reports:IntegratedProcessReport[];process_deliveries:IntegratedProcessDelivery[];quantities:{portable_energy_j:Record<'R'|'W',number>;portable_energy_uJ:Record<'R'|'W',number>;fixed_source_j:Record<'A'|'B',number>;R_storage_free_bytes:number;H_qualified_bytes:number};actors:Array<{id:'R'|'W';point:[number,number]}>;facility:{condition:'faulted'|'unverified_after_replacement'|'operable';version:number};components:{available_spares:number;reserved_spares:number;installed_new:number;installed_old:number;recovered_old:number;recovered_at_H:number};handovers:Array<{actor:'R'|'W';operation_id:string;arrived_at:number;started_at:number|null;completed_at:number|null;report_received_at:number|null;verify_started_at:number|null;verified_at:number|null;received_at:number|null;qualified:boolean;interrupted_at:number|null}>};
+export type IntegratedTruthPayload=IntegratedTerminalIdentity&{layer:'engine_event';grant:{operation_id:string;metadata_revision:number;payload_digest:string};facts:IntegratedTruthFacts};
+export type IntegratedTruthConfirmation=IntegratedTerminalIdentity&{operation_id:string;payload_digest:string;truth_exposure:true;metadata_revision:number};

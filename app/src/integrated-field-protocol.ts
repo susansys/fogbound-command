@@ -1,10 +1,15 @@
 import {record,fields,valid_id,valid_envelope} from './protocol';
 import {integratedPlanningPolicy} from './integrated-field-contracts';
 import type {IntegratedFieldEnvelope} from './integrated-field-contracts';
+import {GameError} from './contracts';
 const model=(value:unknown)=>record(value)&&fields(value,['id','version'])&&value.id==='INTEGRATED-FIELD-MODEL-3'&&value.version===1;
 const ref=(value:unknown)=>record(value)&&fields(value,['run_id','id','version'])&&valid_id(value.run_id)&&valid_id(value.id)&&value.version===1;
 export const integrated_planning_ref=(value:unknown,kind:'working_assessment'|'field_plan')=>record(value)&&fields(value,['run_id','kind','id','version'])&&valid_id(value.run_id)&&value.kind===kind&&valid_id(value.id)&&Number.isSafeInteger(value.version)&&Number(value.version)>=1&&Number(value.version)<=32;
 const dense=(value:unknown[]):boolean=>Object.keys(value).length===value.length&&Array.from(value.keys()).every(index=>Object.hasOwn(value,index));
+export function parse_integrated_truth_request(value:unknown,confirmation=false):import('./integrated-field-contracts').IntegratedTruthRequest|import('./integrated-field-contracts').IntegratedTruthAcknowledgement{
+ if(!record(value)||!fields(value,['run_id','run_digest','finished_seq','expected_meta_revision','operation_id',...(confirmation?['payload_digest']:[])])||!valid_id(value.run_id)||!valid_id(value.operation_id)||typeof value.run_digest!=='string'||!/^[a-f0-9]{64}$/.test(value.run_digest)||!Number.isSafeInteger(value.finished_seq)||Number(value.finished_seq)<1||!Number.isSafeInteger(value.expected_meta_revision)||Number(value.expected_meta_revision)<1||confirmation&&(typeof value.payload_digest!=='string'||!/^[a-f0-9]{64}$/.test(value.payload_digest)))throw new GameError('INVALID_INPUT');
+ return structuredClone(value) as unknown as import('./integrated-field-contracts').IntegratedTruthRequest|import('./integrated-field-contracts').IntegratedTruthAcknowledgement;
+}
 const refs=(value:unknown,kinds:string[])=>Array.isArray(value)&&value.length<=8&&dense(value)&&value.every(value=>record(value)&&fields(value,['run_id','kind','id','version'])&&kinds.includes(String(value.kind))&&valid_id(value.run_id)&&valid_id(value.id)&&value.version===1)&&new Set(value.map(value=>JSON.stringify([value.run_id,value.kind,value.id,value.version]))).size===value.length;
 export function valid_integrated_action_payload(intent:unknown):boolean{
  if(!record(intent))return false;

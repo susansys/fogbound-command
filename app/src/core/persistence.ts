@@ -24,7 +24,7 @@ class Database extends Dexie {
     },
     string
   >;
-  metadata!: Table<{ key: string; value: number; inference?:{request_digest:string;request:import('../outcome-contracts').OutcomeInferenceRequest;note:import('../outcome-contracts').OutcomeInferenceNote}; debrief_template?:import('../outcome-contracts').OutcomeParticipantTemplate; debrief_transition?:{request_digest:string;session:import('../outcome-contracts').OutcomeDebriefSession}; debrief_anchor?:import('./outcome-debrief').OutcomeStoredDebriefAnchor; rejection?:import('../outcome-contracts').OutcomeRejectedDecision; debrief?:import('../outcome-contracts').OutcomeDebriefSession; truth_grant?:import('../outcome-contracts').OutcomeTruthGrant; fairness?:import('../outcome-contracts').OutcomeFairness; exposure?:{definition_hash:string;source:import('../outcome-contracts').OutcomeExposureSource} }, string>;
+  metadata!: Table<{ key: string; value: number; integrated_debrief?:import('../integrated-field-contracts').IntegratedDebriefSession; integrated_truth_grant?:import('../integrated-field-contracts').IntegratedTruthGrant; integrated_fairness?:import('../integrated-field-contracts').IntegratedFairness; integrated_exposure?:{definition_hash:string;source:import('../integrated-field-contracts').IntegratedExposureSource}; inference?:{request_digest:string;request:import('../outcome-contracts').OutcomeInferenceRequest;note:import('../outcome-contracts').OutcomeInferenceNote}; debrief_template?:import('../outcome-contracts').OutcomeParticipantTemplate; debrief_transition?:{request_digest:string;session:import('../outcome-contracts').OutcomeDebriefSession}; debrief_anchor?:import('./outcome-debrief').OutcomeStoredDebriefAnchor; rejection?:import('../outcome-contracts').OutcomeRejectedDecision; debrief?:import('../outcome-contracts').OutcomeDebriefSession; truth_grant?:import('../outcome-contracts').OutcomeTruthGrant; fairness?:import('../outcome-contracts').OutcomeFairness; exposure?:{definition_hash:string;source:import('../outcome-contracts').OutcomeExposureSource} }, string>;
   constructor(name: string) {
     super(name);
     this.version(4).stores({
@@ -103,6 +103,11 @@ export class Persistence {
           sim_time: state.sim_time,
         });
         if (expected === null) {
+          if(state.schema===13){
+            const sources:import('../integrated-field-contracts').IntegratedExposureSource[]=[];
+            for(const row of await this.db.metadata.where('key').startsWith('integrated-exposure:').toArray()){if(row.value!==1||!row.integrated_exposure)throw new GameError('INVALID_SAVE');if(row.integrated_exposure.definition_hash!==state.definition_hash)continue;await this.validate_integrated_exposure_source(row.integrated_exposure.source,state.definition_hash);sources.push(structuredClone(row.integrated_exposure.source));}
+            sources.sort((a,b)=>a.run_id.localeCompare(b.run_id)||a.operation_id.localeCompare(b.operation_id));await this.db.metadata.put({key:'integrated-fairness:'+state.run_id,value:1,integrated_fairness:{run_id:state.run_id,definition_hash:state.definition_hash,truth_exposure:sources.length>0,sources}});
+          }
           if(task?.schema===10){
             const sources:import('../outcome-contracts').OutcomeExposureSource[]=[];
             const exposed=await this.db.metadata.where('key').startsWith('outcome-exposure:').toArray();
@@ -231,6 +236,39 @@ export class Persistence {
   async outcome_inferences(run_id:string){
     const rows=await this.db.metadata.where('key').startsWith('outcome-inference:'+run_id+':').toArray();
     if(rows.some(row=>row.value!==1||!row.inference))throw new GameError('INVALID_SAVE');return rows.map(row=>structuredClone(row.inference!)).sort((a,b)=>a.note.created_sequence-b.note.created_sequence);
+  }
+  async ensure_integrated_debrief(session:import('../integrated-field-contracts').IntegratedDebriefSession,epoch:number){
+    return this.db.transaction('rw',this.db.metadata,async()=>{
+      if((await this.db.metadata.get('writer'))?.value!==epoch)throw new GameError('STALE_WRITER');const key='integrated-debrief:'+session.run_id,row=await this.db.metadata.get(key);
+      if(row){const saved=row.integrated_debrief;if(row.value!==1||!saved||!Number.isSafeInteger(saved.metadata_revision)||saved.metadata_revision<1||typeof saved.truth_exposure!=='boolean'||JSON.stringify(canonical({...saved,metadata_revision:1,truth_exposure:false,pending_grant:null}))!==JSON.stringify(canonical(session)))throw new GameError('INVALID_SAVE');if(saved.pending_grant){const grant=(await this.db.metadata.get('integrated-truth-grant:'+session.run_id+':'+saved.pending_grant.operation_id))?.integrated_truth_grant;if(!grant||grant.run_digest!==session.run_digest||grant.finished_seq!==session.finished_seq||grant.ack_revision!==null||grant.metadata_revision!==saved.pending_grant.metadata_revision||grant.payload_digest!==saved.pending_grant.payload_digest)throw new GameError('INVALID_SAVE');}return structuredClone(saved);}
+      await this.db.metadata.put({key,value:1,integrated_debrief:structuredClone(session)});return structuredClone(session);
+    });
+  }
+  async grant_integrated_truth(request:import('../integrated-field-contracts').IntegratedTruthRequest,request_digest:string,payload_digest:string,epoch:number){
+    return this.db.transaction('rw',this.db.metadata,async()=>{
+      if((await this.db.metadata.get('writer'))?.value!==epoch)throw new GameError('STALE_WRITER');const key='integrated-truth-grant:'+request.run_id+':'+request.operation_id,old=await this.db.metadata.get(key);
+      if(old){const grant=old.integrated_truth_grant;if(old.value!==1||!grant||grant.run_id!==request.run_id||grant.run_digest!==request.run_digest||grant.finished_seq!==request.finished_seq||grant.payload_digest!==payload_digest)throw new GameError('INVALID_SAVE');if(grant.request_digest!==request_digest)throw new GameError('OPERATION_ID_REUSED');return structuredClone(grant);}
+      const sessionKey='integrated-debrief:'+request.run_id,row=await this.db.metadata.get(sessionKey),session=row?.integrated_debrief;if(!session||session.run_digest!==request.run_digest||session.finished_seq!==request.finished_seq)throw new GameError('DEBRIEF_QUERY_REJECTED');if(session.metadata_revision!==request.expected_meta_revision)throw new GameError('OBJECT_VERSION_CONFLICT');
+      const grant:import('../integrated-field-contracts').IntegratedTruthGrant={run_id:request.run_id,run_digest:request.run_digest,finished_seq:request.finished_seq,operation_id:request.operation_id,request_digest,payload_digest,metadata_revision:session.metadata_revision+1,ack_revision:null},pending_grant={operation_id:grant.operation_id,metadata_revision:grant.metadata_revision,payload_digest:grant.payload_digest};await this.db.metadata.put({...row!,integrated_debrief:{...session,metadata_revision:grant.metadata_revision,pending_grant}});await this.db.metadata.put({key,value:1,integrated_truth_grant:grant});return structuredClone(grant);
+    });
+  }
+  async confirm_integrated_truth(request:import('../integrated-field-contracts').IntegratedTruthAcknowledgement,epoch:number){
+    return this.db.transaction('rw',[this.db.metadata,this.db.runs,this.db.snapshots],async()=>{
+      if((await this.db.metadata.get('writer'))?.value!==epoch)throw new GameError('STALE_WRITER');const key='integrated-truth-grant:'+request.run_id+':'+request.operation_id,row=await this.db.metadata.get(key),grant=row?.integrated_truth_grant;
+      if(row?.value!==1||!grant||grant.run_id!==request.run_id||grant.run_digest!==request.run_digest||grant.finished_seq!==request.finished_seq||grant.payload_digest!==request.payload_digest||grant.metadata_revision!==request.expected_meta_revision)throw new GameError('DEBRIEF_QUERY_REJECTED');
+      const answer=(revision:number):import('../integrated-field-contracts').IntegratedTruthConfirmation=>({run_id:request.run_id,run_digest:request.run_digest,finished_seq:request.finished_seq,operation_id:request.operation_id,payload_digest:request.payload_digest,truth_exposure:true,metadata_revision:revision});if(grant.ack_revision!==null)return answer(grant.ack_revision);
+      const sessionKey='integrated-debrief:'+request.run_id,sessionRow=await this.db.metadata.get(sessionKey),session=sessionRow?.integrated_debrief;if(!session||session.run_digest!==request.run_digest||session.finished_seq!==request.finished_seq)throw new GameError('DEBRIEF_QUERY_REJECTED');if(session.metadata_revision!==request.expected_meta_revision)throw new GameError('OBJECT_VERSION_CONFLICT');
+      const state=await this.db.runs.get(request.run_id),sealed=(await this.db.snapshots.get(request.run_id+':'+request.finished_seq))?.state;if(state?.schema!==13||!state.finished||sealed?.schema!==13||!sealed.finished||sealed.integrity!==request.run_digest||sealed.dag.result?.finished_seq!==request.finished_seq)throw new GameError('DEBRIEF_QUERY_REJECTED');
+      const revision=session.metadata_revision+1,source={run_id:request.run_id,run_digest:request.run_digest,finished_seq:request.finished_seq,operation_id:request.operation_id,payload_digest:request.payload_digest,ack_revision:revision};await this.db.metadata.put({...sessionRow!,integrated_debrief:{...session,metadata_revision:revision,truth_exposure:true,pending_grant:null}});await this.db.metadata.put({...row!,integrated_truth_grant:{...grant,ack_revision:revision}});await this.db.metadata.put({key:'integrated-exposure:'+request.run_id+':'+request.operation_id,value:1,integrated_exposure:{definition_hash:state.definition_hash,source}});return answer(revision);
+    });
+  }
+  private async validate_integrated_exposure_source(source:import('../integrated-field-contracts').IntegratedExposureSource,definition_hash:string){
+    const state=await this.db.runs.get(source.run_id),sealed=(await this.db.snapshots.get(source.run_id+':'+source.finished_seq))?.state,grant=(await this.db.metadata.get('integrated-truth-grant:'+source.run_id+':'+source.operation_id))?.integrated_truth_grant;
+    if(state?.schema!==13||!state.finished||state.definition_hash!==definition_hash||sealed?.schema!==13||!sealed.finished||sealed.definition_hash!==definition_hash||sealed.integrity!==source.run_digest||sealed.dag.result?.finished_seq!==source.finished_seq||!grant||grant.ack_revision===null)throw new GameError('INVALID_SAVE');for(const value of [state,sealed])await Dexie.waitFor(validate_state(value,this.play_definitions,this.mission_definitions,this.intelligence_definitions,this.outcome_definitions,this.source_definitions));
+    const expected={run_id:grant.run_id,run_digest:grant.run_digest,finished_seq:grant.finished_seq,operation_id:grant.operation_id,payload_digest:grant.payload_digest,ack_revision:grant.ack_revision};if(JSON.stringify(canonical(source))!==JSON.stringify(canonical(expected)))throw new GameError('INVALID_SAVE');
+  }
+  async integrated_fairness(run_id:string,definition_hash:string){
+    return this.db.transaction('r',[this.db.metadata,this.db.runs,this.db.snapshots],async()=>{const row=await this.db.metadata.get('integrated-fairness:'+run_id),fairness=row?.integrated_fairness;if(row?.value!==1||!fairness||fairness.run_id!==run_id||fairness.definition_hash!==definition_hash||fairness.truth_exposure!==(fairness.sources.length>0))throw new GameError('INVALID_SAVE');for(const source of fairness.sources)await this.validate_integrated_exposure_source(source,definition_hash);return structuredClone(fairness);});
   }
   async has_outcome_truth_exposure(run_id:string,run_digest:string,finished_seq:number){
     return this.db.transaction('r',[this.db.metadata,this.db.runs,this.db.snapshots],async()=>{

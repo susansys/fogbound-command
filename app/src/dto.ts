@@ -1,4 +1,4 @@
-import {integrated_field_player_view} from './integrated-field-dto';
+import {integrated_field_player_view,integrated_debrief_session,integrated_truth_payload,integrated_truth_confirmation,integrated_fairness} from './integrated-field-dto';
 import {conflicting_action_player_view} from './conflicting-action-dto';
 import {source_time_player_view} from './source-time-dto';
 import type {Response} from './transport';
@@ -97,6 +97,10 @@ const run:Check=v=>shape(v,{run_id:valid_id,revision:time,sim_time:time,mode:one
 const codes=['UNSUPPORTED','AUTHORITY_DENIED','EVIDENCE_REQUIRED','CONSTRAINT_HOLD','CONSTRAINT_DENIED','CAPACITY_CONFLICT','STATE_CONFIRMATION_REQUIRED','WRITER_BUSY','LOCK_UNSUPPORTED','INVALID_INPUT','INVALID_REQUEST','CONFIG_PARAMETER_MISSING','CONFIG_UNIT_MISMATCH','INVALID_DEFINITION','RUN_NOT_FOUND','STALE_REVISION','STALE_PLAN','STALE_ASSESSMENT','OPERATION_CONFLICT','OBJECT_VERSION_CONFLICT','OPERATION_ID_REUSED','ORDER_EXISTS','REPLACEMENT_LIMIT','AUTHORITY_EXPIRED','MODE_LOCKED','TIME_REVERSED','TIME_NOT_ADVANCED','RUN_ENDED','STALE_WRITER','CHANNEL_UNCERTAIN','STORAGE_UNCONFIRMED','ENGINE_UNCONFIRMED','CLOCK_PAUSED','INVALID_SAVE','HISTORY_READ_ONLY'];
 export function valid_response(value:unknown):value is Response{
   if(!record(value))return false;
+  if(Object.hasOwn(value,'integrated_debrief'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_debrief:integrated_debrief_session});
+  if(Object.hasOwn(value,'integrated_truth'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_truth:integrated_truth_payload});
+  if(Object.hasOwn(value,'integrated_truth_confirmation'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_truth_confirmation});
+  if(Object.hasOwn(value,'integrated_fairness'))return shape(value,{request_id:valid_id,ok:oneOf([true]),integrated_fairness});
   if(Object.hasOwn(value,'debrief_participants'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_participants:outcome_participant_receipt});
   if(Object.hasOwn(value,'debrief_inference'))return shape(value,{request_id:valid_id,ok:oneOf([true]),debrief_inference:outcome_inference_receipt});
   if(value.ok===false&&['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'].includes(String(value.code)))return shape(value,{request_id:valid_id,ok:oneOf([false]),code:oneOf(['DEBRIEF_NOT_AVAILABLE','DEBRIEF_QUERY_REJECTED','DEBRIEF_BUILD_FAILED'])});

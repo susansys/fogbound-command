@@ -19,6 +19,10 @@ export function issue_integrated_move(state:IntegratedFieldState,envelope:Envelo
  if(state.sim_time>=900000)throw new GameError('CONSTRAINT_DENIED');
  if(state.inputs.filter(input=>'actor' in input.envelope.intent&&input.envelope.intent.actor===intent.actor).length>=16)throw new GameError('CAPACITY_CONFLICT');
  const start_at=Math.max(state.sim_time,state.hq_sender_free_at)+1000;state.hq_sender_free_at=start_at;
+ if(intent.target==='H'){
+  const command_ref={run_id:state.run_id,kind:'command' as const,id:envelope.operation_id,version:1 as const},message_ref={run_id:state.run_id,kind:'message' as const,id:envelope.operation_id+'-return-message',version:1 as const},delivery=(recipient:'R'|'W'|'H'):import('../integrated-field-contracts').IntegratedReturnDelivery=>({ref:{run_id:state.run_id,kind:'delivery',id:envelope.operation_id+'-return-'+recipient,version:1},command_ref:structuredClone(command_ref),message_ref:structuredClone(message_ref),sender:'HQ',recipient,sent_at:start_at-1000,received_at:start_at});
+  state.dag.notifications.push({actor:intent.actor,request_seq:state.inputs.length,operation_id:envelope.operation_id,command_ref,message_ref,deliveries:[delivery(intent.actor),delivery('H')]});
+ }
  state.pending_moves.push({actor:intent.actor,target:intent.target,start_at,operation_id:envelope.operation_id});
 }
 export function complete_integrated_movement(state:IntegratedFieldState,at:number){

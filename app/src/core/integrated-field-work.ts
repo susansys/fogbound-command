@@ -1,9 +1,10 @@
 import {GameError} from '../contracts';
+import {settle_integrated_dag,next_integrated_dag_boundary,integrated_handover_occupied} from './integrated-field-dag';
 import type {IntegratedFieldEnvelope,IntegratedFieldEvidenceRef,IntegratedRefusalReason,IntegratedMaterialReport} from '../integrated-field-contracts';
 import {material_report} from './integrated-field-reports';
 import {integrated_knowledge} from './integrated-field-knowledge';
 import type {IntegratedFieldDefinition} from './integrated-field-definition';
-import {integrated_object} from './integrated-field-definition';
+import {integrated_object,integrated_work_parameters} from './integrated-field-definition';
 import type {IntegratedFieldState} from './integrated-field-state';
 import {integrate_movement,next_movement_boundary,complete_integrated_movement,settle_integrated_movement,report_integrated_stop} from './integrated-field-geometry';
 import {apply_integrated_environment,next_environment_boundary} from './integrated-field-environment';
@@ -16,9 +17,9 @@ type Activity={operation_id:string;actor:Actor;action:'read'|'observe'|'inspect'
 type WorkReport={id:string;operation_id:string;actor:Actor;action:Activity['action'];target:Site;phase:'accepted'|'completed'|'refused'|'blocked';reason:IntegratedRefusalReason|null;observed_at:number;generated_at:number;artifact:IntegratedArtifact|null;facility:Facility|null;material:IntegratedMaterialReport};
 export type IntegratedProtectionLoss={site:Site;at:number};
 export type IntegratedTerminationState={decision_ref:{run_id:string;kind:'termination_decision';id:string;version:1};issued_at:number;reason:string|null;notifications:Array<{actor:Actor;request_seq:number;sent_at:number;arrives_at:number;received_at:number|null}>;actors:Record<Actor,{activity_operation_id:string|null;stow_end_at:number|null;shutdown_at:number|null;receipt_ref:string|null;receipt_kind:'work'|'position'|null}>};
-export type IntegratedReportFixture={protection_loss?:IntegratedProtectionLoss|null;repeat_terminal_delivery?:boolean};
+export type IntegratedReportFixture={protection_loss?:IntegratedProtectionLoss|null;repeat_terminal_delivery?:boolean;functional_failure?:boolean};
 export type IntegratedWorkState={
- initial_spares:0|1;
+ initial_spares:0|1;functional_failure:boolean;
  protection_loss:IntegratedProtectionLoss|null;repeat_terminal_delivery:boolean;termination:IntegratedTerminationState|null;
  pending:Array<{operation_id:string;start_at:number;intent:ActivityIntent;carried_approval:Approval|null;carried_facility:Facility|null}>;
  activities:Activity[];artifacts:IntegratedArtifact[];reports:WorkReport[];
@@ -28,7 +29,7 @@ export type IntegratedWorkState={
  processing_busy_until:number;
  preparation:null|{plan_ref:IntegratedFieldEvidenceRef;approval_ref:IntegratedFieldEvidenceRef;status:'queued'|'validating'|'preparing'|'approved'|'cancelled';start_at:number;validation_end:number;preparation_end:number;approved_at:number|null};
 };
-export function initial_integrated_work(definition:IntegratedFieldDefinition,initial_spares:0|1=1,fixture:IntegratedReportFixture={}):IntegratedWorkState{if(initial_spares!==0&&initial_spares!==1)throw new GameError('INVALID_DEFINITION');const loss=fixture.protection_loss??null;if(loss&&(!['A','B'].includes(loss.site)||!Number.isSafeInteger(loss.at)||loss.at<0||loss.at>900000)||fixture.repeat_terminal_delivery!==undefined&&typeof fixture.repeat_terminal_delivery!=='boolean')throw new GameError('INVALID_DEFINITION');return{initial_spares,protection_loss:loss?structuredClone(loss):null,repeat_terminal_delivery:fixture.repeat_terminal_delivery??false,termination:null,pending:[],activities:[],artifacts:[],reports:[],deliveries:[],portable_energy_uJ:{R:0,W:0},fixed_source_energy_uJ:{A:0,B:0},storage_free_bytes:{R:definition.configurations.find(config=>config.actor==='R')!.storage_bytes!,H:16000000000},facility:{condition:'faulted',version:1},inventory:{available_spares:initial_spares,reserved_spares:0,installed_new:0,installed_old:1,recovered_old:0},processing_busy_until:definition.work_parameters.intel_busy_until_ms,preparation:null};}
+export function initial_integrated_work(definition:IntegratedFieldDefinition,initial_spares:0|1=1,fixture:IntegratedReportFixture={}):IntegratedWorkState{if(initial_spares!==0&&initial_spares!==1)throw new GameError('INVALID_DEFINITION');const loss=fixture.protection_loss??null;if(loss&&(!['A','B'].includes(loss.site)||!Number.isSafeInteger(loss.at)||loss.at<0||loss.at>900000)||fixture.repeat_terminal_delivery!==undefined&&typeof fixture.repeat_terminal_delivery!=='boolean'||fixture.functional_failure!==undefined&&typeof fixture.functional_failure!=='boolean')throw new GameError('INVALID_DEFINITION');return{initial_spares,functional_failure:fixture.functional_failure??false,protection_loss:loss?structuredClone(loss):null,repeat_terminal_delivery:fixture.repeat_terminal_delivery??false,termination:null,pending:[],activities:[],artifacts:[],reports:[],deliveries:[],portable_energy_uJ:{R:0,W:0},fixed_source_energy_uJ:{A:0,B:0},storage_free_bytes:{R:definition.configurations.find(config=>config.actor==='R')!.storage_bytes!,H:16000000000},facility:{condition:'faulted',version:1},inventory:{available_spares:initial_spares,reserved_spares:0,installed_new:0,installed_old:1,recovered_old:0},processing_busy_until:definition.work_parameters.intel_busy_until_ms,preparation:null};}
 export function integrate_energy_uJ(previous:number,watts:number,elapsed_ms:number):number{
  const amount=watts*1000*elapsed_ms,next=previous+amount;
  if(!Number.isSafeInteger(previous)||previous<0||!Number.isFinite(watts)||watts<0||!Number.isSafeInteger(elapsed_ms)||elapsed_ms<0||!Number.isSafeInteger(amount)||!Number.isSafeInteger(next))throw new GameError('INVALID_DEFINITION');return next;
@@ -37,7 +38,7 @@ const active=(state:IntegratedFieldState)=>state.work.activities.filter(activity
 const protected_at=(state:IntegratedFieldState,site:Site,at:number)=>!state.work.protection_loss||state.work.protection_loss.site!==site||at<state.work.protection_loss.at;
 function begin_stow(state:IntegratedFieldState,activity:Activity,at:number,reason:'protection_unavailable'|'termination'){
  if(activity.phase==='safe_stow')return;
- activity.stop_reason=reason;activity.phase='safe_stow';activity.phase_started_at=at;activity.phase_ends_at=at+state.definition.work_parameters.safe_stow_ms;
+ activity.stop_reason=reason;activity.phase='safe_stow';activity.phase_started_at=at;activity.phase_ends_at=at+integrated_work_parameters(state).safe_stow_ms;
  if(activity.action==='repair'&&state.work.inventory.reserved_spares){state.work.inventory.available_spares+=state.work.inventory.reserved_spares;state.work.inventory.reserved_spares=0;}
 }
 function fail_unprotected_work(state:IntegratedFieldState,at:number){for(const activity of active(state)){if(activity.phase==='safe_stow'||!['read','repair'].includes(activity.action)||protected_at(state,activity.target,at))continue;begin_stow(state,activity,at,'protection_unavailable');}}
@@ -53,7 +54,7 @@ function receive_termination(state:IntegratedFieldState,at:number){
   state.pending_moves=state.pending_moves.filter(command=>command.actor!==actor);state.work.pending=state.work.pending.filter(command=>command.intent.actor!==actor);
   if(motion&&(motion.status==='moving'||motion.status==='queued')){motion.status='blocked';motion.ended_at=at;}
   const activity=active(state).find(activity=>activity.actor===actor);if(activity){cleanup.activity_operation_id=activity.operation_id;if(state.definition.termination_policy.non_preemptible.some(phase=>phase===activity.phase))activity.stop_reason='termination';else begin_stow(state,activity,at,'termination');}
-  else cleanup.stow_end_at=at+state.definition.work_parameters.safe_stow_ms;
+  else cleanup.stow_end_at=at+integrated_work_parameters(state).safe_stow_ms;
  }
  for(const actor of state.definition.termination_policy.target_order){const cleanup=termination.actors[actor];if(cleanup.activity_operation_id===null&&cleanup.stow_end_at===at&&cleanup.receipt_ref===null){const report=report_integrated_stop(state,actor,at,termination.decision_ref.id+'-'+actor);cleanup.receipt_ref=report.evidence;cleanup.receipt_kind='position';cleanup.shutdown_at=report.received_at;}}
  if(state.definition.termination_policy.target_order.every(actor=>termination.actors[actor].shutdown_at!==null&&termination.actors[actor].shutdown_at!<=at)){state.ended=true;state.finished=true;state.paused=true;}
@@ -81,7 +82,7 @@ export function issue_integrated_prepare(state:IntegratedFieldState,envelope:Int
  if(state.sim_time>=900000)throw new GameError('CONSTRAINT_DENIED');
  if(intent.plan_ref.run_id!==state.run_id||intent.plan_ref.id!=='B33-PLAN-1')throw new GameError('INVALID_REQUEST');
  if(state.work.preparation)throw new GameError('ORDER_EXISTS');
- const p=state.definition.work_parameters,start_at=Math.max(state.sim_time,state.work.processing_busy_until),validation_end=start_at+p.validation_ms,preparation_end=validation_end+p.preparation_ms;
+ const p=integrated_work_parameters(state),start_at=Math.max(state.sim_time,state.work.processing_busy_until),validation_end=start_at+p.validation_ms,preparation_end=validation_end+p.preparation_ms;
  if(preparation_end>=900000)throw new GameError('CONSTRAINT_DENIED');
  state.work.preparation={plan_ref:structuredClone(intent.plan_ref),approval_ref:{run_id:state.run_id,id:'B33-PLAN-1-preparation-approval',version:1},status:'queued',start_at,validation_end,preparation_end,approved_at:null};state.work.processing_busy_until=preparation_end;
 }
@@ -120,7 +121,7 @@ export function issue_integrated_activity(state:IntegratedFieldState,envelope:In
  const start_at=Math.max(state.sim_time,state.hq_sender_free_at)+1000;state.hq_sender_free_at=start_at;state.work.pending.push({operation_id:envelope.operation_id,start_at,intent:structuredClone(intent),carried_approval,carried_facility});
 }
 function complete_work(state:IntegratedFieldState,at:number){
- const p=state.definition.work_parameters,prep=state.work.preparation;
+ const p=integrated_work_parameters(state),prep=state.work.preparation;
  if(prep&&prep.status!=='cancelled'){if(at===prep.start_at)prep.status='validating';if(at===prep.validation_end)prep.status='preparing';if(at===prep.preparation_end){prep.status='approved';prep.approved_at=at;}}
  for(const activity of active(state)){
   if(activity.phase_ends_at===at){
@@ -135,7 +136,7 @@ function complete_work(state:IntegratedFieldState,at:number){
     const inventory=state.work.inventory;if(inventory.reserved_spares!==1||inventory.installed_old!==1)throw new GameError('INVALID_SAVE');
     inventory.reserved_spares--;inventory.installed_new++;inventory.installed_old--;inventory.recovered_old++;state.work.facility={condition:'unverified_after_replacement',version:state.work.facility.version+1};if(stopBeforeNext)begin_stow(state,activity,at,'termination');else{activity.phase='functional_verify';activity.phase_ends_at=at+p.functional_verify_ms;}
    }else{
-    const phase=activity.phase;if(phase==='functional_verify'){state.work.facility={condition:'operable',version:state.work.facility.version+1};activity.functional_completed_at=at;}if(activity.stop_reason==='termination'){begin_stow(state,activity,at,'termination');continue;}activity.phase='completed';activity.ended_at=at;
+    const phase=activity.phase;if(phase==='functional_verify'){state.work.facility={condition:state.work.functional_failure?'faulted':'operable',version:state.work.facility.version+1};activity.functional_completed_at=at;}if(activity.stop_reason==='termination'){begin_stow(state,activity,at,'termination');continue;}activity.phase='completed';activity.ended_at=at;
     if(phase==='stow'){
      const source=state.definition.synthetic_data_sources.find(source=>source.site===activity.target)!;
      const artifact:IntegratedArtifact={id:activity.operation_id+'-artifact',source:activity.target,logical_size_bytes:p.read_bytes,verified:true,completed_at:at,synthetic_payload_ref:source.id,logical_checksum_ref:source.logical_checksum_ref,model_integrity_digest:state.hashes['data_payload_'+activity.target]};
@@ -152,7 +153,7 @@ function complete_work(state:IntegratedFieldState,at:number){
 function accept_work(state:IntegratedFieldState,at:number){
  const pending=state.work.pending.filter(order=>order.start_at===at);state.work.pending=state.work.pending.filter(order=>order.start_at!==at);
  for(const order of pending){
-  const intent=order.intent,p=state.definition.work_parameters,target=state.definition.geometry.points[intent.target],position=state.actors[intent.actor].position_um;
+  const intent=order.intent,p=integrated_work_parameters(state),target=state.definition.geometry.points[intent.target],position=state.actors[intent.actor].position_um;
   const localTarget=integrated_object(state.definition,intent.target,'facility');integrated_object(state.definition,intent.actor,'actor');if(intent.action==='read'&&!localTarget.properties.some(property=>property==='data_source')||(intent.action==='inspect'||intent.action==='repair')&&!localTarget.properties.some(property=>property==='facility_condition'))throw new GameError('INVALID_DEFINITION');
   const occupied=active(state).some(activity=>activity.actor===intent.actor||activity.target===intent.target);
   let reason:IntegratedRefusalReason|null=null;
@@ -168,7 +169,7 @@ function accept_work(state:IntegratedFieldState,at:number){
 }
 function power(state:IntegratedFieldState,actor:Actor,at:number){
  const shutdown=state.work.termination?.actors[actor].shutdown_at;if(shutdown!=null&&at>=shutdown)return 0;
- const p=state.definition.work_parameters,activity=active(state).find(activity=>activity.actor===actor);
+ const p=integrated_work_parameters(state),activity=active(state).find(activity=>activity.actor===actor);
  if(activity?.phase==='safe_stow')return actor==='R'?p.R_idle_watts:p.W_idle_watts;
  if(actor==='R')return activity?activity.action==='observe'?p.R_observe_watts:p.R_read_watts:p.R_idle_watts;
  if(activity)return activity.phase==='inspect'?p.W_inspect_watts:activity.phase==='isolate'?p.W_isolate_watts:activity.phase==='replace'?p.W_replace_watts:p.W_verify_watts;
@@ -176,10 +177,10 @@ function power(state:IntegratedFieldState,actor:Actor,at:number){
  const h=state.definition.geometry.points.H;return state.actors.W.position_um.every((value,index)=>value===h[index]*1000000)?p.W_off_watts:p.W_idle_watts;
 }
 export function advance_integrated_world(state:IntegratedFieldState,to:number):number{
- let cursor=state.sim_time,steps=0;const p=state.definition.work_parameters;
- const settle=(at:number)=>{complete_work(state,at);complete_integrated_movement(state,at);apply_integrated_environment(state,at);fail_unprotected_work(state,at);receive_termination(state,at);settle_integrated_movement(state,at,new Set(active(state).map(activity=>activity.actor)));accept_work(state,at);};settle(cursor);
+ let cursor=state.sim_time,steps=0;const p=integrated_work_parameters(state);
+ const settle=(at:number)=>{complete_work(state,at);complete_integrated_movement(state,at);apply_integrated_environment(state,at);fail_unprotected_work(state,at);receive_termination(state,at);settle_integrated_movement(state,at,new Set([...active(state).map(activity=>activity.actor),...integrated_handover_occupied(state,at)]));accept_work(state,at);settle_integrated_dag(state,at);};settle(cursor);
  while(cursor<to&&!state.ended){
-  if(++steps>128)throw new GameError('INVALID_DEFINITION');let boundary=Math.min(next_movement_boundary(state,cursor,to),next_environment_boundary(state,cursor,to));
+  if(++steps>128)throw new GameError('INVALID_DEFINITION');let boundary=Math.min(next_movement_boundary(state,cursor,to),next_environment_boundary(state,cursor,to),next_integrated_dag_boundary(state,cursor,to));
   for(const activity of active(state))if(activity.phase_ends_at>cursor)boundary=Math.min(boundary,activity.phase_ends_at);
   for(const order of state.work.pending)if(order.start_at>cursor)boundary=Math.min(boundary,order.start_at);
   for(const item of state.work.deliveries)if(item.received_at>cursor)boundary=Math.min(boundary,item.received_at);

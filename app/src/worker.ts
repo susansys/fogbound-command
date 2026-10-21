@@ -115,6 +115,13 @@ scope.onmessage = (event: MessageEvent<unknown>) => {
         if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
         response=input.kind==='query_outcome_debrief'?{request_id,ok:true,debrief_answer:await (history??game).query_outcome_debrief(input.query)}:{request_id,ok:true,evidence_resolution:await (history??game).resolve_outcome_evidence(input.query)};
       }
+      else if(input.kind==='get_integrated_fairness'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');response={request_id,ok:true,integrated_fairness:await (history??game).get_integrated_fairness(input.run_id)};
+      }
+      else if(input.kind==='open_integrated_debrief'||input.kind==='request_integrated_truth'||input.kind==='confirm_integrated_truth'){
+        if(blocked)throw new GameError('STORAGE_UNCONFIRMED');if(!(await acquire_writer()))throw new GameError('WRITER_BUSY');
+        response=input.kind==='open_integrated_debrief'?{request_id,ok:true,integrated_debrief:await (history??game).open_integrated_debrief(input.run_id)}:input.kind==='request_integrated_truth'?{request_id,ok:true,integrated_truth:await (history??game).request_integrated_truth(input.envelope)}:{request_id,ok:true,integrated_truth_confirmation:await (history??game).confirm_integrated_truth(input.envelope)};
+      }
       else if(input.kind==='get_outcome_fairness'){
         if(blocked)throw new GameError('STORAGE_UNCONFIRMED');
         response={request_id,ok:true,outcome_fairness:await (history??game).get_outcome_fairness(input.run_id)};

@@ -14,10 +14,12 @@ async function reviewFixture(){
 }
 test('NB3-AT011 W leaving H consumes the full moving interval independent of tick partition',async()=>{
  const results=[];
- for(const stops of [[611000],[511001,611000]]){
+ for(const stops of [[651000],[551001,651000]]){
   const f=await reviewFixture();try{
    const model_ref=f.view.model_catalog.model_ref;
-   await f.advance(288000);await f.apply({kind:'integrated_move',actor:'W',target:'H',model_ref});await f.advance(510000);
+   await f.advance(288000);await f.apply({kind:'integrated_move',actor:'W',target:'H',model_ref});await f.advance(550000);
+   // H handover now occupies W; measure departure only after its actual completion.
+   expect((await f.local()).dag.handovers.find(record=>record.actor==='W')!.completed_at).toBeLessThanOrEqual(550000);
    const before=(await f.local()).work.portable_energy_uJ.W;
    await f.apply({kind:'integrated_move',actor:'W',target:'A',model_ref});for(const to of stops)await f.advance(to);
    const state=await f.local();results.push({energy:state.work.portable_energy_uJ.W-before,position:state.actors.W.position_um});

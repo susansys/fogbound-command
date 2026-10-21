@@ -6,6 +6,7 @@ import {canonical,json_data} from './snapshot';
 import {load_kg,portable_energy} from './integrated-field-quantities';
 import {integratedObjectDefinitions,integratedKnowledgePolicy,integratedTerminationPolicy,integratedPlanningPolicy,type IntegratedObjectDefinition} from '../integrated-field-contracts';
 import {validate_environment_inputs} from './integrated-field-environment';
+import {integratedSensitivityPolicy,integratedWorkConfigurations,integrated_work_configuration,integratedProcessPolicy} from '../integrated-field-contracts';
 export type IntegratedFieldDefinition=Omit<typeof raw,'schema'|'contract'|'scenario_kind'|'version'|'model_ref'|'geometry'>&{
   schema:13;contract:'0.5.1';scenario_kind:'play_integrated_field';version:1;
   model_ref:{id:'INTEGRATED-FIELD-MODEL-3';version:1};
@@ -17,9 +18,11 @@ export type IntegratedFieldDefinition=Omit<typeof raw,'schema'|'contract'|'scena
   knowledge_policy:typeof integratedKnowledgePolicy;
   termination_policy:typeof integratedTerminationPolicy;
   planning_policy:typeof integratedPlanningPolicy;
+  sensitivity_policy:typeof integratedSensitivityPolicy;
+  process_policy:typeof integratedProcessPolicy;
 };
 export async function integrated_field_definition():Promise<IntegratedFieldDefinition>{
-  const body={...structuredClone(raw),objects:structuredClone(integratedObjectDefinitions),knowledge_policy:structuredClone(integratedKnowledgePolicy),termination_policy:structuredClone(integratedTerminationPolicy),planning_policy:structuredClone(integratedPlanningPolicy)};
+  const body={...structuredClone(raw),objects:structuredClone(integratedObjectDefinitions),knowledge_policy:structuredClone(integratedKnowledgePolicy),termination_policy:structuredClone(integratedTerminationPolicy),planning_policy:structuredClone(integratedPlanningPolicy),sensitivity_policy:structuredClone(integratedSensitivityPolicy),process_policy:structuredClone(integratedProcessPolicy)};
   validate_environment_inputs(body);
   if(body.schema!==13||body.contract!=='0.5.1'||body.scenario_kind!=='play_integrated_field'||body.geometry.unit!=='m'||body.geometry.metres_per_coordinate!==1||body.model_ref.id!=='INTEGRATED-FIELD-MODEL-3'||body.model_ref.version!==1)throw new GameError('INVALID_DEFINITION');
   for(const point of Object.values(body.geometry.points))if(point.length!==2||point.some(value=>!Number.isFinite(value)))throw new GameError('INVALID_DEFINITION');
@@ -34,7 +37,13 @@ export async function integrated_field_definition():Promise<IntegratedFieldDefin
   if(body.parameters.ha_speed.unit!=='m/s'||body.parameters.ha_speed.category!=='C'||!Number.isFinite(body.parameters.ha_speed.value)||body.parameters.ha_speed.value<=0||body.parameter_sources.r_mass.unit!=='kg'||body.parameter_sources.deadline.unit!=='ms')throw new GameError('INVALID_DEFINITION');
   const hashes={model:await hash(canonical(body.model_ref)),geometry:await hash(canonical(body.geometry)),rules:await hash(canonical(body.public_rules)),configurations:await hash(canonical(body.configurations)),parameters:await hash(canonical({values:body.parameters,sources:body.parameter_sources})),sources:await hash(canonical(body.sources))};
   const work_hashes={...hashes,planning:await hash(canonical(body.planning_policy)),termination:await hash(canonical(body.termination_policy)),knowledge:await hash(canonical(body.knowledge_policy)),objects:await hash(canonical(body.objects)),environment:await hash(canonical(body.environment_inputs)),work:await hash(canonical(body.work_parameters)),data_sources:await hash(canonical(body.synthetic_data_sources)),data_payload_A:await hash(body.synthetic_data_sources[0].payload),data_payload_B:await hash(body.synthetic_data_sources[1].payload)};
-  return {...body,hashes:work_hashes,definition_hash:await hash(canonical({...body,hashes:work_hashes}))} as unknown as IntegratedFieldDefinition;
+  const profile_hashes:Record<string,string>={};for(const id of Object.keys(body.sensitivity_policy) as Array<keyof typeof body.sensitivity_policy>)profile_hashes['sensitivity_'+id]=await hash(canonical(integratedWorkConfigurations[integrated_work_configuration(id)]));const all_hashes={...work_hashes,...profile_hashes,process:await hash(canonical(body.process_policy))};
+  return {...body,hashes:all_hashes,definition_hash:await hash(canonical({...body,hashes:all_hashes}))} as unknown as IntegratedFieldDefinition;
+}
+export function integrated_work_parameters(state:Pick<import('./integrated-field-state').IntegratedFieldState,'definition'|'sensitivity'>){
+ const p=structuredClone(state.definition.work_parameters),profile=state.definition.sensitivity_policy[state.sensitivity];if(!profile)throw new GameError('INVALID_DEFINITION');
+ for(const key of ['validation_ms','preparation_ms','observe_ms','read_prepare_ms','read_stow_ms','inspect_ms','isolate_ms','replace_ms','functional_verify_ms','handover_ms','intel_verify_ms'] as const)p[key]*=profile.work_scale;
+ p.copy_bytes_per_second*=profile.throughput_scale;p.verify_bytes_per_second*=profile.throughput_scale;return p;
 }
 export function integrated_object(definition:IntegratedFieldDefinition,id:string,kind:IntegratedObjectDefinition['kind']):IntegratedObjectDefinition{
  const object=definition.objects.find(object=>object.id===id&&object.kind===kind);if(!object)throw new GameError('INVALID_REQUEST');return object;
