@@ -1129,6 +1129,9 @@ dialog > header > button {
 .integrated-field-map .map-fallback { z-index:8; max-height:calc(100% - 120px); overflow:auto; }
 
 /* Keep the inherited headquarters order usable on a narrow integrated scene. */
+.integrated-workbench .integrated-report-workspace>.report-list{flex:0 0 320px;min-width:0;padding:12px 16px;overflow-wrap:anywhere}
+.integrated-workbench .integrated-report-workspace>.report-list button{white-space:normal;max-width:100%}
+.integrated-workbench .integrated-report-workspace>.report-detail{flex:1;min-width:0;min-height:0;height:auto;max-width:none;margin:0;overflow-wrap:anywhere}
 @media (max-width:700px){
  .integrated-workbench .topbar{height:auto;min-height:58px;flex-wrap:wrap;gap:8px;padding:10px 12px;overflow:visible}
  .integrated-workbench .topbar>*{max-width:100%}
@@ -1141,5 +1144,8 @@ dialog > header > button {
  .integrated-workbench .intelligence-sources{width:100%;min-width:0;flex:0 0 auto;overflow:visible;border-left:0;border-top:1px solid var(--line);padding:14px}
  .integrated-workbench .intelligence-sources button{white-space:normal;max-width:100%}
  .integrated-workbench .intelligence-sources input,.integrated-workbench .intelligence-sources select{max-width:100%}
+ .integrated-workbench .integrated-report-workspace{overflow:hidden}
+ .integrated-workbench .integrated-report-workspace>.report-list{flex:0 1 auto;max-height:40%;padding:8px 14px}
+ .integrated-workbench .integrated-report-workspace>.report-detail{padding:14px}
  .integrated-workbench .global-footer{height:auto;min-height:25px;flex-wrap:wrap;gap:4px;padding:6px 12px;white-space:normal}
 }
