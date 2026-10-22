@@ -23,3 +23,12 @@
 [PR #116](https://github.com/susansys/fogbound-command/pull/116) 已完成工程交付，主事件已正式登记为第 10 次工程交付；文档不重复计数，也不启动下一批。985 核心／313 可移植浏览器结果只归属实际候选及 main CI；本机 Windows 恢复和真实隐藏／继续证据另列，不用 Linux skip 代签。
 
 [固定验证记录](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/VERIFICATION.md) 的 S12 段落是交付前快照，文中当时待验项须与最终 PR／CI／交付记录区分；原克隆、曝光元数据、窄屏及验证前置失败保持历史记录，不能据后续成功倒签全部旧根因已修。受控逻辑时钟不是同等时长的真实墙钟体验；原 244AT 与正式 PLAY 仍未签收。
+
+## 交付后的布局核对
+
+本节采集时间：2026-10-22T14:17:40.7213984Z。工程来源仍为 274d105c621c9cb52380409fbaa50e42722b90bb，文档基线为 PR #117；以下发现不撤销原工程交付，也不表示布局已经验收。
+
+- 报告详情仍放在当前行动侧栏，没有进入继承布局要求的报告主工作区。修复须保留报告与递交的合法身份、未保存输入及返回焦点。
+- 拒绝提示的复核区位于当前行动上下文之外，在窄屏会严重挤压工作区。修复须把它放回相关行动上下文，保证返回目标可见，保留原输入且不自动重新下令。
+
+两处问题已核实，最小布局修复正在进行，尚未验收或合并。固定实现入口为 [工作台](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-workbench.tsx) 与 [样式](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/style.css)；布局核对是后续独立证据，不把原 CI 成功当作这两处已经通过。
