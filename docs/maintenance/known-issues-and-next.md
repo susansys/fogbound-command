@@ -24,11 +24,15 @@
 
 [固定验证记录](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/VERIFICATION.md) 的 S12 段落是交付前快照，文中当时待验项须与最终 PR／CI／交付记录区分；原克隆、曝光元数据、窄屏及验证前置失败保持历史记录，不能据后续成功倒签全部旧根因已修。受控逻辑时钟不是同等时长的真实墙钟体验；原 244AT 与正式 PLAY 仍未签收。
 
-## 交付后的布局核对
+## 交付后的布局核对与后续修复
 
-本节采集时间：2026-10-22T14:17:40.7213984Z。工程来源仍为 274d105c621c9cb52380409fbaa50e42722b90bb，文档基线为 PR #117；以下发现不撤销原工程交付，也不表示布局已经验收。
+本节采集时间：2026-10-22T14:17:40.7213984Z。工程来源仍为 274d105c621c9cb52380409fbaa50e42722b90bb，文档基线为 PR #117；以下是当时发现的历史快照，不撤销原工程交付；后续修复状态见本节末尾。
 
 - 报告详情仍放在当前行动侧栏，没有进入继承布局要求的报告主工作区。修复须保留报告与递交的合法身份、未保存输入及返回焦点。
 - 拒绝提示的复核区位于当前行动上下文之外，在窄屏会严重挤压工作区。修复须把它放回相关行动上下文，保证返回目标可见，保留原输入且不自动重新下令。
 
-两处问题已核实，最小布局修复正在进行，尚未验收或合并。固定实现入口为 [工作台](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-workbench.tsx) 与 [样式](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/style.css)；布局核对是后续独立证据，不把原 CI 成功当作这两处已经通过。
+两处问题当时已核实，最小修复尚在进行；该历史快照不作为当前修复状态。固定实现入口为 [工作台](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-workbench.tsx) 与 [样式](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/style.css)；布局核对是后续独立证据，不把原 CI 成功当作这两处已经通过。
+
+后续修复已完成交付：见 [PR #119](https://github.com/susansys/fogbound-command/pull/119)、[PR #120](https://github.com/susansys/fogbound-command/pull/120) 与 [main CI](https://github.com/susansys/fogbound-command/actions/runs/39984476137)，修复来源固定为 84a22b87b905d6d590dfc2e154a9422162d46788。原失败 [39816839152](https://github.com/susansys/fogbound-command/actions/runs/39816839152) 保留；本地 RED／GREEN 的 Node 24.14 与实际候选／main CI 的 Node 22.23.3 分开，不把受控复现当成真实网络重放。
+
+最后只有两份验证文件不同于已接受的界面快照，58 项运行制品相同，支持有限复用；CI 指纹核对 HTML 加 41 项公开资源，全部 58 项发行包和 428 项源码另按包内条目核对。旧 Windows 14 项／四步布局／42 附件保持原执行身份，不冒称全部 32 合同身份或 Windows 新跑通过。工程事件仍为 10，正式体验及原 244AT 未签收，不自动启动下一批。

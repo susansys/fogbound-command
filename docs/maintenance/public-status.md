@@ -2,14 +2,14 @@
 
 ## 来源快照
 
-本次公开事实采集截至 **2026-10-21T23:20:34.4970982Z**。这是固定来源快照，不代表之后的实时进展。
+本次公开事实采集截至 **2026-10-23T17:08:05.8396033Z**。这是固定来源快照，不代表之后的实时进展。
 
 | 身份 | 固定来源 | 结论范围 |
 | --- | --- | --- |
-| 已合并工程来源 main | [274d105c621c9cb52380409fbaa50e42722b90bb](https://github.com/susansys/fogbound-command/commit/274d105c621c9cb52380409fbaa50e42722b90bb) | B33 综合现场模型与完整行动链已完成工程交付；唯一主事件已由原负责人确认为第 10 次工程交付，本目录派生同步不重复计数 |
+| 已合并工程来源 main | [84a22b87b905d6d590dfc2e154a9422162d46788](https://github.com/susansys/fogbound-command/commit/84a22b87b905d6d590dfc2e154a9422162d46788) | B33 交付后的最小布局修复及验证前置纠正已完成交付，仍归同一第 10 次工程事件，不新增批次 |
 | 文档来源 README | [固定 README](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/README.md) | 该固定公开 README 仍列旧六个演练；后续界面改进和 B31 可选档案包按固定实现、PR 分列，不把旧首页说明当最新范围；发布事实按 PR／验证记录分列 |
-| 该工程来源的 main CI | [39686579474](https://github.com/susansys/fogbound-command/actions/runs/39686579474) | 985 核心、313 可移植浏览器通过；Windows 本机证据与 Linux CI 分列，不把跳过原生用例记为通过 |
-| 本目录已有文档交付 | [PR #115](https://github.com/susansys/fogbound-command/pull/115)、[文档 main 022d421](https://github.com/susansys/fogbound-command/commit/022d421f765609b19a979012f3105616978bccf0) | 上次文档真实 docs-only CI 已成功；runtime 未运行，不视为游戏测试通过 |
+| 该工程来源的 main CI | [39984476137](https://github.com/susansys/fogbound-command/actions/runs/39984476137) | 985 核心／94 文件、11 包装检查及 313 可移植浏览器通过，逐身份无 skip／flaky／retry；20 项 Windows 责任不由 Linux 跳过代签 |
+| 本目录已有文档交付 | [PR #118](https://github.com/susansys/fogbound-command/pull/118)、[文档 main 4d19ca6](https://github.com/susansys/fogbound-command/commit/4d19ca64dcbaf2c89ee932867c859af6f9a12511) | 上次文档实际 docs-only 检查成功；当时记录的两处布局问题现有后续修复交付，文档检查不等于游戏测试 |
 
 工程来源 SHA、文档来源与本目录的新交付 SHA 各自记录。当前工程 CI 只归属于其实际 SHA 和范围；本目录候选的 PR／CI／合并结果须由本次实际发布记录标识。
 
@@ -33,6 +33,12 @@
 
 地图显示继承 1.1.0 与界面继承 1.2.1 已完成设计冻结并获准实施。此状态依据本次逐项核对的正式冻结清单及后续执行准入；旧候选正文保留的待审状态是历史快照。设计来源尚未随产品合并公开，公开批次入口仍为 [SPEC #101](https://github.com/susansys/fogbound-command/issues/101)，不把该入口当作新增设计清单的公开副本。
 
-地图只在虚构区域继承底图、高程显示和 APP6 式军标，不代表真实地理、坡度物理或完整标准合规。界面继承既有布局及交互语义，允许新模型数据适配，不要求像素完全一致。原 48 项、地图新增 12 项、界面新增 20 项分别保留验收身份；这些是范围数量，地图和界面尚无全套签收。
+地图只在虚构区域继承底图、高程显示和 APP6 式军标，不代表真实地理、坡度物理或完整标准合规。界面继承既有布局及交互语义，允许新模型数据适配，不要求像素完全一致。原 48 项、地图新增 12 项、界面新增 20 项分别保留验收身份；这些是范围数量；原 274d105c 交付时点地图和界面尚无全套签收。本次修复按后文 32 个身份的有限证据映射，闭合 7 个布局缺口及 014 关联检查，不表示 32 项全新执行或原 244AT／正式 PLAY 通过。
 
 B33 工程交付已完成，技术导航现按固定工程提交更新。48 项原工程验收与地图／界面新增身份分开，不据本批交付把 80 个合同身份统称全项通过。唯一工程主事件已按正式记录确认为第 10 次，文档不新增计数；原 244AT 未运行，正式体验未签收。
+
+## 同批布局修复交付
+
+[PR #119](https://github.com/susansys/fogbound-command/pull/119) 与 [PR #120](https://github.com/susansys/fogbound-command/pull/120) 已正常合并，修复报告主工作区归属与拒绝提示复核位置，并纠正实际 CI 暴露的指纹前置问题。[候选 CI](https://github.com/susansys/fogbound-command/actions/runs/39979738780) 与上列 main CI、428 项源码及 58 项发行包逐项核对、安全同步均已完成。B33 原工程交付来源仍为 [274d105c](https://github.com/susansys/fogbound-command/commit/274d105c621c9cb52380409fbaa50e42722b90bb)，本次修复来源与文档 SHA 分列，不把新检查结果归给旧提交。
+
+32 个界面／地图身份按有限证据映射：补齐 7 个布局缺口及 014 关联的未保存输入离开检查，其他身份保留原执行来源和适用复用证据。不是新跑 32 项，也不是一轮新的 Windows 验证；原 244AT 与正式 PLAY 仍未签收。
