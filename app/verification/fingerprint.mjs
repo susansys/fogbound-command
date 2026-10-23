@@ -6,7 +6,8 @@ const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const origin=process.env.FB01_URL??'http://127.0.0.1:4175';
 let html;
 for(let attempt=0;attempt<100;attempt++){
-  try{const response=await fetch(origin,{signal:AbortSignal.timeout(1000)});if(response.ok){html=await response.text();if(html.includes('玄枢行动'))break;}}catch{}
+  const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),1000);
+  try{const response=await fetch(origin,{signal:controller.signal});if(response.ok){html=await response.text();if(html.includes('玄枢行动'))break;}}catch{}finally{clearTimeout(deadline);controller.abort();}
   await new Promise(resolve=>setTimeout(resolve,100));
 }
 if(!html?.includes('玄枢行动'))throw Error('static service unavailable');
