@@ -90,3 +90,28 @@ test('workflow keeps quality boundaries and always publishes full browser result
  for(const job of [quality,browser])for(const step of job.split('      - ').slice(1))if(/run: npm |run: npx |uses: actions\/setup-node|name: Run browser|name: Build the tested|name: Serve the same/.test(step))assert.match(step,/if: steps.scope.outputs.docs_only != 'true'/);
  const config=readFileSync(path.join(app,'playwright.config.ts'),'utf8');assert.match(config,/workers: 1/);assert.match(config,/retries: 0/);assert.doesNotMatch(config,/timeout:\s*0/);
 });
+
+// Run the actual fingerprint readiness block in a fresh process. A controlled
+// fetch has no socket handle, so only the request deadline can keep it alive.
+const fingerprintSource=readFileSync(path.join(app,'verification/fingerprint.mjs'),'utf8');
+const readinessStart=fingerprintSource.indexOf('const origin='),readinessEnd=fingerprintSource.indexOf('const entry=');
+assert(readinessStart>=0&&readinessEnd>readinessStart);
+const readinessSource=fingerprintSource.slice(readinessStart,readinessEnd);
+function fingerprintReadiness(mode){
+ const fixture=`let readinessCalls=0;globalThis.fetch=async(_, {signal})=>{readinessCalls++;const wait=()=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));if(readinessCalls===1&&${JSON.stringify(mode)}==='headers')return wait();if(readinessCalls===1&&${JSON.stringify(mode)}==='error')throw Error('controlled unavailable attempt');return{ok:true,text:()=>readinessCalls===1&&${JSON.stringify(mode)}==='body'?wait():Promise.resolve('玄枢行动')};};\n`;
+ const result=spawnSync(process.execPath,['--input-type=module','--eval',fixture+readinessSource+`\nconsole.log('FINGERPRINT_READY '+JSON.stringify({calls:readinessCalls,html,timeouts:process.getActiveResourcesInfo().filter(type=>type==='Timeout')}));`],{cwd:app,encoding:'utf8',timeout:5000,maxBuffer:1000000,env:process.env});
+ assert.equal(result.error,undefined,String(result.error));assert.equal(result.status,0,result.stderr);
+ const line=result.stdout.split('\n').find(value=>value.startsWith('FINGERPRINT_READY '));assert(line,'readiness must finish before the child exits');return JSON.parse(line.slice('FINGERPRINT_READY '.length));
+}
+test('fingerprint readiness survives a pending response with no other active handle',()=>{
+ const result=fingerprintReadiness('headers');assert.equal(result.calls,2);assert.equal(result.html,'玄枢行动');assert.deepEqual(result.timeouts,[]);
+});
+test('fingerprint readiness also times out a pending response body',()=>{
+ const result=fingerprintReadiness('body');assert.equal(result.calls,2);assert.equal(result.html,'玄枢行动');assert.deepEqual(result.timeouts,[]);
+});
+test('fingerprint readiness releases its deadline after immediate success',()=>{
+ const result=fingerprintReadiness('ready');assert.equal(result.calls,1);assert.equal(result.html,'玄枢行动');assert.deepEqual(result.timeouts,[]);
+});
+test('fingerprint readiness releases a failed attempt deadline before completing a retry',()=>{
+ const result=fingerprintReadiness('error');assert.equal(result.calls,2);assert.equal(result.html,'玄枢行动');assert.deepEqual(result.timeouts,[]);
+});
