@@ -1,6 +1,6 @@
 # 已发布实现的技术导航
 
-本页导航到[来源快照](public-status.md#来源快照)所列固定公开工程来源 `274d105c621c9cb52380409fbaa50e42722b90bb`。本快照包含 B31 背景资料、B32 冲突信息和 B33 综合现场行动链入口；来源 CI、实际证据与正式交付分别核验。
+本页导航到[来源快照](public-status.md#来源快照)所列 B33 原工程来源 `274d105c621c9cb52380409fbaa50e42722b90bb`。本快照包含 B31 背景资料、B32 冲突信息和 B33 综合现场行动链入口；来源 CI、实际证据与正式交付分别核验。
 
 | 边界 | 实际入口 | 阅读目的 |
 | --- | --- | --- |
@@ -32,5 +32,7 @@
 | --- | --- | --- |
 | 合同与合法视图 | [integrated-field-contracts.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-contracts.ts)、[integrated-field-dto.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-dto.ts) | 量与对象身份、报告／递交、所知与研判分开 |
 | 规则与过程 | [integrated-field-engine.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-engine.ts)、[integrated-field-work.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-work.ts) | 连续移动、工序资源与环境影响的模型实现，不代表现实校准 |
-| 界面与地图 | [integrated-field-workbench.tsx](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-workbench.tsx)、[integrated-field-map.tsx](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-map.tsx) | 既有布局交互继承、虚构高程显示和军标，不宣称像素复刻或完整标准合规 |
+| 界面与地图 | [integrated-field-workbench.tsx](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/src/integrated-field-workbench.tsx)、[integrated-field-map.tsx](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/integrated-field-map.tsx) | 既有布局交互继承、虚构高程显示和军标，不宣称像素复刻或完整标准合规 |
 | 状态与保存 | [integrated-field-state.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-state.ts)、[integrated-field-snapshot.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-snapshot.ts) | 独立 schema13、嵌套校验与恢复；旧 schema4—12 保留各自身份 |
+
+布局与验证前置的后续修复固定于 [84a22b87](https://github.com/susansys/fogbound-command/commit/84a22b87b905d6d590dfc2e154a9422162d46788)：[工作台](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/src/integrated-field-workbench.tsx)、[布局样式](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/src/style.css) 与 [指纹验证](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/verification/fingerprint.mjs)。其余导航保留原工程来源；新 CI 结论只属于对应修复 SHA，原失败和有限证据复用见[已知问题](known-issues-and-next.md)。
