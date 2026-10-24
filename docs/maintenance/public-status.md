@@ -42,3 +42,11 @@ B33 工程交付已完成，技术导航现按固定工程提交更新。48 项�
 [PR #119](https://github.com/susansys/fogbound-command/pull/119) 与 [PR #120](https://github.com/susansys/fogbound-command/pull/120) 已正常合并，修复报告主工作区归属与拒绝提示复核位置，并纠正实际 CI 暴露的指纹前置问题。[候选 CI](https://github.com/susansys/fogbound-command/actions/runs/39979738780) 与上列 main CI、428 项源码及 58 项发行包逐项核对、安全同步均已完成。B33 原工程交付来源仍为 [274d105c](https://github.com/susansys/fogbound-command/commit/274d105c621c9cb52380409fbaa50e42722b90bb)，本次修复来源与文档 SHA 分列，不把新检查结果归给旧提交。
 
 32 个界面／地图身份按有限证据映射：补齐 7 个布局缺口及 014 关联的未保存输入离开检查，其他身份保留原执行来源和适用复用证据。不是新跑 32 项，也不是一轮新的 Windows 验证；原 244AT 与正式 PLAY 仍未签收。
+
+## K-A 开发中
+
+本节核对时间：2026-10-24T14:01:03.5763245Z。[SPEC #122](https://github.com/susansys/fogbound-command/issues/122) 已公开冻结设计 KA-TEXT-KNOWLEDGE-DESIGN-0.1.1 的实施范围：四票串行、40 项工程验收身份，一个最终批次 PR。范围包括有限采集、合格检查、合法纠正与来源证据、真实迟到位置、两实体记录的保管和逐件核验、有界收尾，以及公开界面和实际保存恢复；保留 schema4—13 身份。
+
+当前处于[首票开发](https://github.com/susansys/fogbound-command/issues/123)，后续依次为[纠正与迟到位置](https://github.com/susansys/fogbound-command/issues/124)、[保管核验与收尾](https://github.com/susansys/fogbound-command/issues/125)、[全链验证与交付](https://github.com/susansys/fogbound-command/issues/126)。局部测试或类型检查通过，不代表首票 10 项或整批 40 项验收通过；尚未形成新的工程 PR 或交付。已发布工程来源仍为 84a22b87，技术导航及工程计数 10 保持；文档同步不增加工程事件。
+
+K-B、K-C、P1 及原 244AT 不在本次交付范围，正式 PLAY 未签收；设计冻结与任务图建立均不等于软件完成。
