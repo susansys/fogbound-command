@@ -4,6 +4,32 @@ import {Persistence} from '../src/core/persistence';
 import {Transport} from '../src/transport';
 import {valid_request} from '../src/protocol';
 import {valid_response} from '../src/dto';
+import {hash} from '../src/core/scenario';
+import {canonical} from '../src/core/snapshot';
+
+test.each(['before-issue-and-window','ack-before-issue','ack-short-service'])('KA-E09 rejects a digest-consistent W timeline that violates public causality: %s',async(mutation)=>{
+  const store=new Persistence('ka-owned-dto-causality-'+crypto.randomUUID()),game=new Game(store);let transport:Transport|undefined;
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'at-59',expected_revision:view.revision,intent:{kind:'advance',to:59000}})).view;
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:view.run_id,kind,id,version:1 as const});
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'collect-W',expected_revision:view.revision,intent:{kind:'request_collection',actor:'W',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-QUALIFIED'),method_ref:ref('method','qualified-facility-inspection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-W')],collection_window:{from:60000,to:91000},needed_by:900000}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'at-93',expected_revision:view.revision,intent:{kind:'advance',to:93000}})).view;
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
+    expect(valid_response({request_id:'actual-W',ok:true,view})).toBe(true);
+    const changed=structuredClone(view),ack=changed.collection_requests[0].acknowledgement!,report=changed.reports[0];
+    if(mutation==='before-issue-and-window'){
+      ack.planned_start_at=0;report.observed_time={kind:'known',value:30000,evidence:report.observation_ref!};report.generated_at=32000;report.resource_snapshot.at=32000;
+      changed.deliveries[0].sent_at=32000;changed.deliveries[0].received_at=33000;changed.coverage[0].observed_time=structuredClone(report.observed_time);
+    }else if(mutation==='ack-before-issue'){ack.sent_at=0;ack.received_at=1000;}
+    else ack.received_at=ack.sent_at+500;
+    const {content_digest:_oldDigest,...content}=report;report.content_digest=await hash(canonical(content));
+    expect(valid_response({request_id:'impossible-W',ok:true,view:changed})).toBe(false);
+    vi.stubGlobal('Worker',OwnedPort);transport=new Transport();
+    const pending=transport.request({kind:'current',run_id:view.run_id}),port=OwnedPort.current,request_id=port.latest?.request_id;
+    port.emit({request_id,ok:true,view:changed});expect(await pending).toEqual({request_id,ok:false,code:'CHANNEL_UNCERTAIN'});
+  }finally{transport?.close();vi.unstubAllGlobals();await store.delete();}
+});
 
 class OwnedPort{
   static current:OwnedPort;

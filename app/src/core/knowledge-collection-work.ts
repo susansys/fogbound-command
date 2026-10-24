@@ -56,7 +56,8 @@ export function cancel_collection(state:KnowledgeCollectionState,intent:Collecti
   task.cancel={ref:collection_ref(state.run_id,'cancellation',task.ref.id+'.cancel'),origin:unsent?'local_queue':'remote',issued_at:state.sim_time,received_at:null,result:unsent?'cancelled':null};
   if(unsent){
     unsent.status='cancelled';unsent.cancelled_at=state.sim_time;task.status='cancelled';
-    state.requirements.find(ir=>ir.request_id===task.ref.id)!.status='cancelled';
+    const requirement=state.requirements.find(ir=>ir.request_id===task.ref.id)!;
+    if(!['expired','cancelled','answered','inconclusive'].includes(requirement.status))requirement.status='cancelled';
     state.schedule=state.schedule.filter(event=>event.command_id!==unsent.ref.id);retime_hq_queue(state);state.knowledge_seq++;
   }else dispatch_hq(state,task,'cancel_received');
 }

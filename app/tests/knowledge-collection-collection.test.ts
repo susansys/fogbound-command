@@ -3,6 +3,24 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import type {GamePlayerView} from '../src/play-contracts';
 
+test('KA-E08 withdrawing an unsent command preserves an already expired IR terminal state',async()=>{
+  const store=new Persistence('ka-owned-expired-local-withdrawal-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:view.run_id,kind,id,version:1 as const});
+    const collect=async(actor:'R'|'W',needed_by:number)=>{view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'collect-'+actor,expected_revision:view.revision,intent:{kind:'request_collection',actor,question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope',actor==='R'?'B-LIMITED':'B-QUALIFIED'),method_ref:ref('method',actor==='R'?'limited-text-collection':'qualified-facility-inspection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-'+actor)],collection_window:actor==='R'?{from:1000,to:31000}:{from:60000,to:91000},needed_by}})).view;};
+    await collect('R',900000);if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'cancel-R',expected_revision:view.revision,intent:{kind:'cancel_collection',request_ref:view.collection_requests[0].ref,authority_ref:ref('authority','KA-INITIAL')}})).view;
+    await collect('W',1000);
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'expire',expected_revision:view.revision,intent:{kind:'advance',to:1000}})).view;
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
+    expect(view.collection_requests[1].status).toBe('expired');
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'withdraw-unsent-W',expected_revision:view.revision,intent:{kind:'cancel_collection',request_ref:view.collection_requests[1].ref,authority_ref:ref('authority','KA-INITIAL')}})).view;
+    expect(view).toMatchObject({collection_requests:[{actor:'R'},{actor:'W',status:'expired',local_receipt:{kind:'cancelled_before_send',at:1000,remote_task_created:false}}],reports:[]});
+    expect(await store.read_committed(view.run_id)).toMatchObject({requirements:[{status:'tasking'},{status:'expired'}],collection_tasks:[{source_actor:'R'}]});
+  }finally{await store.delete();}
+});
+
 test('KA-E05 a private mid-work gate change has no HQ effect until its real failure Delivery',async()=>{
   const normalStore=new Persistence('ka-owned-gate-normal-'+crypto.randomUUID()),gatedStore=new Persistence('ka-owned-gate-private-'+crypto.randomUUID());
   const normalGame=new Game(normalStore),gatedGame=new Game(gatedStore,{knowledge_collection_gate_profile:'unknown_mid'});

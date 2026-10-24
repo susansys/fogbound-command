@@ -38,6 +38,14 @@ export function knowledge_collection_player_view(value:unknown):value is Knowled
   const view=value as unknown as KnowledgeCollectionPlayerView;
   if(view.actors.length!==2||new Set(view.actors.map(actor=>actor.id)).size!==2||view.reports.length!==view.deliveries.length||view.coverage.length!==view.reports.length)return false;
   for(const records of [view.collection_requests,view.reports,view.deliveries,view.coverage])if(new Set(records.map(item=>item.ref.id)).size!==records.length)return false;
+  for(const request of view.collection_requests){
+    if(request.issued_at>view.sim_time)return false;
+    const ack=request.acknowledgement;
+    if(ack){
+      const earliest=Math.max(request.actor==='R'?1000:60000,request.issued_at+1000),windowEnd=request.actor==='R'?31000:91000;
+      if(ack.planned_start_at<earliest||ack.planned_start_at>=windowEnd||ack.sent_at<request.issued_at+1000||ack.received_at!==ack.sent_at+1000||ack.received_at>view.sim_time)return false;
+    }
+  }
   for(const report of view.reports){
     const delivery=view.deliveries.find(item=>item.report_ref.id===report.ref.id),known=view.coverage.find(item=>item.report_ref.id===report.ref.id);
     const request=view.collection_requests.find(item=>report.ref.id===item.ref.id+'.report');
