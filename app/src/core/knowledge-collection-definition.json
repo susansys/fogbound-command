@@ -25,6 +25,19 @@
   "facility": {"condition": "operable", "version": 1},
   "control_receipt": {"method": "task-control-receipt", "sender_ms": 1000},
   "diagnostic_sampling_surfaces": {"default": "registered_surface", "empty": "no_persistent_samples"},
+  "local_gate_scope": "collection_only_not_return_or_registration",
+  "local_gate_profiles": {
+    "normal": {"initial": "met", "changes": []},
+    "initial_unknown": {"initial": "unknown", "changes": []},
+    "initial_not_met": {"initial": "not_met", "changes": []},
+    "unknown_mid": {"initial": "met", "changes": [{"at":15000,"status":"unknown"}]},
+    "not_met_mid": {"initial": "met", "changes": [{"at":15000,"status":"not_met"}]},
+    "unknown_before_completion": {"initial": "met", "changes": [{"at":29999,"status":"unknown"}]},
+    "unknown_at_completion": {"initial": "met", "changes": [{"at":30000,"status":"unknown"}]},
+    "not_met_at_completion": {"initial": "met", "changes": [{"at":30000,"status":"not_met"}]},
+    "unknown_after_completion": {"initial": "met", "changes": [{"at":30001,"status":"unknown"}]},
+    "initial_unknown_then_met": {"initial": "unknown", "changes": [{"at":2000,"status":"met"}]}
+  },
   "actors": {
     "R": {"people": 3, "labor_capacity": 1, "energy_uj": 143147520000, "idle_uj_per_ms": 2000, "collection_uj_per_ms": 4000, "registration_uj_per_ms": 4000, "load_kg": 4, "blank_record_kg": 0.01},
     "W": {"people": 3, "labor_capacity": 1, "energy_uj": 57600000000, "idle_uj_per_ms": 500, "collection_uj_per_ms": 2000, "registration_uj_per_ms": 500, "load_kg": 3, "blank_record_kg": 0.01}

@@ -79,7 +79,7 @@ export class Game {
   private history:StoredState|null=null;
   private readonly validated_source_tasks=new WeakSet<object>();
   private readonly verified_replay_states=new Set<string>();
-  constructor(readonly store: Persistence,private readonly fixture:{knowledge_collection_surface?:'default'|'empty';conflicting_facility?:'operable'|'faulted';integrated_guidance_loss_at?:number|null;integrated_spares?:0|1;integrated_environment?:import('./integrated-field-environment').IntegratedEnvironmentProfile;integrated_protection_loss?:import('./integrated-field-work').IntegratedProtectionLoss|null;integrated_repeat_terminal_delivery?:boolean;integrated_functional_failure?:boolean;integrated_wet_all_time?:boolean;integrated_sensitivity?:import('../integrated-field-contracts').IntegratedSensitivity}={}) {}
+  constructor(readonly store: Persistence,private readonly fixture:{knowledge_collection_surface?:'default'|'empty';knowledge_collection_gate_profile?:import('./knowledge-collection-definition').KnowledgeCollectionGateProfile;conflicting_facility?:'operable'|'faulted';integrated_guidance_loss_at?:number|null;integrated_spares?:0|1;integrated_environment?:import('./integrated-field-environment').IntegratedEnvironmentProfile;integrated_protection_loss?:import('./integrated-field-work').IntegratedProtectionLoss|null;integrated_repeat_terminal_delivery?:boolean;integrated_functional_failure?:boolean;integrated_wet_all_time?:boolean;integrated_sensitivity?:import('../integrated-field-contracts').IntegratedSensitivity}={}) {}
   private remember_replay_state(integrity:string){
     this.verified_replay_states.add(integrity);
     if(this.verified_replay_states.size>64)this.verified_replay_states.delete(this.verified_replay_states.values().next().value!);
@@ -219,7 +219,8 @@ export class Game {
       run_id = crypto.randomUUID();
     if(is_knowledge_collection_definition(definition)){
       const surface=source?.schema===14?source.initial_conditions.surface:this.fixture.knowledge_collection_surface??'default';
-      const state=initial_knowledge_collection_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,surface);
+      const gateProfile=source?.schema===14?source.initial_conditions.gate_profile:this.fixture.knowledge_collection_gate_profile??'normal';
+      const state=initial_knowledge_collection_state(definition,run_id,mode,epoch,source?.run_id??null,source?.rng.origin??run_id,surface,gateProfile);
       await this.commit(state,null,operation,creationFingerprint);return project_knowledge_collection_view(state);
     }
     if(is_integrated_field_definition(definition)){

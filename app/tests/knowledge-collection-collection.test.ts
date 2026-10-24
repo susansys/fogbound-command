@@ -3,6 +3,42 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import type {GamePlayerView} from '../src/play-contracts';
 
+test('KA-E05 a private mid-work gate change has no HQ effect until its real failure Delivery',async()=>{
+  const normalStore=new Persistence('ka-owned-gate-normal-'+crypto.randomUUID()),gatedStore=new Persistence('ka-owned-gate-private-'+crypto.randomUUID());
+  const normalGame=new Game(normalStore),gatedGame=new Game(gatedStore,{knowledge_collection_gate_profile:'unknown_mid'});
+  try{
+    let normal:GamePlayerView,gated:GamePlayerView;
+    const random=vi.spyOn(crypto,'randomUUID').mockReturnValue('33333333-3333-4333-8333-333333333333');
+    try{const selector={schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}};normal=await normalGame.create_run(selector,'research','create');gated=await gatedGame.create_run(selector,'research','create');}finally{random.mockRestore();}
+    const ref=(kind:string,id:string)=>({run_id:normal.run_id,kind,id,version:1});
+    const envelope={run_id:normal.run_id,operation_id:'collect',expected_revision:normal.revision,intent:{kind:'request_collection',actor:'R',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-LIMITED'),method_ref:ref('method','limited-text-collection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-R')],collection_window:{from:1000,to:31000},needed_by:900000}};
+    normal=(await normalGame.apply_collection_intent(envelope)).view;gated=(await gatedGame.apply_collection_intent(envelope)).view;expect(gated).toEqual(normal);
+    for(const to of [1000,2000,14999,15000,16000]){
+      const control={run_id:normal.run_id,operation_id:'at-'+to,expected_revision:normal.revision,intent:{kind:'advance' as const,to}};
+      normal=(await new Game(normalStore).control_clock(control)).view;gated=(await new Game(gatedStore).control_clock(control)).view;expect(gated).toEqual(normal);
+    }
+    gated=(await new Game(gatedStore).control_clock({run_id:gated.run_id,operation_id:'failure-delivery',expected_revision:gated.revision,intent:{kind:'advance',to:17000}})).view;
+    expect(gated).toMatchObject({reports:[{body:{kind:'collection_failed',reason:'local_gate_unknown'},observed_time:{kind:'unknown'}}],deliveries:[{received_at:17000}]});
+  }finally{await normalStore.delete();await gatedStore.delete();}
+});
+
+test.each(['unknown_before_completion','unknown_at_completion','unknown_after_completion'] as const)('KA-E05 gate boundary is identical for coarse steps and recovered fine steps: %s',async(profile)=>{
+  const coarseStore=new Persistence('ka-owned-gate-coarse-'+crypto.randomUUID()),fineStore=new Persistence('ka-owned-gate-fine-'+crypto.randomUUID());
+  const coarseGame=new Game(coarseStore,{knowledge_collection_gate_profile:profile}),fineGame=new Game(fineStore,{knowledge_collection_gate_profile:profile});
+  try{
+    let coarse:GamePlayerView,fine:GamePlayerView;
+    const random=vi.spyOn(crypto,'randomUUID').mockReturnValue('44444444-4444-4444-8444-444444444444');
+    try{const selector={schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}};coarse=await coarseGame.create_run(selector,'research','create');fine=await fineGame.create_run(selector,'research','create');}finally{random.mockRestore();}
+    const ref=(kind:string,id:string)=>({run_id:coarse.run_id,kind,id,version:1});
+    const envelope={run_id:coarse.run_id,operation_id:'collect',expected_revision:coarse.revision,intent:{kind:'request_collection',actor:'R',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-LIMITED'),method_ref:ref('method','limited-text-collection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-R')],collection_window:{from:1000,to:31000},needed_by:900000}};
+    coarse=(await coarseGame.apply_collection_intent(envelope)).view;fine=(await fineGame.apply_collection_intent(envelope)).view;
+    coarse=(await coarseGame.control_clock({run_id:coarse.run_id,operation_id:'coarse',expected_revision:coarse.revision,intent:{kind:'advance',to:40000}})).view;
+    for(const to of [1000,2000,29998,29999,30000,30001,30999,31000,32000,33000,40000])fine=(await new Game(fineStore).control_clock({run_id:fine.run_id,operation_id:'fine-'+to,expected_revision:fine.revision,intent:{kind:'advance',to}})).view;
+    const a=await coarseStore.read_committed(coarse.run_id),b=await fineStore.read_committed(fine.run_id);if(a?.schema!==14||b?.schema!==14)throw Error('Wrong collection branch');
+    for(const key of ['sim_time','actors','gates','commands','requests','requirements','collection_tasks','observations','reports','deliveries','records','schedule','event_sequence','knowledge_seq','rng','intel'] as const)expect(b[key]).toEqual(a[key]);
+  }finally{await coarseStore.delete();await fineStore.delete();}
+});
+
 test('KA-E08 a cancelled source task does not mask the real labor and device cost of its legal retry',async()=>{
   const store=new Persistence('ka-owned-retry-cost-'+crypto.randomUUID()),game=new Game(store);
   try{
@@ -296,5 +332,32 @@ test('KA-E03 requires a real qualified inspection before W can deliver the facil
       deliveries:[{sender:'W',recipient:'HQ',sent_at:92000,received_at:93000}],
       coverage:[{quality:'qualified',planned_area_m2:4,actual_area_m2:4,actual_scope:[{min_x:249,max_x:251,min_y:149,max_y:151}]}],
     });
+  }finally{await store.delete();}
+});
+
+test.each([
+  {profile:'initial_unknown',generated_at:32000,received_at:33000,work:0,reason:'window_closed',energy:82000000,success:false},
+  {profile:'initial_not_met',generated_at:2000,received_at:3000,work:0,reason:'local_gate_not_met',energy:82000000,success:false},
+  {profile:'unknown_mid',generated_at:16000,received_at:17000,work:14000,reason:'local_gate_unknown',energy:110000000,success:false},
+  {profile:'not_met_mid',generated_at:16000,received_at:17000,work:14000,reason:'local_gate_not_met',energy:110000000,success:false},
+  {profile:'unknown_before_completion',generated_at:30999,received_at:31999,work:28999,reason:'local_gate_unknown',energy:139998000,success:false},
+  {profile:'unknown_at_completion',generated_at:31000,received_at:32000,work:29000,reason:'local_gate_unknown',energy:140000000,success:false},
+  {profile:'not_met_at_completion',generated_at:31000,received_at:32000,work:29000,reason:'local_gate_not_met',energy:140000000,success:false},
+  {profile:'unknown_after_completion',generated_at:31000,received_at:32000,work:29000,reason:null,energy:140000000,success:true},
+  {profile:'initial_unknown_then_met',generated_at:32000,received_at:33000,work:29000,reason:null,energy:140000000,success:true},
+] as const)('KA-E05 obeys a real local collection gate, spent work and environment phase: $profile',async(vector)=>{
+  const store=new Persistence('ka-owned-local-gate-'+crypto.randomUUID()),game=new Game(store,{knowledge_collection_gate_profile:vector.profile});
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const ref=(kind:string,id:string)=>({run_id:view.run_id,kind,id,version:1});
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'collect',expected_revision:view.revision,intent:{kind:'request_collection',actor:'R',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-LIMITED'),method_ref:ref('method','limited-text-collection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-R')],collection_window:{from:1000,to:31000},needed_by:900000}})).view;
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'before-delivery',expected_revision:view.revision,intent:{kind:'advance',to:vector.received_at-1}})).view;
+    expect(view).toMatchObject({reports:[],coverage:[]});
+    view=(await new Game(store).control_clock({run_id:view.run_id,operation_id:'at-delivery',expected_revision:view.revision,intent:{kind:'advance',to:vector.received_at}})).view;
+    expect(view).toMatchObject({reports:[{generated_at:vector.generated_at}],deliveries:[{received_at:vector.received_at}]});
+    if(vector.success)expect(view).toMatchObject({reports:[{body:{kind:'limited_indication'},observed_time:{kind:'known',value:vector.generated_at-1000}}],coverage:[{actual_area_m2:50}]});
+    else expect(view).toMatchObject({reports:[{body:{kind:'collection_failed',reason:vector.reason,collection_work_ms:vector.work},observation_ref:null,record_ref:null,observed_time:{kind:'unknown'}}],coverage:[{actual_scope:[],actual_area_m2:null,quality:'failed'}]});
+    view=(await new Game(store).control_clock({run_id:view.run_id,operation_id:'finish',expected_revision:view.revision,intent:{kind:'advance',to:40000}})).view;
+    expect(await store.read_committed(view.run_id)).toMatchObject({actors:{R:{energy_used_uj:vector.energy,blank_record:!vector.success}},collection_tasks:[{status:vector.success?'collected':'failed'}]});
   }finally{await store.delete();}
 });

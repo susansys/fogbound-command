@@ -8,7 +8,7 @@ export function valid_knowledge_collection_envelope(value:unknown):value is Know
   const intent=value.intent;
   if(intent.kind==='advance')return fields(intent,['kind','to'])&&Number.isSafeInteger(intent.to)&&Number(intent.to)>=0&&Number(intent.to)<=1222000;
   if(intent.kind==='cancel_collection')return fields(intent,['kind','request_ref','authority_ref'])&&valid_collection_ref(intent.request_ref,value.run_id,'collection_request')&&valid_collection_ref(intent.authority_ref,value.run_id,'authority');
-  if(intent.kind!=='request_collection'||!fields(intent,['kind','actor','question_ref','target_ref','scope_ref','method_ref','authority_ref','basis_refs','collection_window','needed_by'])||!['R','W'].includes(String(intent.actor)))return false;
+  if(intent.kind!=='request_collection'||!fields(intent,['kind','actor','question_ref','target_ref','scope_ref','method_ref','authority_ref','basis_refs','collection_window','needed_by'])||intent.actor!=='R'&&intent.actor!=='W')return false;
   for(const [key,kind]of [['question_ref','question'],['target_ref','facility'],['scope_ref','scope'],['method_ref','method'],['authority_ref','authority']])if(!valid_collection_ref(intent[key],value.run_id,kind))return false;
   if(!Array.isArray(intent.basis_refs)||intent.basis_refs.length!==1||Object.keys(intent.basis_refs).length!==1||!valid_collection_ref(intent.basis_refs[0],value.run_id,'briefing'))return false;
   const window=intent.collection_window;

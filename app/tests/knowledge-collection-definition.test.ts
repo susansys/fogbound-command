@@ -1,6 +1,18 @@
 import {expect, test} from 'vitest';
 import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
+import {state_hash,validate_state} from '../src/core/snapshot';
+
+test('KA-E09 rejects a coercible private initial-condition value even when the corrupted body has a matching hash',async()=>{
+  const store=new Persistence('ka-owned-initial-condition-type-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const state=await store.read_committed(view.run_id);if(state?.schema!==14)throw Error('Wrong collection branch');
+    Reflect.set(state.initial_conditions,'surface',['default']);state.integrity=await state_hash(state);
+    await expect(validate_state(state)).rejects.toThrow('INVALID_SAVE');
+    expect(await game.get_view(view.run_id)).toEqual(view);
+  }finally{await store.delete();}
+});
 
 test('KA-E01 creates the independent collection package with both teams lawfully known at B', async () => {
   const store = new Persistence('ka-owned-definition-' + crypto.randomUUID());

@@ -1,6 +1,7 @@
 import type { Mode, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
+import {verify_collection_report_digests} from './knowledge-collection-dto';
 import {verify_integrated_truth_digest} from './integrated-field-dto';
 import {verify_outcome_participant_receipt,verify_outcome_inference_receipt,verify_outcome_truth_digest,verify_outcome_debrief_digest} from './outcome-dto';
 import {correlation} from './protocol';
@@ -99,6 +100,7 @@ export class Transport {
     });
     this.worker.onmessage = async(event: MessageEvent<unknown>) => {
       let response:Response = valid_response(event.data)?event.data:{request_id:correlation(event.data),ok:false,code:'CHANNEL_UNCERTAIN'};
+      if(response.ok&&response.view?.scenario_kind==='play_knowledge_collection'){try{if(!await verify_collection_report_digests(response.view))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.debrief_participants){try{if(!await verify_outcome_participant_receipt(response.debrief_participants))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.debrief_inference){try{if(!await verify_outcome_inference_receipt(response.debrief_inference))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.integrated_truth){try{if(!await verify_integrated_truth_digest(response.integrated_truth))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}

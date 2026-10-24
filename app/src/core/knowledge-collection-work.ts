@@ -7,7 +7,7 @@ import {hash} from './scenario';
 export function collection_ref<K extends string>(run_id:string,kind:K,id:string):CollectionRef<K>{return {run_id,kind,id,version:1};}
 function collection_policy(state:KnowledgeCollectionState,actor:CollectionActor){return actor==='R'?state.definition.collection:state.definition.inspection;}
 function sort_events(state:KnowledgeCollectionState){
-  const phase={collection_complete:0,registration_complete:0,receive_collection:1,accepted_receipt:1,report_delivery:1,cancel_received:1,start_collection:2,hq_send:2,ir_expiry:3};
+  const phase={gate_change:-1,collection_complete:0,registration_complete:0,receive_collection:1,accepted_receipt:1,report_delivery:1,cancel_received:1,window_close:1,start_collection:2,hq_send:2,ir_expiry:3};
   state.schedule.sort((a,b)=>a.at-b.at||phase[a.kind]-phase[b.kind]||a.sequence-b.sequence);
 }
 function enqueue(state:KnowledgeCollectionState,request_id:string,kind:KnowledgeCollectionState['schedule'][number]['kind'],at:number,command_id?:string){
@@ -73,13 +73,13 @@ function accrue_energy(state:KnowledgeCollectionState,to:number){
 }
 async function form_activity_terminal(state:KnowledgeCollectionState,task:CollectionRequestState,cancelled=false){
   const actor=task.intent.actor,policy=collection_policy(state,actor),observation=cancelled?undefined:state.observations.find(item=>item.request_id===task.ref.id);
-  if(!cancelled&&(task.started_at===null||task.collection_stopped_at===null||!observation&&task.stop_reason===null||observation&&!state.actors[actor].blank_record))throw new GameError('INVALID_REQUEST');
+  if(!cancelled&&(task.collection_stopped_at===null||!observation&&task.stop_reason===null||observation&&(task.started_at===null||!state.actors[actor].blank_record)))throw new GameError('INVALID_REQUEST');
   const area=(rect:typeof policy.planned_scope)=>(rect.max_x-rect.min_x)*(rect.max_y-rect.min_y);
   const content:Omit<CollectionReport,'content_digest'>={
     ref:collection_ref(state.run_id,'report',task.ref.id+'.report'),source_actor:actor,method:cancelled?'task-control-receipt':actor==='R'?'limited-text-collection':'qualified-facility-inspection',
     target_ref:structuredClone(task.intent.target_ref),scope_ref:structuredClone(task.intent.scope_ref),method_ref:cancelled?collection_ref(state.run_id,'method',state.definition.control_receipt.method):structuredClone(task.intent.method_ref),requested_method_ref:structuredClone(task.intent.method_ref),
     observation_ref:observation?.ref??null,record_ref:observation?collection_ref(state.run_id,'record',task.ref.id+'.record'):null,observed_time:observation?{kind:'known',value:observation.observed_at,evidence:observation.ref}:{kind:'unknown'},generated_at:state.sim_time,source_reported_time:{kind:'unknown'},
-    body:cancelled?{kind:'collection_cancelled',field:'B.condition',quality:'failed',outcome:'not_covered',conclusion:'unknown',reason:'cancelled_before_start',collection_work_ms:0,limits:['作业开始前已取消，没有生成样本或实体记录']}:!observation?{kind:'collection_failed',field:'B.condition',quality:'failed',outcome:'not_covered',conclusion:'unknown',reason:task.stop_reason!,attempted_interval:{from:task.started_at!,to:task.collection_stopped_at!},collection_work_ms:task.collection_stopped_at!-task.started_at!,limits:['本次采集没有提交持久样本，不能据此判断未采集范围']}:
+    body:cancelled?{kind:'collection_cancelled',field:'B.condition',quality:'failed',outcome:'not_covered',conclusion:'unknown',reason:'cancelled_before_start',collection_work_ms:0,limits:['作业开始前已取消，没有生成样本或实体记录']}:!observation?{kind:'collection_failed',field:'B.condition',quality:'failed',outcome:'not_covered',conclusion:'unknown',reason:task.stop_reason!,attempted_interval:{from:task.started_at??task.received_at!,to:task.collection_stopped_at!},collection_work_ms:task.started_at===null?0:task.collection_stopped_at!-task.started_at,limits:['本次采集没有提交持久样本，不能据此判断未采集范围']}:
       observation.sample.kind==='limited_indication'?{kind:'limited_indication',field:'B.condition',quality:'limited',outcome:'inconclusive',limits:['仅取得计划范围内的有限资料，不能据此确认设施状况']}:{kind:'qualified_facility_field',field:'B.condition',condition:observation.sample.condition,object_version:observation.sample.object_version,quality:'qualified',outcome:'detected',qualification_ref:collection_ref(state.run_id,'qualification',state.definition.inspection.qualification),limits:['只适用于本次检查的B设施字段及实际范围']},
     coverage:{planned_scope:structuredClone(policy.planned_scope),actual_scope:structuredClone(observation?.actual_scope??[]),planned_area_m2:area(policy.planned_scope),actual_area_m2:observation?observation.actual_scope.reduce((sum,rect)=>sum+area(rect),0):null,geometry_version:state.definition.hashes.geometry,model_version:1},
     control_outcomes:task.cancel&&task.cancel.result!==null&&task.cancel.received_at!==null?[{request_ref:task.cancel.ref,result:task.cancel.result,decided_at:task.cancel.received_at}]:[],
@@ -93,9 +93,26 @@ async function form_activity_terminal(state:KnowledgeCollectionState,task:Collec
   state.actors[actor].sender_free_at=task.report_sent_at+policy.sender_ms;
   enqueue(state,task.ref.id,'report_delivery',state.actors[actor].sender_free_at);
 }
+function stop_collection_work(state:KnowledgeCollectionState,task:CollectionRequestState,reason:NonNullable<CollectionRequestState['stop_reason']>){
+  task.stop_reason=reason;task.collection_stopped_at=state.sim_time;task.status='registering';
+  state.collection_tasks.find(item=>item.request_id===task.ref.id)!.status='failed';
+  state.schedule=state.schedule.filter(event=>event.request_id!==task.ref.id||!['start_collection','collection_complete'].includes(event.kind));
+  enqueue(state,task.ref.id,'registration_complete',state.sim_time+collection_policy(state,task.intent.actor).registration_ms);
+}
 export async function advance_collection_work(state:KnowledgeCollectionState,to:number){
   while(state.schedule.length&&state.schedule[0].at<=to){
     const event=state.schedule.shift()!;accrue_energy(state,event.at);
+    if(event.kind==='gate_change'){
+      const change=state.definition.local_gate_profiles[state.initial_conditions.gate_profile].changes.find(item=>item.at===event.at);
+      if(!change)throw new GameError('INVALID_REQUEST');
+      state.gates.R=change.status as import('./knowledge-collection-state').CollectionLocalGate;
+      for(const task of state.requests.filter(task=>task.intent.actor==='R'&&task.received_at!==null)){
+        if(task.status==='collecting'&&state.gates.R!=='met')stop_collection_work(state,task,state.gates.R==='unknown'?'local_gate_unknown':'local_gate_not_met');
+        else if(task.status==='waiting'&&state.gates.R==='not_met'&&state.sim_time>=task.intent.collection_window.from)stop_collection_work(state,task,'local_gate_not_met');
+        else if(task.status==='waiting'&&state.gates.R==='met'&&state.sim_time<task.intent.collection_window.to&&!state.schedule.some(item=>item.request_id===task.ref.id&&item.kind==='start_collection'))enqueue(state,task.ref.id,'start_collection',Math.max(state.sim_time,task.intent.collection_window.from));
+      }
+      continue;
+    }
     const task=state.requests.find(request=>request.ref.id===event.request_id);
     if(!task)throw new GameError('INVALID_REQUEST');
     if(event.command_id){
@@ -113,16 +130,21 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
       state.collection_tasks.push({ref:collection_ref(state.run_id,'collection_task',task.ref.id+'.task'),request_id:task.ref.id,requirement_ref:state.requirements.find(ir=>ir.request_id===task.ref.id)!.ref,source_actor:task.intent.actor,labor_ref:task.intent.actor+':LABOR',device_ref:task.intent.actor+':COLLECTOR',window:structuredClone(task.intent.collection_window),scope_ref:structuredClone(task.intent.scope_ref),method_ref:structuredClone(task.intent.method_ref),authority_ref:structuredClone(task.intent.authority_ref),basis_refs:structuredClone(task.intent.basis_refs),status:'allocated',started_at:null,observed_at:null});
       const actor=state.actors[task.intent.actor];
       task.accepted_sent_at=Math.max(state.sim_time,actor.sender_free_at);
-      task.accepted_stage=task.planned_start_at>state.sim_time?'waiting_window':'collecting';
+      task.accepted_stage=state.gates[task.intent.actor]==='unknown'?'waiting_gate':state.gates[task.intent.actor]==='not_met'?'refused_gate':task.planned_start_at>state.sim_time?'waiting_window':'collecting';
       const ackAt=task.accepted_sent_at+policy.sender_ms;
       actor.sender_free_at=ackAt;enqueue(state,task.ref.id,'accepted_receipt',ackAt);
       enqueue(state,task.ref.id,'start_collection',task.planned_start_at);
+      enqueue(state,task.ref.id,'window_close',task.intent.collection_window.to);
     }else if(event.kind==='start_collection'){
       const actor=state.actors[task.intent.actor];
       if(actor.position[0]!==250||actor.position[1]!==150)throw new GameError('INVALID_REQUEST');
+      if(state.gates[task.intent.actor]==='unknown')continue;
+      if(state.gates[task.intent.actor]==='not_met'){stop_collection_work(state,task,'local_gate_not_met');continue;}
       task.started_at=state.sim_time;task.status='collecting';
       const collection=state.collection_tasks.find(item=>item.request_id===task.ref.id)!;collection.status='collecting';collection.started_at=state.sim_time;
       enqueue(state,task.ref.id,'collection_complete',Math.min(state.sim_time+policy.collection_ms,task.intent.collection_window.to));
+    }else if(event.kind==='window_close'){
+      if(task.status==='waiting')stop_collection_work(state,task,'window_closed');
     }else if(event.kind==='accepted_receipt'){
       task.accepted_received_at=state.sim_time;state.knowledge_seq++;
       const requirement=state.requirements.find(ir=>ir.request_id===task.ref.id)!;
