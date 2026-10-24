@@ -33,6 +33,7 @@ export type Request =
   |{kind:'open_outcome_debrief';run_id:string}
   |{kind:'request_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthRequest}
   |{kind:'confirm_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthAcknowledgement}
+  |{kind:'operate_knowledge_collection';envelope:import('./knowledge-collection-contracts').KnowledgeCollectionEnvelope}
   |{kind:'operate_conflicting_action';envelope:import('./conflicting-action-contracts').ConflictingActionEnvelope}
   |{kind:'operate_outcome';envelope:import('./outcome-contracts').OutcomeEnvelope}
   |{kind:'request_source_validation';envelope:unknown}

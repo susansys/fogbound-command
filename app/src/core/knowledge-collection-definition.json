@@ -1,0 +1,32 @@
+{
+  "id": "KA-TEXT-KNOWLEDGE-01", "version": 1,
+  "schema": 14, "contract": "0.5.1", "scenario_kind": "play_knowledge_collection",
+  "geometry": {"unit": "m", "metres_per_coordinate": 1, "points": {"H": [50,150], "A": [150,150], "B": [250,150]}},
+  "initial_positions": {"R": "B", "W": "B"},
+  "public_rules": {"deadline": 900000, "receipt_grace": 10000, "cleanup_duration": 322000},
+  "collection": {
+    "question": "B-condition", "field": "B.condition", "target": "B", "scope": "B-LIMITED",
+    "method": "limited-text-collection", "authority": "KA-INITIAL",
+    "collection_ms": 29000, "registration_ms": 1000, "sender_ms": 1000,
+    "window": {"from": 1000, "to": 31000},
+    "planned_scope": {"min_x": 245, "max_x": 255, "min_y": 145, "max_y": 155},
+    "available_surface": {"min_x": 245, "max_x": 250, "min_y": 145, "max_y": 155},
+    "parameter_category": "C", "calibration_status": "fictional_not_measured"
+  },
+  "inspection": {
+    "question": "B-condition", "field": "B.condition", "target": "B", "scope": "B-QUALIFIED",
+    "method": "qualified-facility-inspection", "authority": "KA-INITIAL", "qualification": "W-FACILITY-INSPECTOR",
+    "collection_ms": 30000, "registration_ms": 2000, "sender_ms": 1000,
+    "window": {"from": 60000, "to": 91000},
+    "planned_scope": {"min_x": 249, "max_x": 251, "min_y": 149, "max_y": 151},
+    "available_surface": {"min_x": 249, "max_x": 251, "min_y": 149, "max_y": 151},
+    "parameter_category": "C", "calibration_status": "fictional_not_measured"
+  },
+  "facility": {"condition": "operable", "version": 1},
+  "control_receipt": {"method": "task-control-receipt", "sender_ms": 1000},
+  "diagnostic_sampling_surfaces": {"default": "registered_surface", "empty": "no_persistent_samples"},
+  "actors": {
+    "R": {"people": 3, "labor_capacity": 1, "energy_uj": 143147520000, "idle_uj_per_ms": 2000, "collection_uj_per_ms": 4000, "registration_uj_per_ms": 4000, "load_kg": 4, "blank_record_kg": 0.01},
+    "W": {"people": 3, "labor_capacity": 1, "energy_uj": 57600000000, "idle_uj_per_ms": 500, "collection_uj_per_ms": 2000, "registration_uj_per_ms": 500, "load_kg": 3, "blank_record_kg": 0.01}
+  }
+}

@@ -1,3 +1,4 @@
+import {knowledge_collection_player_view} from './knowledge-collection-dto';
 import {integrated_field_player_view,integrated_debrief_session,integrated_truth_payload,integrated_truth_confirmation,integrated_fairness} from './integrated-field-dto';
 import {conflicting_action_player_view} from './conflicting-action-dto';
 import {source_time_player_view} from './source-time-dto';
@@ -43,6 +44,7 @@ const common_player_view:Check=v=>shape(v,{
   issued_orders:list(v=>shape(v,{command_id:valid_id,issued:time,plan:legacy_plan},{reason:text})),
 },{replacement:v=>shape(v,{original_command_id:valid_id,replacement_command_id:valid_id,accepted_at:time,received_at:time,evidence:text}),scenario_case:oneOf(prestart_case_refs),scenario_kind:oneOf(['record','prestart_move']),artifacts:list(artifact),replay_nodes:list(v=>shape(v,{revision:v=>time(v)&&Number(v)>=1,at:time,meaningful:bool,label:text}))});
 export const player_view:Check=v=>{
+  if(record(v)&&v.scenario_kind==='play_knowledge_collection')return knowledge_collection_player_view(v);
   if(record(v)&&v.scenario_kind==='play_integrated_field')return integrated_field_player_view(v);
   if(record(v)&&v.scenario_kind==='play_outcome')return Object.hasOwn(v,'conflicting_action')?conflicting_action_player_view(v):Object.hasOwn(v,'source_package')||Object.hasOwn(v,'source_reading')?source_time_player_view(v):outcome_player_view(v);
   if(record(v)&&v.scenario_kind==='play_intelligence')return intelligence_player_view(v);

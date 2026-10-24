@@ -1,3 +1,4 @@
+import {valid_knowledge_collection_envelope} from './knowledge-collection-protocol';
 import {parse_conflicting_action_envelope} from './conflicting-action-protocol';
 import {valid_integrated_field_envelope,parse_integrated_truth_request} from './integrated-field-protocol';
 import {parse_outcome_participant_query,parse_outcome_inference_request,parse_outcome_debrief_transition,parse_outcome_decision_query,parse_outcome_envelope,parse_outcome_truth_request,parse_outcome_debrief_query,parse_outcome_evidence_request} from './outcome-protocol';
@@ -30,6 +31,7 @@ export function valid_request(
   value: unknown,
 ): value is Request & { request_id: string } {
   if (!record(value) || !valid_id(value.request_id)) return false;
+  if(value.kind==='operate_knowledge_collection')return fields(value,['kind','request_id','envelope'])&&valid_knowledge_collection_envelope(value.envelope);
   if(value.kind==='open_integrated_debrief'||value.kind==='get_integrated_fairness')return fields(value,['kind','request_id','run_id'])&&valid_id(value.run_id);
   if(value.kind==='request_integrated_truth'||value.kind==='confirm_integrated_truth'){if(!fields(value,['kind','request_id','envelope']))return false;try{parse_integrated_truth_request(value.envelope,value.kind==='confirm_integrated_truth');return true;}catch{return false;}}
   if(value.kind==='get_outcome_participants'){if(!fields(value,['kind','request_id','query']))return false;try{parse_outcome_participant_query(value.query);return true;}catch{return false;}}

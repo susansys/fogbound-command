@@ -78,6 +78,7 @@ export function Workbench() {
   const [intelligenceView,setIntelligenceView]=useState<IntelligencePlayerView|null>(null);
   const shownRun=useRef<string|null>(null);shownRun.current=integratedView?.run_id??outcomeView?.run_id??intelligenceView?.run_id??missionView?.run_id??playView?.run_id??view?.run_id??null;
   function setView(next:GamePlayerView|null){
+    if(next?.scenario_kind==='play_knowledge_collection'){setError('INVALID_REQUEST');return;}
     if(next?.scenario_kind==='play_integrated_field'){if(!historyActive.current)liveView.current=next;setIntegratedView(next);setOutcomeView(null);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setIntegratedView(null);
     if(next?.scenario_kind==='play_outcome'){if(!historyActive.current)liveView.current=next;setOutcomeView(next);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setOutcomeView(null);
     if(next?.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(next);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
@@ -95,6 +96,7 @@ export function Workbench() {
   currentView.current = view;
   useEffect(()=>{if(!history){setReviewNode('');replayNodes.current=[];}},[view?.run_id,history]);
   function adoptView(next:GamePlayerView){
+    if(next.scenario_kind==='play_knowledge_collection'){setError('INVALID_REQUEST');return;}
     if(next.scenario_kind==='play_integrated_field'){if(!historyActive.current)liveView.current=next;setIntegratedView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setOutcomeView(null);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setIntegratedView(null);
     if(next.scenario_kind==='play_outcome'){if(!historyActive.current)liveView.current=next;setOutcomeView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setIntelligenceView(null);setMissionView(null);setPlayView(null);setLegacyView(null);return;}setOutcomeView(null);
     if(next.scenario_kind==='play_intelligence'){if(!historyActive.current)liveView.current=next;setIntelligenceView(old=>!old||next.run_id===old.run_id&&next.revision>=old.revision?next:old);setMissionView(null);setPlayView(null);setLegacyView(null);return;}
@@ -252,7 +254,7 @@ export function Workbench() {
       if(view.mode==='command'&&(!isCurrent()||!response.ok&&response.code==='STALE_REVISION')){
         const fresh=await transport.request({kind:'view',run_id:context.run_id});
         if(editing.current!==seq||currentView.current?.run_id!==context.run_id||historyActive.current)return;
-        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'||fresh.view.scenario_kind==='play_mission'||fresh.view.scenario_kind==='play_intelligence'||fresh.view.scenario_kind==='play_outcome'||fresh.view.scenario_kind==='play_integrated_field'){if(!fresh.ok)setError(fresh.code);return;}
+        if(!fresh.ok||!fresh.view||fresh.view.scenario_kind==='play_corridor'||fresh.view.scenario_kind==='play_mission'||fresh.view.scenario_kind==='play_intelligence'||fresh.view.scenario_kind==='play_outcome'||fresh.view.scenario_kind==='play_integrated_field'||fresh.view.scenario_kind==='play_knowledge_collection'){if(!fresh.ok)setError(fresh.code);return;}
         if(fresh.view.revision>=currentView.current.revision){currentView.current=fresh.view;adoptView(fresh.view);}
         context.revision=currentView.current.revision;continue;
       }
