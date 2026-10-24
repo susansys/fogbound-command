@@ -8,6 +8,29 @@ import {canonical} from '../src/core/snapshot';
 import {valid_request} from '../src/protocol';
 import {Transport} from '../src/transport';
 
+test.each([{work:'archive',restore:false},{work:'archive',restore:true},{work:'position',restore:false},{work:'position',restore:true}])('KA-E12 delayed start rechecks R capacity after gate recovery and $work reception, restore=$restore',async({work,restore})=>{
+  const store=new Persistence('ka-owned-gate-start-capacity-'+crypto.randomUUID());let game=new Game(store,{knowledge_collection_gate_profile:'initial_unknown_then_met'});
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1},case_ref:work==='archive'?'KA-SOURCE3-01':'KA-LATE-POSITION-01'},'research','create');
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:view.run_id,kind,id,version:1 as const});
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'collect-first',expected_revision:view.revision,intent:{kind:'request_collection',actor:'R',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-LIMITED'),method_ref:ref('method','limited-text-collection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-R')],collection_window:{from:1000,to:31000},needed_by:900000}})).view;
+    if(work==='position')view=(await game.control_clock({run_id:view.run_id,operation_id:'at-1',expected_revision:view.revision,intent:{kind:'advance',to:1000}})).view;
+    const intent=work==='archive'?{kind:'request_archive_read',actor:'R',entry:'survey',method_ref:ref('method','B-archive-read'),authority_ref:ref('authority','KA-INITIAL'),forward_credentials:'defer'}:{kind:'request_self_position',actor:'R',recipient:'HQ',method_ref:ref('method','self-position-registration'),authority_ref:ref('authority','KA-INITIAL')};
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'other-device-work',expected_revision:view.revision,intent})).view;
+    if(restore){
+      view=(await game.control_clock({run_id:view.run_id,operation_id:'at-2500',expected_revision:view.revision,intent:{kind:'advance',to:2500}})).view;
+      view=(await game.save({run_id:view.run_id,operation_id:'save-conflict',expected_revision:view.revision,intent:{kind:'save'}})).view;
+      game=new Game(new Persistence(store.name));view=(await game.restore(view.run_id,'restore-conflict')).view;
+    }
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'at-34',expected_revision:view.revision,intent:{kind:'advance',to:34000}})).view;
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong branch');
+    expect(view.reports.find(report=>report.method==='limited-text-collection')).toMatchObject({body:{kind:'collection_failed',reason:'capacity',collection_work_ms:0},observed_time:{kind:'unknown'}});
+    const state=await store.read_committed(view.run_id);if(state?.schema!==14)throw Error('Wrong state');
+    expect(state.records).toHaveLength(0);expect(state.actors.R.energy_used_uj).toBe(work==='archive'?74000000:70000000);
+    expect(valid_response({request_id:'actual-start-capacity',ok:true,view})).toBe(true);
+  }finally{await store.delete();}
+});
+
 test('KA-E12 review regression turns collection requested after W departure into an actual local failure receipt',async()=>{
   const store=new Persistence('ka-owned-departed-collection-'+crypto.randomUUID()),game=new Game(store);
   try{

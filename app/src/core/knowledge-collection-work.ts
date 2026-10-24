@@ -8,6 +8,9 @@ import {is_collection_report,type CollectionArchiveIntent,type CollectionHistori
 
 export function collection_ref<K extends string>(run_id:string,kind:K,id:string):CollectionRef<K>{return {run_id,kind,id,version:1};}
 function collection_policy(state:KnowledgeCollectionState,actor:CollectionActor){return actor==='R'?state.definition.collection:state.definition.inspection;}
+function collection_device_busy(state:KnowledgeCollectionState,actor:CollectionActor){
+  return actor==='R'&&(state.archive_requests.some(item=>item.status==='reading'||item.status==='registering')||state.position_requests.some(item=>item.started_at!==null&&item.completed_at===null&&item.outcome===null));
+}
 function sort_events(state:KnowledgeCollectionState){
   const phase={gate_change:-1,collection_complete:0,registration_complete:0,archive_read_complete:0,archive_registration_complete:0,return_boundary:0,position_complete:0,receive_return:1,receive_position:1,receive_archive:1,receive_source_forward:1,receive_collection:1,accepted_receipt:1,report_delivery:1,cancel_received:1,window_close:1,start_collection:2,hq_send:2,source_send:2,ir_expiry:3};
   state.schedule.sort((a,b)=>a.at-b.at||phase[a.kind]-phase[b.kind]||a.sequence-b.sequence);
@@ -171,7 +174,7 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
       task.received_at=state.sim_time;task.status='waiting';
       state.collection_tasks.push({ref:collection_ref(state.run_id,'collection_task',task.ref.id+'.task'),request_id:task.ref.id,requirement_ref:state.requirements.find(ir=>ir.request_id===task.ref.id)!.ref,source_actor:task.intent.actor,labor_ref:task.intent.actor+':LABOR',device_ref:task.intent.actor+':COLLECTOR',window:structuredClone(task.intent.collection_window),scope_ref:structuredClone(task.intent.scope_ref),method_ref:structuredClone(task.intent.method_ref),authority_ref:structuredClone(task.intent.authority_ref),basis_refs:structuredClone(task.intent.basis_refs),status:'allocated',started_at:null,observed_at:null});
       const point=state.actors[task.intent.actor].position,not_at_site=point[0]!==250||point[1]!==150;
-      const busy=task.intent.actor==='R'&&(state.archive_requests.some(item=>item.status==='reading'||item.status==='registering')||state.position_requests.some(item=>item.started_at!==null&&item.completed_at===null&&item.outcome===null));
+      const busy=collection_device_busy(state,task.intent.actor);
       task.accepted_stage=not_at_site?'refused_site':busy?'refused_capacity':state.gates[task.intent.actor]==='unknown'?'waiting_gate':state.gates[task.intent.actor]==='not_met'?'refused_gate':task.planned_start_at>state.sim_time?'waiting_window':'collecting';
       task.accepted_sent_at=queue_source_message(state,{owner_kind:'collection',request_id:task.ref.id,actor:task.intent.actor,kind:'accepted',report_ref:null,copy_index:0}).planned_sent_at;
       if(not_at_site||busy){await refuse_local_collection(state,task,not_at_site?'not_at_site':'capacity');continue;}
@@ -182,6 +185,7 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
       if(actor.position[0]!==250||actor.position[1]!==150){await refuse_local_collection(state,task,'not_at_site');continue;}
       if(state.gates[task.intent.actor]==='unknown')continue;
       if(state.gates[task.intent.actor]==='not_met'){stop_collection_work(state,task,'local_gate_not_met');continue;}
+      if(collection_device_busy(state,task.intent.actor)){await refuse_local_collection(state,task,'capacity');continue;}
       task.started_at=state.sim_time;task.status='collecting';
       const collection=state.collection_tasks.find(item=>item.request_id===task.ref.id)!;collection.status='collecting';collection.started_at=state.sim_time;
       enqueue(state,task.ref.id,'collection_complete',Math.min(state.sim_time+policy.collection_ms,task.intent.collection_window.to));
