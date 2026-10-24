@@ -163,3 +163,25 @@ test.each([336000,340000])('KA-E28 stopping at%s cancels only unstarted H work a
     expect(state.intel.jobs).toEqual([]);expect(valid_response({request_id:'stopped-H-queue',ok:true,view})).toBe(true);
   }finally{await store.delete();}
 });
+
+test('KA-E28 terminating preserves an expired IR and its local cancellation through save and restore',async()=>{
+  const store=new Persistence('ka-owned-expired-local-withdrawal-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:view.run_id,kind,id,version:1 as const});
+    const collect=async(actor:'R'|'W',needed_by:number)=>{view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'collect-'+actor,expected_revision:view.revision,intent:{kind:'request_collection',actor,question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope',actor==='R'?'B-LIMITED':'B-QUALIFIED'),method_ref:ref('method',actor==='R'?'limited-text-collection':'qualified-facility-inspection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-'+actor)],collection_window:actor==='R'?{from:1000,to:31000}:{from:60000,to:91000},needed_by}})).view;};
+    await collect('R',900000);if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'cancel-R',expected_revision:view.revision,intent:{kind:'cancel_collection',request_ref:view.collection_requests[0].ref,authority_ref:ref('authority','KA-INITIAL')}})).view;
+    await collect('W',1000);
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'expire',expected_revision:view.revision,intent:{kind:'advance',to:1000}})).view;
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
+    expect(view.collection_requests[1].status).toBe('expired');
+    view=(await game.apply_collection_intent({run_id:view.run_id,operation_id:'terminate',expected_revision:view.revision,intent:{kind:'terminate_task',authority_ref:ref('authority','KA-INITIAL')}})).view;
+    expect(view).toMatchObject({collection_requests:[{actor:'R'},{actor:'W',status:'expired',local_receipt:{kind:'cancelled_before_send',at:1000,remote_task_created:false}}],reports:[]});
+    expect(await store.read_committed(view.run_id)).toMatchObject({requirements:[{status:'tasking'},{status:'expired'}],collection_tasks:[{source_actor:'R'}]});
+    view=(await game.save({run_id:view.run_id,operation_id:'save-terminal',expected_revision:view.revision,intent:{kind:'save'}})).view;
+    const restored=(await new Game(new Persistence(store.name)).restore(view.run_id,'restore-terminal')).view;
+    expect(restored).toMatchObject({collection_requests:[{actor:'R'},{actor:'W',status:'expired',local_receipt:{kind:'cancelled_before_send',at:1000,remote_task_created:false}}]});
+    expect(valid_response({request_id:'restored-expired',ok:true,view:restored})).toBe(true);
+  }finally{await store.delete();}
+});

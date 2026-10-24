@@ -307,7 +307,8 @@ export function begin_collection_termination(state:KnowledgeCollectionState,trig
     const task=state.requests.find(task=>task.ref.id===command.request_id);
     if(task&&command.kind==='receive_collection'){
       task.status='cancelled';task.cancel={ref:collection_ref(state.run_id,'cancellation',task.ref.id+'.cleanup-cancel'),origin:'local_queue',issued_at:state.sim_time,received_at:null,result:'cancelled'};
-      state.requirements.find(requirement=>requirement.request_id===task.ref.id)!.status='cancelled';
+      const requirement=state.requirements.find(requirement=>requirement.request_id===task.ref.id)!;
+      if(!['expired','cancelled','answered','inconclusive'].includes(requirement.status))requirement.status='cancelled';
     }
   }
   retime_hq_queue(state);

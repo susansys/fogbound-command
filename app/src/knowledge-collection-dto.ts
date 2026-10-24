@@ -102,6 +102,8 @@ export function knowledge_collection_player_view(value:unknown):value is Knowled
   }
   for(const work of view.hq_work){
     if(work.ticket<1||work.issued_at>view.sim_time||work.method_ref.id!==(work.kind==='preparation'?'HQ-SOURCE-PREPARATION':'HQ-TEXT-PROCESSING')||work.kind==='preparation'&&work.basis_refs.length!==0||work.kind==='processing'&&work.basis_refs.length===0||work.used_ms>20000)return false;
+    if(work.started_at!==null&&work.started_at<work.issued_at)return false;
+    if(new Set(work.basis_refs.map(basis=>basis.id)).size!==work.basis_refs.length||work.basis_refs.some(basis=>![...view.reports,...view.process_reports].some(report=>same(report.ref,basis))||![...view.deliveries,...view.process_deliveries].some(delivery=>same(delivery.report_ref,basis)&&delivery.received_at<=work.issued_at)))return false;
     if(work.status==='processing'&&(work.started_at===null||work.completed_at!==null||work.used_ms!==view.sim_time-work.started_at))return false;
     if(work.status==='completed'&&(work.started_at===null||work.used_ms!==20000||work.completed_at!==work.started_at+20000||work.completed_at>view.sim_time))return false;
     if((work.status==='queued'||work.status==='cancelled')&&(work.started_at!==null||work.completed_at!==null||work.used_ms!==0))return false;

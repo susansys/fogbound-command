@@ -102,6 +102,42 @@ class OwnedPort{
   terminate(){}
 }
 
+test.each(['queued-before-basis','processing-before-basis','completed-before-basis','started-before-issue','preparation-started-before-issue','actual-later-duplicates'])('KA-E23 rejects digest-consistent HQ processing with impossible causality: %s',async(mutation)=>{
+  const store=new Persistence('ka-owned-processing-causality-'+crypto.randomUUID()),game=new Game(store);let transport:Transport|undefined;
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1},case_ref:'KA-SOURCE3-01'},'research','create');
+    const ref=<K extends string>(kind:K,id:string)=>({run_id:view.run_id,kind,id,version:1 as const});
+    const apply=async(operation_id:string,intent:unknown)=>{view=(await game.apply_collection_intent({run_id:view.run_id,operation_id,expected_revision:view.revision,intent})).view;};
+    const at=async(to:number)=>{view=(await game.control_clock({run_id:view.run_id,operation_id:'at-'+to,expected_revision:view.revision,intent:{kind:'advance',to}})).view;};
+    await apply('collect-R',{kind:'request_collection',actor:'R',question_ref:ref('question','B-condition'),target_ref:ref('facility','B'),scope_ref:ref('scope','B-LIMITED'),method_ref:ref('method','limited-text-collection'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[ref('briefing','KA-BRIEF-INITIAL-R')],collection_window:{from:1000,to:31000},needed_by:900000,delivery_copies:3});
+    await at(32000);if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong branch');
+    await apply('prepare',{kind:'request_hq_preparation',method_ref:ref('method','HQ-SOURCE-PREPARATION'),authority_ref:ref('authority','KA-INITIAL')});
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong branch');
+    await apply('process',{kind:'request_hq_processing',method_ref:ref('method','HQ-TEXT-PROCESSING'),authority_ref:ref('authority','KA-INITIAL'),basis_refs:[view.reports[0].ref]});
+    if(mutation!=='queued-before-basis')await at(mutation==='processing-before-basis'?53000:72000);
+    if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong branch');
+    expect(valid_response({request_id:'actual-processing',ok:true,view})).toBe(true);
+    if(mutation==='actual-later-duplicates'){
+      expect(view.deliveries.map(item=>item.received_at)).toEqual([32000,33000,34000]);
+      expect(view.hq_work.find(work=>work.kind==='processing')!.issued_at).toBe(32000);
+      vi.stubGlobal('Worker',OwnedPort);transport=new Transport();
+      const pending=transport.request({kind:'current',run_id:view.run_id}),port=OwnedPort.current,request_id=port.latest?.request_id;
+      port.emit({request_id,ok:true,view});expect(await pending).toEqual({request_id,ok:true,view});return;
+    }
+    const changed=structuredClone(view),job=changed.hq_work.find(work=>work.kind===(mutation==='preparation-started-before-issue'?'preparation':'processing'))!;
+    job.issued_at=mutation==='started-before-issue'?53000:mutation==='preparation-started-before-issue'?33000:1000;
+    if(mutation==='completed-before-basis'){
+      job.started_at=1000;job.completed_at=21000;
+      const product=changed.hq_products.find(item=>item.kind==='processing')!;product.completed_at=21000;
+      const {content_digest:_oldDigest,...content}=product;product.content_digest=await hash(canonical(content));
+    }
+    expect(valid_response({request_id:'impossible-processing',ok:true,view:changed})).toBe(false);
+    vi.stubGlobal('Worker',OwnedPort);transport=new Transport();
+    const pending=transport.request({kind:'current',run_id:view.run_id}),port=OwnedPort.current,request_id=port.latest?.request_id;
+    port.emit({request_id,ok:true,view:changed});expect(await pending).toEqual({request_id,ok:false,code:'CHANNEL_UNCERTAIN'});
+  }finally{transport?.close();vi.unstubAllGlobals();await store.delete();}
+});
+
 test('KA-E09 an actual IndexedDB abort commits neither a collection task nor its receipt and blocks further candidates',async()=>{
   const store=new Persistence('ka-owned-atomic-collection-'+crypto.randomUUID()),game=new Game(store);
   try{
