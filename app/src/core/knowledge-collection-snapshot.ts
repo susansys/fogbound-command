@@ -14,7 +14,7 @@ export async function validate_knowledge_collection_state(value:unknown):Promise
     if(!Array.isArray(value.inputs))throw new Error('Invalid collection inputs');
     for(const item of value.inputs){
       if(!record(item)||!valid_knowledge_collection_envelope(item.envelope))throw new Error('Invalid collection input');
-      expected=await apply_knowledge_collection_control(expected,item.envelope);
+      expected=await apply_knowledge_collection_control(expected,item.envelope,item.clock_to as number|undefined);
     }
     expected.integrity=await state_hash(expected);
     if(JSON.stringify(canonical(value))!==JSON.stringify(canonical(expected)))throw new Error('Collection snapshot mismatch');

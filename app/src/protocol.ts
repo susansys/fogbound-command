@@ -56,9 +56,8 @@ export function valid_request(
   if (value.kind === "create")
     return (
       fields(value, ["kind", "mode", "operation_id", "request_id",...(value.definition_ref===undefined?[]:['definition_ref']),...(value.case_ref===undefined?[]:['case_ref'])]) &&
-      (value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&
-      (value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE')&&
-      (value.definition_ref===undefined||value.definition_ref==='INTEGRATED-FIELD-PACK-3'||value.definition_ref==='B32-CONFLICTING-ACTION-01'||value.definition_ref==='B31-SOURCE-TIME-01'||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01'||value.definition_ref==='B23-INTELLIGENCE-01'||value.definition_ref==='B24-OUTCOME-01'||value.definition_ref==='B24-OUTCOME-NARROW-01'||value.definition_ref==='B24-OUTCOME-HARD-BOUNDARY-02') &&
+      (value.definition_ref==='KA-TEXT-KNOWLEDGE-01'?(value.case_ref===undefined||['KA-NORMAL-01','KA-SOURCE3-01','KA-LATE-POSITION-01'].includes(String(value.case_ref))&&typeof value.case_ref==='string'):(value.case_ref===undefined||prestart_case_refs.some(ref=>ref===value.case_ref))&&(value.case_ref===undefined||value.case_ref==='normal'||value.definition_ref==='ENG-PRESTART-REPLACE'))&&
+      (value.definition_ref===undefined||value.definition_ref==='KA-TEXT-KNOWLEDGE-01'||value.definition_ref==='INTEGRATED-FIELD-PACK-3'||value.definition_ref==='B32-CONFLICTING-ACTION-01'||value.definition_ref==='B31-SOURCE-TIME-01'||value.definition_ref==='FB01-ENG-MOVE'||value.definition_ref==='FB02-ENG-RECORD'||value.definition_ref==='ENG-PRESTART-REPLACE'||value.definition_ref==='B21-CORRIDOR-01'||value.definition_ref==='B22-MISSION-01'||value.definition_ref==='B23-INTELLIGENCE-01'||value.definition_ref==='B24-OUTCOME-01'||value.definition_ref==='B24-OUTCOME-NARROW-01'||value.definition_ref==='B24-OUTCOME-HARD-BOUNDARY-02') &&
       (value.mode === "command" || value.mode === "research") &&
       valid_id(value.operation_id)
     );

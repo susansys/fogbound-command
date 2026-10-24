@@ -13,7 +13,7 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
+  scenario_kind?: 'play_knowledge_collection'|'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
   read_only?:boolean;
   source_package?:{id:'B31-SOURCE-TIME-01';version:1};
   conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};
@@ -47,7 +47,7 @@ export type Request =
   |{kind:'evaluate_decision';run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>}
   |{kind:'operate_mission';envelope:Envelope}
   |{kind:'operate_intelligence';envelope:Envelope}
-  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
+  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef|import('./knowledge-collection-contracts').KnowledgeCollectionCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }

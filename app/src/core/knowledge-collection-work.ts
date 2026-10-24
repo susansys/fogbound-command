@@ -1,9 +1,11 @@
+import {settle_collection_outcome} from './knowledge-collection-outcome';
 import {GameError} from '../contracts';
 import type {CollectionActor,CollectionRef,CollectionReport,CollectionRequestIntent,CollectionCancelIntent} from '../knowledge-collection-contracts';
 import type {CollectionRequestState,KnowledgeCollectionState} from './knowledge-collection-state';
 import {canonical} from './snapshot';
 import {hash} from './scenario';
 import {apply_received_collection_report} from './knowledge-collection-knowledge';
+import {register_collection_record,transfer_collection_record,verify_collection_record} from './knowledge-collection-records';
 import {is_collection_report,type CollectionArchiveIntent,type CollectionHistoricalReport,type CollectionHistoricalOriginal,type CollectionRootRegistration,type CollectionPairCredential,type CollectionCredentialForwardIntent,type CollectionSourceNotice,type CollectionArchiveReceipt,type CollectionReturnIntent,type CollectionPositionIntent,type CollectionPositionReport} from '../knowledge-collection-contracts';
 
 export function collection_ref<K extends string>(run_id:string,kind:K,id:string):CollectionRef<K>{return {run_id,kind,id,version:1};}
@@ -12,25 +14,26 @@ function collection_device_busy(state:KnowledgeCollectionState,actor:CollectionA
   return actor==='R'&&(state.archive_requests.some(item=>item.status==='reading'||item.status==='registering')||state.position_requests.some(item=>item.started_at!==null&&item.completed_at===null&&item.outcome===null));
 }
 function sort_events(state:KnowledgeCollectionState){
-  const phase={gate_change:-1,collection_complete:0,registration_complete:0,archive_read_complete:0,archive_registration_complete:0,return_boundary:0,position_complete:0,receive_return:1,receive_position:1,receive_archive:1,receive_source_forward:1,receive_collection:1,accepted_receipt:1,report_delivery:1,cancel_received:1,window_close:1,start_collection:2,hq_send:2,source_send:2,ir_expiry:3};
+  const phase={goal_deadline:3,goal_grace:3,cleanup_deadline:3,cleanup_start:2,receive_cleanup:1,gate_change:-1,collection_complete:0,registration_complete:0,archive_read_complete:0,archive_registration_complete:0,return_boundary:0,position_complete:0,handover_complete:0,intel_complete:0,receive_return:1,receive_position:1,receive_archive:1,receive_source_forward:1,receive_collection:1,accepted_receipt:1,report_delivery:1,cancel_received:1,window_close:1,start_collection:2,handover_start:2,intel_start:2,hq_send:2,source_send:2,ir_expiry:3};
   state.schedule.sort((a,b)=>a.at-b.at||phase[a.kind]-phase[b.kind]||a.sequence-b.sequence);
 }
 function enqueue(state:KnowledgeCollectionState,request_id:string,kind:KnowledgeCollectionState['schedule'][number]['kind'],at:number,command_id?:string){
   state.schedule.push({at,sequence:++state.event_sequence,kind,request_id,...(command_id?{command_id}:{})});sort_events(state);
 }
 export function queue_source_message(state:KnowledgeCollectionState,input:Pick<import('./knowledge-collection-state').CollectionSourceMessage,'owner_kind'|'request_id'|'actor'|'kind'|'report_ref'|'copy_index'|'credential_id'>){
-  const actor=state.actors[input.actor],sent=Math.max(state.sim_time,actor.sender_free_at),received=sent+state.definition.control_receipt.sender_ms;
+  const actor=input.actor==='H'||input.actor==='INTEL'?state.support_senders[input.actor]:state.actors[input.actor],sent=Math.max(state.sim_time,actor.sender_free_at),received=sent+state.definition.control_receipt.sender_ms;
   const suffix=input.kind==='accepted'?'.accepted':input.kind==='terminal'?'.terminal':'.'+input.kind+'-'+input.copy_index;
-  const message:import('./knowledge-collection-state').CollectionSourceMessage={...input,ref:collection_ref(state.run_id,'message',input.request_id+suffix),optional:input.kind==='forward'||input.kind==='credential',planned_sent_at:sent,planned_received_at:received,sent_at:null,received_at:null,status:'queued'};
+  const message:import('./knowledge-collection-state').CollectionSourceMessage={...input,cancelled_at:null,cancellation_reason:null,ref:collection_ref(state.run_id,'message',input.request_id+suffix),optional:input.kind==='forward'||input.kind==='credential',planned_sent_at:sent,planned_received_at:received,sent_at:null,received_at:null,status:'queued'};
   if(state.source_messages.some(item=>item.ref.id===message.ref.id))throw new GameError('INVALID_REQUEST');
+  if(message.optional&&state.termination?.tasks.some(task=>task.intent.actor===input.actor&&task.received_at!==null)){message.status='cancelled';message.cancelled_at=state.sim_time;message.cancellation_reason='termination_before_send';state.source_messages.push(message);return message;}
   state.source_messages.push(message);actor.sender_free_at=received;
   state.schedule.push({at:sent,sequence:++state.event_sequence,kind:'source_send',request_id:input.request_id,source_message_id:message.ref.id},{at:received,sequence:++state.event_sequence,kind:input.kind==='accepted'?'accepted_receipt':'report_delivery',request_id:input.request_id,source_message_id:message.ref.id});sort_events(state);
   return message;
 }
-function dispatch_hq(state:KnowledgeCollectionState,task:{ref:CollectionRef;intent:{actor:CollectionActor}},kind:'receive_collection'|'cancel_received'|'receive_archive'|'receive_source_forward'|'receive_return'|'receive_position'){
+function dispatch_hq(state:KnowledgeCollectionState,task:{ref:CollectionRef;intent:{actor:CollectionActor}},kind:'receive_cleanup'|'receive_collection'|'cancel_received'|'receive_archive'|'receive_source_forward'|'receive_return'|'receive_position'){
   const sent=Math.max(state.sim_time,state.hq_sender_free_at),received=sent+state.definition.control_receipt.sender_ms;
   const ref=collection_ref(state.run_id,'message',task.ref.id+(kind==='cancel_received'?'.cancel-dispatch':'.dispatch'));
-  state.commands.push({ref,request_id:task.ref.id,kind,recipient:task.intent.actor,planned_sent_at:sent,planned_received_at:received,sent_at:sent===state.sim_time?sent:null,delivered_at:null,cancelled_at:null,status:sent===state.sim_time?'sending':'queued'});
+  state.commands.push({ref,request_id:task.ref.id,kind,recipient:task.intent.actor,planned_sent_at:sent,planned_received_at:received,sent_at:sent===state.sim_time?sent:null,delivered_at:null,cancelled_at:null,cancellation_reason:null,status:sent===state.sim_time?'sending':'queued'});
   if(sent>state.sim_time)enqueue(state,task.ref.id,'hq_send',sent,ref.id);
   enqueue(state,task.ref.id,kind,received,ref.id);state.hq_sender_free_at=received;
 }
@@ -71,7 +74,7 @@ export function cancel_collection(state:KnowledgeCollectionState,intent:Collecti
   const unsent=state.commands.find(command=>command.request_id===task.ref.id&&command.kind==='receive_collection'&&command.status==='queued');
   task.cancel={ref:collection_ref(state.run_id,'cancellation',task.ref.id+'.cancel'),origin:unsent?'local_queue':'remote',issued_at:state.sim_time,received_at:null,result:unsent?'cancelled':null};
   if(unsent){
-    unsent.status='cancelled';unsent.cancelled_at=state.sim_time;task.status='cancelled';
+    unsent.status='cancelled';unsent.cancelled_at=state.sim_time;unsent.cancellation_reason='player_before_send';task.status='cancelled';
     const requirement=state.requirements.find(ir=>ir.request_id===task.ref.id)!;
     if(!['expired','cancelled','answered','inconclusive'].includes(requirement.status))requirement.status='cancelled';
     state.schedule=state.schedule.filter(event=>event.command_id!==unsent.ref.id);retime_hq_queue(state);state.knowledge_seq++;
@@ -88,7 +91,7 @@ function accrue_energy(state:KnowledgeCollectionState,to:number){
     const profile=state.definition.actors[actor],task=state.requests.find(request=>request.intent.actor===actor&&(request.status==='collecting'||request.status==='registering'));
     const archive=actor==='R'&&state.archive_requests.some(request=>request.status==='reading'||request.status==='registering');
     const positioning=actor==='R'&&state.position_requests.some(request=>request.started_at!==null&&request.completed_at===null&&request.outcome===null);
-    const rate=archive||positioning?profile.collection_uj_per_ms:task?.status==='collecting'?profile.collection_uj_per_ms:task?.status==='registering'?profile.registration_uj_per_ms:profile.idle_uj_per_ms;
+    const rate=state.actors[actor].off?0:archive||positioning?profile.collection_uj_per_ms:task?.status==='collecting'?profile.collection_uj_per_ms:task?.status==='registering'?profile.registration_uj_per_ms:profile.idle_uj_per_ms;
     const used=state.actors[actor].energy_used_uj+elapsed*rate;
     if(!Number.isSafeInteger(used)||used>profile.energy_uj)throw new GameError('RESOURCE_EXHAUSTED');
     state.actors[actor].energy_used_uj=used;
@@ -111,9 +114,9 @@ async function form_activity_terminal(state:KnowledgeCollectionState,task:Collec
     resource_snapshot:{actor,at:state.sim_time,energy_used_j:state.actors[actor].energy_used_uj/1000000},
   };
   const content_digest=await hash(canonical(content));
-  state.reports.push({...content,content_digest});
+  const report={...content,content_digest};state.reports.push(report);
   if(observation?.source_local_position)await form_position_report(state,'R-self-position-old','collection-end-self-position',observation.observed_at,observation.source_local_position.point,observation.ref,collection_ref(state.run_id,'registration',task.ref.id+'.registration'));
-  if(content.record_ref){state.records.push({ref:content.record_ref,holder:actor,mass_kg:state.definition.actors[actor].blank_record_kg,report_ref:content.ref,canonical_content:JSON.stringify(canonical(content)),content_digest});state.actors[actor].blank_record=false;}
+  if(content.record_ref){state.records.push(await register_collection_record({definition_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1,hash:state.definition.hashes.record_identity},collection_task_ref:collection_ref(state.run_id,'collection_task',task.ref.id+'.task'),report,mass_kg:state.definition.actors[actor].blank_record_kg,qualification_ref:collection_ref(state.run_id,'qualification',collection_policy(state,actor).qualification)}));state.actors[actor].blank_record=false;}
   task.registered_at=cancelled?null:state.sim_time;task.status=cancelled?'cancelled':observation?'completed':'failed';
   task.report_sent_at=queue_source_message(state,{owner_kind:'collection',request_id:task.ref.id,actor,kind:'terminal',report_ref:content.ref,copy_index:0}).planned_sent_at;
   const copies=observation?task.intent.delivery_copies??1:1;
@@ -126,8 +129,12 @@ function stop_collection_work(state:KnowledgeCollectionState,task:CollectionRequ
   enqueue(state,task.ref.id,'registration_complete',state.sim_time+collection_policy(state,task.intent.actor).registration_ms);
 }
 export async function advance_collection_work(state:KnowledgeCollectionState,to:number){
-  while(state.schedule.length&&state.schedule[0].at<=to){
-    const event=state.schedule.shift()!;accrue_energy(state,event.at);
+  while(!state.finished&&state.schedule.length&&state.schedule[0].at<=to){
+    try{
+    const event=state.schedule.shift()!;accrue_energy(state,event.at);advance_intel_work(state.intel,event.at,false);
+    if(event.kind==='goal_deadline'){begin_collection_termination(state,'deadline');continue;}
+    if(event.kind==='goal_grace')continue;
+    if(event.kind==='cleanup_deadline'){settle_collection_outcome(state,true);continue;}
     if(event.source_message_id){
       const message=state.source_messages.find(item=>item.ref.id===event.source_message_id);
       if(!message)throw new GameError('INVALID_REQUEST');
@@ -139,6 +146,7 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
       if(message.status!=='sending'||message.sent_at===null)throw new GameError('INVALID_REQUEST');
       message.status='delivered';message.received_at=state.sim_time;
     }
+    if(event.kind==='intel_start'||event.kind==='intel_complete'){await advance_collection_intel(state,event);continue;}
     if(event.kind==='gate_change'){
       const change=state.definition.local_gate_profiles[state.initial_conditions.gate_profile].changes.find(item=>item.at===event.at);
       if(!change)throw new GameError('INVALID_REQUEST');
@@ -156,8 +164,14 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
       if(event.kind==='hq_send'){command.sent_at=state.sim_time;command.status='sending';continue;}
       command.delivered_at=state.sim_time;command.status='delivered';
     }
+    const cleanup=state.termination?.tasks.find(task=>task.ref.id===event.request_id);
+    if(cleanup){await advance_collection_cleanup(state,cleanup,event);continue;}
+    const verification=state.verification_jobs.find(request=>request.ref.id===event.request_id);
+    if(verification){receive_verification_report(state,verification,event);continue;}
+    const handover=state.handovers.find(request=>request.ref.id===event.request_id);
+    if(handover){await advance_handover(state,handover,event);continue;}
     const returning=state.returns.find(request=>request.ref.id===event.request_id);
-    if(returning){advance_return(state,returning,event);continue;}
+    if(returning){await advance_return(state,returning,event);continue;}
     const positioning=state.position_requests.find(request=>request.ref.id===event.request_id);
     if(positioning){await advance_position(state,positioning,event);continue;}
     const forward=state.source_forwards.find(request=>request.ref.id===event.request_id);
@@ -240,9 +254,10 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
         else if(report.body.quality==='limited')requirement.status='inconclusive';
       }
     }
+    }finally{settle_collection_outcome(state);}
   }
-  accrue_energy(state,to);
-  advance_intel_work(state.intel,to);
+  accrue_energy(state,state.finished?state.sim_time:to);
+  advance_intel_work(state.intel,state.sim_time,false);
 }
 async function refuse_local_collection(state:KnowledgeCollectionState,task:CollectionRequestState,reason:'not_at_site'|'capacity'){
   task.stop_reason=reason;task.collection_stopped_at=state.sim_time;
@@ -260,8 +275,77 @@ export function request_archive_read(state:KnowledgeCollectionState,intent:Colle
 export function request_collection_return(state:KnowledgeCollectionState,intent:CollectionReturnIntent){
   const previous=state.returns.filter(task=>task.intent.actor===intent.actor);
   if(intent.authority_ref.id!=='KA-INITIAL'||previous.some(task=>task.stage!=='failed'))throw new GameError('INVALID_REQUEST');
-  const task:import('./knowledge-collection-state').CollectionReturnState={ref:collection_ref(state.run_id,'return_request','return-'+intent.actor+(previous.length?'-'+(previous.length+1):'')),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,arrived_at:null,stage:'tasking',outcome:null,accepted_sent_at:null,accepted_received_at:null};
+  const task:import('./knowledge-collection-state').CollectionReturnState={origin:'hq_order',cleanup_ref:null,ref:collection_ref(state.run_id,'return_request','return-'+intent.actor+(previous.length?'-'+(previous.length+1):'')),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,arrived_at:null,stage:'tasking',outcome:null,accepted_sent_at:null,accepted_received_at:null};
   state.returns.push(task);dispatch_hq(state,task,'receive_return');
+}
+function cancel_collection_optional_messages(state:KnowledgeCollectionState,actor:CollectionActor){
+  for(const message of state.source_messages)if(message.actor===actor&&message.status==='queued'&&(message.optional||message.kind==='accepted')){message.status='cancelled';message.cancelled_at=state.sim_time;message.cancellation_reason='termination_before_send';}
+    let free=state.source_messages.find(message=>message.actor===actor&&message.status==='sending')?.planned_received_at??state.sim_time;
+    for(const message of state.source_messages.filter(message=>message.actor===actor&&message.status==='queued')){
+      message.planned_sent_at=free;message.planned_received_at=free+1000;free+=1000;
+      for(const event of state.schedule.filter(event=>event.source_message_id===message.ref.id))event.at=event.kind==='source_send'?message.planned_sent_at:message.planned_received_at;
+      const task=state.requests.find(task=>task.ref.id===message.request_id);if(task&&message.kind==='terminal')task.report_sent_at=message.planned_sent_at;
+      const archive=state.archive_requests.find(task=>task.ref.id===message.request_id);if(archive&&message.kind==='terminal')archive.terminal_sent_at=message.planned_sent_at;
+      const position=state.position_requests.find(task=>task.ref.id===message.request_id);if(position&&message.kind==='terminal')position.terminal_sent_at=message.planned_sent_at;
+    }
+    state.actors[actor].sender_free_at=free;
+}
+export function begin_collection_termination(state:KnowledgeCollectionState,trigger:'player'|'deadline'){
+  if(state.termination||state.result)return;
+  state.status='terminating';
+  state.termination={ref:collection_ref(state.run_id,'termination','knowledge-collection-termination'),trigger,issued_at:state.sim_time,cleanup_deadline:Math.min(1222000,state.sim_time+state.definition.public_rules.cleanup_duration),cleanup_reports:[],cleanup_deliveries:[],recovery_unconfirmed:[],cancelled_controls:[],tasks:(['R','W'] as const).map(actor=>({ref:collection_ref(state.run_id,'cleanup_request','cleanup-'+actor),intent:{actor},received_at:null,return_ref:null,completed_at:null,report_ref:null}))};
+  for(const command of state.commands.filter(command=>command.status==='queued')){
+    command.status='cancelled';command.cancelled_at=state.sim_time;command.cancellation_reason='termination_before_send';
+    state.schedule=state.schedule.filter(event=>event.command_id!==command.ref.id);
+    const request=[...state.requests,...state.archive_requests,...state.source_forwards,...state.returns,...state.position_requests].find(task=>task.ref.id===command.request_id);
+    if(!request)throw new GameError('INVALID_REQUEST');
+    state.termination.cancelled_controls.push({command_ref:structuredClone(command.ref),request_ref:structuredClone(request.ref),command_kind:command.kind,at:state.sim_time,reason:'termination_before_send',remote_control_created:false});
+    const archive=state.archive_requests.find(task=>task.ref.id===command.request_id);if(archive)archive.status='cancelled';
+    const forward=state.source_forwards.find(task=>task.ref.id===command.request_id);if(forward)forward.cancelled_at=state.sim_time;
+    const position=state.position_requests.find(task=>task.ref.id===command.request_id);if(position)position.cancelled_at=state.sim_time;
+    const returning=state.returns.find(task=>task.ref.id===command.request_id);if(returning)returning.stage='failed';
+    const task=state.requests.find(task=>task.ref.id===command.request_id);
+    if(task&&command.kind==='receive_collection'){
+      task.status='cancelled';task.cancel={ref:collection_ref(state.run_id,'cancellation',task.ref.id+'.cleanup-cancel'),origin:'local_queue',issued_at:state.sim_time,received_at:null,result:'cancelled'};
+      state.requirements.find(requirement=>requirement.request_id===task.ref.id)!.status='cancelled';
+    }
+  }
+  retime_hq_queue(state);
+  for(const job of state.intel.jobs)if(job.status==='queued')job.status='cancelled';
+  for(const task of state.handovers)if(task.status==='queued'){task.status='cancelled';task.cancelled_at=state.sim_time;}
+  for(const task of state.termination.tasks)dispatch_hq(state,task,'receive_cleanup');
+  enqueue(state,'KA','cleanup_deadline',state.termination.cleanup_deadline);sort_events(state);
+}
+async function complete_collection_cleanup(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionCleanupState){
+  if(task.completed_at!==null)return;
+  const actor=task.intent.actor,point=state.actors[actor].position;
+  if(point[0]!==50||point[1]!==150)throw new GameError('INVALID_REQUEST');
+  task.completed_at=state.sim_time;
+  const content:Omit<import('../knowledge-collection-contracts').CollectionCleanupReport,'content_digest'>={ref:collection_ref(state.run_id,'report',task.ref.id+'.report'),source_actor:actor,method:'task-cleanup',observed_at:state.sim_time,generated_at:state.sim_time,body:{people:3,point:structuredClone(point),record_refs:state.records.filter(record=>record.holder===actor).map(record=>structuredClone(record.ref)),energy_used_uj:state.actors[actor].energy_used_uj}};
+  state.termination!.cleanup_reports.push({...content,content_digest:await hash(canonical(content))});task.report_ref=content.ref;
+  queue_source_message(state,{owner_kind:'cleanup',request_id:task.ref.id,actor,kind:'terminal',report_ref:content.ref,copy_index:0});
+}
+async function advance_collection_cleanup(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionCleanupState,event:KnowledgeCollectionState['schedule'][number]){
+  if(event.kind==='receive_cleanup'){task.received_at=state.sim_time;cancel_collection_optional_messages(state,task.intent.actor);enqueue(state,task.ref.id,'cleanup_start',state.sim_time);return;}
+  if(event.kind==='report_delivery'){
+    const message=state.source_messages.find(message=>message.ref.id===event.source_message_id);
+    if(!message||message.sent_at===null||!task.report_ref)throw new GameError('INVALID_REQUEST');
+    state.termination!.cleanup_deliveries.push({ref:collection_ref(state.run_id,'delivery',task.ref.id+'.delivery'),report_ref:structuredClone(task.report_ref),message_ref:message.ref,sender:task.intent.actor,recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});return;
+  }
+  if(event.kind!=='cleanup_start')throw new GameError('INVALID_REQUEST');
+  const actor=task.intent.actor;
+  const waiting=state.requests.filter(request=>request.intent.actor===actor&&request.status==='waiting');
+  for(const request of waiting){state.schedule=state.schedule.filter(event=>event.request_id!==request.ref.id||!['start_collection','collection_complete','registration_complete'].includes(event.kind));state.collection_tasks.find(item=>item.request_id===request.ref.id)!.status='cancelled';await form_activity_terminal(state,request,true);}
+  const busy=state.requests.some(request=>request.intent.actor===actor&&(request.status==='collecting'||request.status==='registering'))||actor==='R'&&(state.archive_requests.some(request=>request.status==='reading'||request.status==='registering')||state.position_requests.some(request=>request.started_at!==null&&request.completed_at===null&&request.outcome===null))||state.handovers.some(request=>request.actor===actor&&request.status==='receiving');
+  if(busy){
+    const next=state.schedule.find(event=>['collection_complete','registration_complete','archive_read_complete','archive_registration_complete','position_complete','handover_complete'].includes(event.kind)&&event.at>state.sim_time);
+    if(!next)throw new GameError('INVALID_REQUEST');enqueue(state,task.ref.id,'cleanup_start',next.at);return;
+  }
+  if(state.actors[actor].position[0]===50){await complete_collection_cleanup(state,task);return;}
+  const moving=state.returns.find(request=>request.intent.actor===actor&&(request.stage==='AB'||request.stage==='HA'));
+  if(moving){moving.cleanup_ref=task.ref;task.return_ref=moving.ref;return;}
+  const returning:import('./knowledge-collection-state').CollectionReturnState={origin:'cleanup',cleanup_ref:task.ref,ref:collection_ref(state.run_id,'return_request',task.ref.id+'.return'),intent:{kind:'return_to_headquarters',actor,authority_ref:collection_ref(state.run_id,'authority','KA-INITIAL')},issued_at:state.sim_time,received_at:state.sim_time,started_at:state.sim_time,arrived_at:null,stage:state.actors[actor].position[0]>150?'AB':'HA',outcome:'moving',accepted_sent_at:null,accepted_received_at:null};
+  state.returns.push(returning);task.return_ref=returning.ref;state.actors[actor].off=false;queue_return_boundary(state,returning);
 }
 function return_speed(stage:'AB'|'HA',at:number){return stage==='HA'?1000:at>=180000&&at<300000?700:850;}
 function queue_return_boundary(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionReturnState){
@@ -270,7 +354,7 @@ function queue_return_boundary(state:KnowledgeCollectionState,task:import('./kno
   const weather=task.stage==='AB'?(state.sim_time<180000?180000:state.sim_time<300000?300000:Infinity):Infinity;
   enqueue(state,task.ref.id,'return_boundary',Math.min(state.sim_time+Math.ceil(remaining/return_speed(task.stage,state.sim_time)),weather));
 }
-function advance_return(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionReturnState,event:KnowledgeCollectionState['schedule'][number]){
+async function advance_return(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionReturnState,event:KnowledgeCollectionState['schedule'][number]){
   if(event.kind==='receive_return'){
     task.received_at=state.sim_time;
     const busy=state.requests.some(item=>item.intent.actor===task.intent.actor&&(item.status==='waiting'||item.status==='collecting'||item.status==='registering'))||task.intent.actor==='R'&&state.archive_requests.some(item=>item.status==='reading'||item.status==='registering');
@@ -281,7 +365,7 @@ function advance_return(state:KnowledgeCollectionState,task:import('./knowledge-
   else if(event.kind==='return_boundary'){
     const point=state.actors[task.intent.actor].position;
     if(task.stage==='AB'&&point[0]===150)task.stage='HA';
-    else if(task.stage==='HA'&&point[0]===50){task.stage='arrived';task.arrived_at=state.sim_time;return;}
+    else if(task.stage==='HA'&&point[0]===50){task.stage='arrived';task.arrived_at=state.sim_time;if(task.intent.actor==='W')state.actors.W.off=true;if(task.cleanup_ref){const cleanup=state.termination!.tasks.find(item=>item.ref.id===task.cleanup_ref!.id)!;await complete_collection_cleanup(state,cleanup);}else await arrive_collection_handover(state,task);return;}
     queue_return_boundary(state,task);
   }else throw new GameError('INVALID_REQUEST');
 }
@@ -290,10 +374,115 @@ export function request_collection_position(state:KnowledgeCollectionState,inten
   const task:import('./knowledge-collection-state').CollectionPositionState={ref:collection_ref(state.run_id,'position_request','position-'+(state.position_requests.length+1)),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,completed_at:null,outcome:null,accepted_sent_at:null,accepted_received_at:null,terminal_sent_at:null,terminal_received_at:null,report_ref:null};
   state.position_requests.push(task);dispatch_hq(state,task,'receive_position');
 }
+async function arrive_collection_handover(state:KnowledgeCollectionState,returning:import('./knowledge-collection-state').CollectionReturnState){
+  if(state.termination||state.result)return;
+  if(state.handovers.some(item=>item.return_request_ref.id===returning.ref.id))return;
+  const record=state.records.find(item=>item.holder===returning.intent.actor&&item.source_actor===returning.intent.actor);
+  const task:import('./knowledge-collection-state').CollectionHandoverState={ref:collection_ref(state.run_id,'handover',returning.ref.id+'.handover'),return_request_ref:structuredClone(returning.ref),actor:returning.intent.actor,ticket:state.H_receiver.next_ticket++,record_ref:record?.ref??null,arrived_at:state.sim_time,started_at:null,completed_at:null,status:record?'queued':'not_available',report_received_at:null};
+  state.handovers.push(task);
+  if(!record){task.completed_at=state.sim_time;await form_handover_report(state,task);}
+  else enqueue(state,task.ref.id,'handover_start',state.sim_time);
+}
+async function form_handover_report(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionHandoverState){
+  if(task.completed_at===null)throw new GameError('INVALID_REQUEST');
+  const record=task.status==='completed'?state.records.find(item=>item.ref.id===task.record_ref?.id):undefined;
+  const body:import('../knowledge-collection-contracts').CollectionHandoverReport['body']={kind:'record_handover',actor:task.actor,people:3,outcome:record?'transferred':task.status==='deadline'?'deadline':'not_available',arrived_at:task.arrived_at,completed_at:task.completed_at,record_refs:record?[structuredClone(record.ref)]:[],record_digests:record?[record.content_digest]:[],custody_refs:record?record.custody.filter(event=>event.handover_ref?.id===task.ref.id).map(event=>structuredClone(event.ref)):[],mass_kg:record?.mass_kg??0,logical_size_bytes:record?.logical_size_bytes??0,geometry_version:state.definition.hashes.geometry};
+  const content:Omit<import('../knowledge-collection-contracts').CollectionHandoverReport,'content_digest'>={ref:collection_ref(state.run_id,'report',task.ref.id+'.report'),source_actor:'H',method:'H-record-handover',target_ref:collection_ref(state.run_id,'actor',task.actor),scope_ref:collection_ref(state.run_id,'scope','H'),observed_time:{kind:'known',value:task.completed_at,evidence:task.ref},generated_at:task.completed_at,source_reported_time:{kind:'known',value:task.completed_at,evidence:task.ref},body};
+  state.process_reports.push({...content,content_digest:await hash(canonical(content))});queue_source_message(state,{owner_kind:'handover',request_id:task.ref.id,actor:'H',kind:'terminal',report_ref:content.ref,copy_index:0});
+}
+async function advance_handover(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionHandoverState,event:KnowledgeCollectionState['schedule'][number]){
+  if(event.kind==='handover_start'){
+    if(task.status!=='queued'||state.handovers.some(item=>item.status==='receiving'))return;
+    const next=state.handovers.filter(item=>item.status==='queued').sort((a,b)=>a.arrived_at-b.arrived_at||a.ticket-b.ticket)[0];
+    if(next!==task)return;
+    const actor=state.actors[task.actor],record=state.records.find(item=>item.ref.id===task.record_ref?.id);
+    if(actor.position[0]!==50||actor.position[1]!==150||!record||record.holder!==task.actor)throw new GameError('INVALID_REQUEST');
+    if(state.termination){task.status='cancelled';task.cancelled_at=state.sim_time;return;}
+    if(state.sim_time>=state.definition.public_rules.deadline){task.status='deadline';task.completed_at=state.sim_time;await form_handover_report(state,task);return;}
+    task.status='receiving';task.started_at=state.sim_time;enqueue(state,task.ref.id,'handover_complete',state.sim_time+state.definition.handover_policy.work_ms);
+  }else if(event.kind==='handover_complete'){
+    if(task.completed_at!==null)return;
+    const record=state.records.find(item=>item.ref.id===task.record_ref?.id);
+    if(!record||task.status!=='receiving'||task.started_at===null)throw new GameError('INVALID_REQUEST');
+    if(transfer_collection_record(record,{run_id:state.run_id,actor:task.actor,handover_ref:task.ref,at:state.sim_time})){
+      state.actors[task.actor].load_kg=Math.round((state.actors[task.actor].load_kg-record.mass_kg)*1000)/1000;
+      state.H_inventory.mass_kg=Math.round((state.H_inventory.mass_kg+record.mass_kg)*1000)/1000;state.H_inventory.logical_size_bytes+=record.logical_size_bytes;state.H_inventory.record_refs.push(structuredClone(record.ref));
+    }
+    task.status='completed';task.completed_at=state.sim_time;await form_handover_report(state,task);
+    const next=state.handovers.filter(item=>item.status==='queued').sort((a,b)=>a.arrived_at-b.arrived_at||a.ticket-b.ticket)[0];
+    if(next)enqueue(state,next.ref.id,'handover_start',state.sim_time);
+  }else if(event.kind==='report_delivery'){
+    const message=state.source_messages.find(item=>item.ref.id===event.source_message_id),report=state.process_reports.find(item=>item.ref.id===message?.report_ref?.id);
+    if(!message||message.sent_at===null||!report||report.method!=='H-record-handover')throw new GameError('INVALID_REQUEST');
+    task.report_received_at=state.sim_time;state.process_deliveries.push({ref:collection_ref(state.run_id,'delivery',task.ref.id+'.delivery'),report_ref:report.ref,message_ref:message.ref,sender:'H',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});
+    if(!state.termination&&report.body.outcome==='transferred')queue_record_verification(state,task,report,state.process_deliveries[state.process_deliveries.length-1]);
+  }else throw new GameError('INVALID_REQUEST');
+}
 async function form_position_report(state:KnowledgeCollectionState,id:string,method:CollectionPositionReport['method'],observed_at:number,point:[number,number],observation:CollectionRef<'observation'>,registration:CollectionRef<'registration'>){
   const content:Omit<CollectionPositionReport,'content_digest'>={ref:collection_ref(state.run_id,'report',id),source_actor:'R',method,target_ref:collection_ref(state.run_id,'actor','R'),scope_ref:collection_ref(state.run_id,'scope','R-self'),method_ref:collection_ref(state.run_id,'method',method),observation_ref:observation,observed_time:{kind:'known',value:observed_at,evidence:observation},generated_at:state.sim_time,source_reported_time:{kind:'known',value:state.sim_time,evidence:registration},body:{kind:'self_position',field:'R.position',quality:'registered',outcome:'recorded',point:structuredClone(point),geometry_version:state.definition.hashes.geometry,route_version:state.definition.hashes.geometry,qualification_ref:collection_ref(state.run_id,'qualification',state.definition.position_policy.qualification),limits:['只表示R自身在所标观察时点登记的架空位置，不持续跟踪当前位置']}};
   if(state.reports.some(report=>report.ref.id===id))throw new GameError('INVALID_REQUEST');
   state.reports.push({...content,content_digest:await hash(canonical(content))});return content.ref;
+}
+function queue_record_verification(state:KnowledgeCollectionState,handover:import('./knowledge-collection-state').CollectionHandoverState,report:import('../knowledge-collection-contracts').CollectionHandoverReport,delivery:import('../knowledge-collection-contracts').CollectionProcessDelivery){
+  if(handover.record_ref===null||state.verification_jobs.some(item=>item.record_ref.id===handover.record_ref!.id))return;
+  const ref=collection_ref(state.run_id,'verification',handover.record_ref.id+'.verification');
+  const job=queue_intel_work(state.intel,{id:ref.id,kind:'verification',eligible_at:state.sim_time,work_ms:state.definition.verification_policy.work_ms});
+  state.verification_jobs.push({ref,record_ref:structuredClone(handover.record_ref),actor:handover.actor,job_id:job.id,handover_report_ref:structuredClone(report.ref),handover_delivery_ref:structuredClone(delivery.ref),report_received_at:null});enqueue(state,'INTEL','intel_start',state.sim_time);
+}
+async function advance_collection_intel(state:KnowledgeCollectionState,event:KnowledgeCollectionState['schedule'][number]){
+  if(event.kind==='intel_start'){
+    if(state.termination||state.sim_time>=state.definition.public_rules.deadline){for(const job of state.intel.jobs)if(job.status==='queued')job.status='cancelled';return;}
+    start_intel_work(state.intel);
+    const active=state.intel.jobs.find(job=>job.status==='processing');
+    if(active&&!state.schedule.some(item=>item.kind==='intel_complete'&&item.request_id===active.id))enqueue(state,active.id,'intel_complete',state.sim_time+active.work_ms-active.used_ms);
+    return;
+  }
+  const job=state.intel.jobs.find(item=>item.id===event.request_id),pending=state.verification_jobs.find(item=>item.job_id===event.request_id);
+  if(!job||job.status!=='completed'||job.started_at===null||job.completed_at!==state.sim_time)throw new GameError('INVALID_REQUEST');
+  if(job.kind==='verification'&&pending&&!state.verifications.some(item=>item.ref.id===pending.ref.id)){
+    const material=state.records.find(item=>item.ref.id===pending.record_ref.id),handover=state.process_reports.find(item=>item.ref.id===pending.handover_report_ref.id),delivery=state.process_deliveries.find(item=>item.ref.id===pending.handover_delivery_ref.id);
+    const checked=material?await verify_collection_record(material,{run_id:state.run_id,package_hash:state.definition.hashes.record_identity,geometry_hash:state.definition.hashes.geometry,handover_report:handover?.method==='H-record-handover'?handover:undefined,handover_delivery:delivery,qualifications:[collection_ref(state.run_id,'qualification',state.definition.collection.qualification),collection_ref(state.run_id,'qualification',state.definition.inspection.qualification)]}):{result:'not_evaluable' as const,reasons:['missing_H_record'],source_report:null,evidence_refs:[]};
+    const verification:import('../knowledge-collection-contracts').CollectionVerificationRecord={ref:structuredClone(pending.ref),record_ref:structuredClone(pending.record_ref),actor:pending.actor,handover_report_ref:structuredClone(pending.handover_report_ref),resource_ref:'INTEL',ticket:job.ticket,started_at:job.started_at,completed_at:state.sim_time,used_ms:job.used_ms,result:checked.result,reasons:checked.reasons,evidence_refs:checked.evidence_refs,checks_digest:await hash(canonical({record_ref:pending.record_ref,record_digest:material?.content_digest??null,handover_report_ref:pending.handover_report_ref,handover_digest:handover?.content_digest??null,result:checked.result,reasons:checked.reasons}))};
+    state.verifications.push(verification);
+    const content:Omit<import('../knowledge-collection-contracts').CollectionVerificationReport,'content_digest'>={ref:collection_ref(state.run_id,'report',pending.ref.id+'.report'),source_actor:'INTEL',method:'INTEL-record-verification',target_ref:structuredClone(pending.record_ref),scope_ref:collection_ref(state.run_id,'scope','H'),observed_time:{kind:'known',value:state.sim_time,evidence:structuredClone(pending.ref)},generated_at:state.sim_time,source_reported_time:{kind:'known',value:state.sim_time,evidence:structuredClone(pending.ref)},body:{kind:'record_verification',actor:pending.actor,verification:structuredClone(verification),original_observed_time:structuredClone(checked.source_report?.observed_time??{kind:'unknown'}),original_generated_at:checked.source_report?.generated_at??null,limits:['核验只涉及送达记录的真实性及既定内容资格，不更新原调查观察时点']}};
+    state.process_reports.push({...content,content_digest:await hash(canonical(content))});queue_source_message(state,{owner_kind:'verification',request_id:pending.ref.id,actor:'INTEL',kind:'terminal',report_ref:content.ref,copy_index:0});
+  }
+  const local=state.hq_work.find(item=>item.job_id===job.id);
+  if(local&&!state.hq_products.some(product=>product.job_ref.id===local.ref.id)){
+    const sources=local.basis_refs.map(ref=>received_collection_packet(state,ref.id));
+    if(sources.some(source=>!source))throw new GameError('INVALID_REQUEST');
+    const content:Omit<import('../knowledge-collection-contracts').CollectionHQProduct,'content_digest'>={ref:collection_ref(state.run_id,'knowledge_product',local.ref.id+'.product'),job_ref:structuredClone(local.ref),kind:local.kind,completed_at:state.sim_time,basis_refs:structuredClone(local.basis_refs),basis_digests:sources.map(source=>source!.content_digest),source_observation_times:sources.map(source=>structuredClone(source!.observed_time)),limits:['只准备或整理已收到资料，不产生新观察、独立来源或更高内容资格']};
+    state.hq_products.push({...content,content_digest:await hash(canonical(content))});state.knowledge_seq++;
+  }
+  enqueue(state,'INTEL','intel_start',state.sim_time);
+}
+function received_collection_packet(state:KnowledgeCollectionState,id:string){
+  if(state.deliveries.some(delivery=>delivery.report_ref.id===id))return state.reports.find(report=>report.ref.id===id);
+  if(state.process_deliveries.some(delivery=>delivery.report_ref.id===id))return state.process_reports.find(report=>report.ref.id===id);
+  return undefined;
+}
+export async function request_collection_hq_work(state:KnowledgeCollectionState,envelope:import('../knowledge-collection-contracts').KnowledgeCollectionEnvelope){
+  const intent=envelope.intent,policy=state.definition.hq_work_policy;
+  if(intent.kind!=='request_hq_preparation'&&intent.kind!=='request_hq_processing'&&intent.kind!=='cancel_hq_work')throw new GameError('INVALID_REQUEST');
+  if(intent.authority_ref.id!==policy.authority)throw new GameError('INVALID_REQUEST');
+  if(intent.kind==='cancel_hq_work'){
+    const local=state.hq_work.find(item=>item.ref.id===intent.job_ref.id);
+    if(!local)throw new GameError('INVALID_REQUEST');
+    local.cancellations.push({operation_id:envelope.operation_id,at:state.sim_time,result:cancel_intel_work(state.intel,local.job_id)});enqueue(state,'INTEL','intel_start',state.sim_time);await advance_collection_work(state,state.sim_time);return;
+  }
+  const kind=intent.kind==='request_hq_preparation'?'preparation':'processing',method=kind==='preparation'?policy.preparation_method:policy.processing_method;
+  if(intent.method_ref.id!==method||state.sim_time>=state.definition.public_rules.deadline)throw new GameError('INVALID_REQUEST');
+  const basis_refs=intent.kind==='request_hq_processing'?intent.basis_refs:[];
+  if(new Set(basis_refs.map(ref=>ref.id)).size!==basis_refs.length||basis_refs.some(ref=>!received_collection_packet(state,ref.id)))throw new GameError('INVALID_REQUEST');
+  const pending=state.hq_work.find(item=>item.kind===kind&&state.intel.jobs.some(job=>job.id===item.job_id&&(job.status==='queued'||job.status==='processing')));
+  if(pending){state.control_admissions.push({operation_id:envelope.operation_id,at:state.sim_time,actor:'HQ',outcome:'busy',pending_ref:structuredClone(pending.ref)});return;}
+  const ref=collection_ref(state.run_id,'processing_job','hq-'+kind+'-'+(state.hq_work.length+1)),job=queue_intel_work(state.intel,{id:ref.id,kind,eligible_at:state.sim_time,work_ms:kind==='preparation'?policy.preparation_ms:policy.processing_ms});
+  state.hq_work.push({ref,kind,method_ref:structuredClone(intent.method_ref),job_id:job.id,issued_at:state.sim_time,basis_refs:structuredClone(basis_refs),cancellations:[]});enqueue(state,'INTEL','intel_start',state.sim_time);await advance_collection_work(state,state.sim_time);
+}
+function receive_verification_report(state:KnowledgeCollectionState,pending:import('./knowledge-collection-state').CollectionVerificationJob,event:KnowledgeCollectionState['schedule'][number]){
+  const message=state.source_messages.find(item=>item.ref.id===event.source_message_id),report=state.process_reports.find(item=>item.ref.id===message?.report_ref?.id);
+  if(event.kind!=='report_delivery'||!message||message.sent_at===null||!report||report.method!=='INTEL-record-verification')throw new GameError('INVALID_REQUEST');
+  pending.report_received_at=state.sim_time;state.process_deliveries.push({ref:collection_ref(state.run_id,'delivery',pending.ref.id+'.delivery'),report_ref:report.ref,message_ref:message.ref,sender:'INTEL',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});
 }
 async function advance_position(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionPositionState,event:KnowledgeCollectionState['schedule'][number]){
   const terminal=()=>{task.terminal_sent_at=queue_source_message(state,{owner_kind:'position',request_id:task.ref.id,actor:'R',kind:'terminal',report_ref:task.report_ref,copy_index:0}).planned_sent_at;};
@@ -433,12 +622,13 @@ export function start_intel_work(pool:import('./knowledge-collection-state').Int
   const next=pool.jobs.filter(job=>job.status==='queued'&&job.eligible_at<=pool.at).sort((a,b)=>a.eligible_at-b.eligible_at||a.ticket-b.ticket)[0];
   if(next){next.status='processing';next.started_at=pool.at;}
 }
-export function advance_intel_work(pool:import('./knowledge-collection-state').IntelWorkPool,to:number){
+export function advance_intel_work(pool:import('./knowledge-collection-state').IntelWorkPool,to:number,auto_start=true){
   if(!Number.isSafeInteger(to)||to<pool.at)throw new GameError('INVALID_INPUT');
   while(pool.at<to){
-    start_intel_work(pool);
+    if(auto_start)start_intel_work(pool);
     const active=pool.jobs.find(job=>job.status==='processing');
     if(!active){
+      if(!auto_start){pool.at=to;continue;}
       const eligible=pool.jobs.filter(job=>job.status==='queued').map(job=>job.eligible_at).filter(at=>at>pool.at);
       pool.at=Math.min(to,...eligible);continue;
     }
@@ -448,7 +638,7 @@ export function advance_intel_work(pool:import('./knowledge-collection-state').I
   }
   // At the exact target, release completion first. Controls and start are separate phases.
 }
-export function cancel_intel_work(pool:import('./knowledge-collection-state').IntelWorkPool,id:string){
+export function cancel_intel_work(pool:import('./knowledge-collection-state').IntelWorkPool,id:string):'cancelled'|'already_started'|'already_completed'{
   const job=pool.jobs.find(job=>job.id===id);if(!job)throw new GameError('INVALID_REQUEST');
   if(job.status==='processing')return 'already_started';
   if(job.status==='queued'){job.status='cancelled';return 'cancelled';}

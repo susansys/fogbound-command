@@ -12,6 +12,7 @@
   "initial_positions": {"R": "B", "W": "B"},
   "public_rules": {"deadline": 900000, "receipt_grace": 10000, "cleanup_duration": 322000},
   "collection": {
+    "qualification": "R-LIMITED-COLLECTOR",
     "question": "B-condition", "field": "B.condition", "target": "B", "scope": "B-LIMITED",
     "method": "limited-text-collection", "authority": "KA-INITIAL",
     "collection_ms": 29000, "registration_ms": 1000, "sender_ms": 1000,
@@ -31,6 +32,9 @@
   },
   "facility": {"condition": "operable", "version": 1},
   "control_receipt": {"method": "task-control-receipt", "sender_ms": 1000},
+  "handover_policy": {"site":"H","receiver_ref":"H-RECEIVER","capacity":1,"work_ms":25000,"sender":"H","parameter_category":"C","calibration_status":"fictional_not_measured"},
+  "verification_policy": {"resource_ref":"INTEL","capacity":1,"work_ms":20000,"sender":"INTEL","parameter_category":"C","calibration_status":"fictional_not_measured"},
+  "hq_work_policy": {"resource_ref":"INTEL","authority":"KA-INITIAL","preparation_method":"HQ-SOURCE-PREPARATION","processing_method":"HQ-TEXT-PROCESSING","preparation_ms":20000,"processing_ms":20000,"parameter_category":"C","calibration_status":"fictional_not_measured"},
   "diagnostic_sampling_surfaces": {"default": "registered_surface", "empty": "no_persistent_samples"},
   "local_gate_scope": "collection_only_not_return_or_registration",
   "local_gate_profiles": {

@@ -164,7 +164,7 @@ export class Game {
       let replay=structuredClone(initial);
       for(const input of latest.inputs){
         if(input.at>to)break;
-        if(input.envelope.intent.kind==='advance'&&input.envelope.intent.to>to){await advance_collection_work(replay,to);break;}
+        if((input.envelope.intent.kind==='advance'||input.envelope.intent.kind==='tick')&&input.envelope.intent.to>to){await advance_collection_work(replay,to);break;}
         replay=await apply_knowledge_collection_control(replay,input.envelope,input.clock_to);
       }
       if(replay.sim_time<to)await advance_collection_work(replay,to);
@@ -824,9 +824,9 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     if(!valid_integrated_field_envelope(envelope)||(await this.store.read_committed(envelope.run_id))?.schema!==13)throw new GameError('INVALID_INPUT');
     return this.operate(envelope,clock_to);
   }
-  async apply_collection_intent(input:unknown):Promise<{receipt:Receipt;view:PlayerView}>{
+  async apply_collection_intent(input:unknown,clock_to?:number):Promise<{receipt:Receipt;view:PlayerView}>{
     if(!valid_knowledge_collection_envelope(input)||(await this.store.read_committed(input.run_id))?.schema!==14)throw new GameError('INVALID_INPUT');
-    return this.operate(input);
+    return this.operate(input,clock_to);
   }
   async control_clock(
     envelope: Envelope,
@@ -843,6 +843,10 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
     if(prior){
       const snapshot=await this.store.snapshot(run,prior.revision);
       const input=snapshot?.inputs.find(x=>x.envelope.operation_id===operation_id)?.envelope;
+      if(snapshot?.schema===14){
+        if(!input||!valid_knowledge_collection_envelope(input)||input.intent.kind!=='tick'||input.intent.to!==to)throw new GameError('OPERATION_CONFLICT');
+        return this.operate(input);
+      }
       if(!input||!valid_envelope(input,910000,true)||input.intent.kind!=='tick'||input.intent.to!==to)throw new GameError('OPERATION_CONFLICT');
       return this.operate(input);
     }

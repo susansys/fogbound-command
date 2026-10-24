@@ -7,6 +7,64 @@ import {valid_response} from '../src/dto';
 import {hash} from '../src/core/scenario';
 import {canonical} from '../src/core/snapshot';
 import {is_collection_report} from '../src/knowledge-collection-contracts';
+import {IDBFactory} from 'fake-indexeddb';
+import type {Response} from '../src/transport';
+
+async function actualWorkerModule(action:(send:(frame:Record<string,unknown>)=>Promise<Response>,pulse:()=>Promise<Response>)=>Promise<void>){
+  // Browser host carrier only: the actual worker module, Game and Persistence run.
+  // An independent fake-IDB factory owns every DB; this is not native evidence.
+  vi.resetModules();vi.stubGlobal('indexedDB',new IDBFactory());
+  let interval:(()=>void)|null=null,automatic:((value:Response)=>void)|null=null;
+  const pending=new Map<string,(value:Response)=>void>();
+  const host:{onmessage:((event:MessageEvent<unknown>)=>void)|null;postMessage:(value:Response)=>void}={onmessage:null,postMessage(value){const resolve=pending.get(value.request_id);if(resolve){pending.delete(value.request_id);resolve(value);}else automatic?.(value);}};
+  vi.stubGlobal('self',host);vi.stubGlobal('navigator',{locks:{request:(_name:string,_options:unknown,callback:(lock:object)=>Promise<void>)=>callback({name:'owned-lock'})}});
+  vi.stubGlobal('setInterval',(callback:()=>void)=>{interval=callback;return 1;});
+  const now=vi.spyOn(performance,'now').mockReturnValue(0);
+  try{
+    await import('../src/worker');
+    const send=(frame:Record<string,unknown>)=>new Promise<Response>(resolve=>{const request_id=crypto.randomUUID();pending.set(request_id,resolve);host.onmessage!(new MessageEvent('message',{data:{...frame,request_id}}));});
+    let time=0;
+    const pulse=()=>new Promise<Response>(resolve=>{time=time===0?910000:1222000;now.mockReturnValue(time);automatic=resolve;interval!();});
+    await action(send,pulse);
+  }finally{
+    const {Persistence:WorkerPersistence}=await import('../src/core/persistence');await new WorkerPersistence('fogbound-map-b-game-1').delete();
+    vi.unstubAllGlobals();vi.restoreAllMocks();vi.resetModules();
+  }
+}
+
+test('KA-E29 actual Worker module routes schema14 controls, contextual operation lookup, list and cleanup past910 (owned host carrier)',async()=>{
+  await actualWorkerModule(async(send)=>{
+    const created=await send({kind:'create',definition_ref:'KA-TEXT-KNOWLEDGE-01',case_ref:'KA-NORMAL-01',mode:'research',operation_id:'create'});
+    expect(created.ok).toBe(true);if(!created.ok||!created.view)throw Error('No actual worker run');let view=created.view;
+    const prepared=await send({kind:'operate_knowledge_collection',envelope:{run_id:view.run_id,operation_id:'prepare',expected_revision:view.revision,intent:{kind:'request_hq_preparation',method_ref:{run_id:view.run_id,kind:'method',id:'HQ-SOURCE-PREPARATION',version:1},authority_ref:{run_id:view.run_id,kind:'authority',id:'KA-INITIAL',version:1}}}});
+    expect(prepared.ok).toBe(true);if(!prepared.ok||!prepared.view)throw Error('No preparation');view=prepared.view;
+    const lookup=await send({kind:'receipt',run_id:view.run_id,operation_id:'prepare'});expect(lookup).toMatchObject({ok:true,receipt:{kind:'request_hq_preparation'},view:{scenario_kind:'play_knowledge_collection'}});
+    const listed=await send({kind:'list'});expect(listed).toMatchObject({ok:true,runs:[{run_id:view.run_id,scenario_kind:'play_knowledge_collection'}]});
+    for(const to of [910000,1222000]){const advanced=await send({kind:'operate_knowledge_collection',envelope:{run_id:view.run_id,operation_id:'at-'+to,expected_revision:view.revision,intent:{kind:'advance',to}}});expect(advanced.ok).toBe(true);if(!advanced.ok||!advanced.view)throw Error('No advance');view=advanced.view;}
+    expect(view).toMatchObject({sim_time:1120648,finished:true,result:{outcome:'failure',safe_people:6}});
+  });
+});
+
+test('KA-E29 actual Worker command timer uses schema14 cleanup horizon rather than legacy610/910 (owned monotonic host carrier)',async()=>{
+  await actualWorkerModule(async(send,pulse)=>{
+    expect(await send({kind:'create',definition_ref:'KA-TEXT-KNOWLEDGE-01',mode:'command',operation_id:'create'})).toMatchObject({ok:true,view:{scenario_kind:'play_knowledge_collection',paused:false}});
+    expect(await pulse()).toMatchObject({ok:true,view:{sim_time:910000,status:'terminating',finished:false}});
+    expect(await pulse()).toMatchObject({ok:true,view:{sim_time:1120648,status:'finished',finished:true,paused:true}});
+  });
+});
+
+test('KA-E29 real collection operation receipts require their own schema14 view and cannot be accepted with an older scenario',async()=>{
+  const store=new Persistence('ka-owned-receipt-routing-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const initial=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const actual=await game.apply_collection_intent({run_id:initial.run_id,operation_id:'terminate',expected_revision:initial.revision,intent:{kind:'terminate_task',authority_ref:{run_id:initial.run_id,kind:'authority',id:'KA-INITIAL',version:1}}});
+    expect(valid_response({request_id:'actual-ka-receipt',ok:true,...actual})).toBe(true);
+    expect(valid_response({request_id:'missing-ka-context',ok:true,receipt:actual.receipt})).toBe(false);
+    expect(valid_response({request_id:'wrong-scenario',ok:true,receipt:actual.receipt,view:{...actual.view,scenario_kind:'play_integrated_field'}})).toBe(false);
+    expect(valid_response({request_id:'wrong-run',ok:true,...actual,receipt:{...actual.receipt,run_id:'foreign-run'}})).toBe(false);
+    expect(valid_response({request_id:'old-intent',ok:true,...actual,receipt:{...actual.receipt,kind:'integrated_move'}})).toBe(false);
+  }finally{await store.delete();}
+});
 
 test.each(['before-issue-and-window','ack-before-issue','ack-short-service'])('KA-E09 rejects a digest-consistent W timeline that violates public causality: %s',async(mutation)=>{
   const store=new Persistence('ka-owned-dto-causality-'+crypto.randomUUID()),game=new Game(store);let transport:Transport|undefined;
