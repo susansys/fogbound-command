@@ -6,6 +6,7 @@ import {valid_request} from '../src/protocol';
 import {valid_response} from '../src/dto';
 import {hash} from '../src/core/scenario';
 import {canonical} from '../src/core/snapshot';
+import {is_collection_report} from '../src/knowledge-collection-contracts';
 
 test.each(['before-issue-and-window','ack-before-issue','ack-short-service'])('KA-E09 rejects a digest-consistent W timeline that violates public causality: %s',async(mutation)=>{
   const store=new Persistence('ka-owned-dto-causality-'+crypto.randomUUID()),game=new Game(store);let transport:Transport|undefined;
@@ -18,6 +19,7 @@ test.each(['before-issue-and-window','ack-before-issue','ack-short-service'])('K
     if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
     expect(valid_response({request_id:'actual-W',ok:true,view})).toBe(true);
     const changed=structuredClone(view),ack=changed.collection_requests[0].acknowledgement!,report=changed.reports[0];
+    if(!is_collection_report(report))throw Error('Expected actual collection');
     if(mutation==='before-issue-and-window'){
       ack.planned_start_at=0;report.observed_time={kind:'known',value:30000,evidence:report.observation_ref!};report.generated_at=32000;report.resource_snapshot.at=32000;
       changed.deliveries[0].sent_at=32000;changed.deliveries[0].received_at=33000;changed.coverage[0].observed_time=structuredClone(report.observed_time);
@@ -86,7 +88,9 @@ test('KA-E09 transports only lawful collection Game views and rejects private da
     expect(await store.read_committed(view.run_id)).toEqual(before);
     expect(valid_response({request_id:'ka-delivered',ok:true,view:delivered.view})).toBe(true);
     if(delivered.view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
-    const changed=structuredClone(delivered.view);changed.reports[0].record_ref!.run_id='another-run';
+    const changed=structuredClone(delivered.view),report=changed.reports[0];
+    if(!is_collection_report(report))throw Error('Expected actual collection');
+    report.record_ref!.run_id='another-run';
     expect(valid_response({request_id:'ka-corrupt',ok:true,view:changed})).toBe(false);
   }finally{transport?.close();vi.unstubAllGlobals();await store.delete();}
 });
@@ -115,6 +119,7 @@ test.each(['R-qualified','R-impersonates-W','W-evidence-missing','wrong-scope','
     if(view.scenario_kind!=='play_knowledge_collection')throw Error('Wrong collection branch');
     expect(valid_response({request_id:'lawful',ok:true,view})).toBe(true);
     const changed=structuredClone(view),report=changed.reports[mutation==='W-evidence-missing'?1:0],coverage=changed.coverage[mutation==='W-evidence-missing'?1:0];
+    if(!is_collection_report(report))throw Error('Expected actual collection');
     if(mutation==='R-qualified'||mutation==='R-impersonates-W'){
       Object.assign(report,{method:'qualified-facility-inspection',method_ref:ref('method','qualified-facility-inspection'),requested_method_ref:ref('method','qualified-facility-inspection'),scope_ref:ref('scope','B-QUALIFIED'),body:{kind:'qualified_facility_field',field:'B.condition',condition:'operable',object_version:1,quality:'qualified',outcome:'detected',qualification_ref:ref('qualification','W-FACILITY-INSPECTOR'),limits:['forged promotion']}});
       Object.assign(coverage,{quality:'qualified',outcome:'detected',method_ref:report.method_ref,limits:report.body.limits});

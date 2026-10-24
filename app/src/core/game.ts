@@ -1,6 +1,7 @@
 import {initial_knowledge_collection_state} from './knowledge-collection-state';
 import {is_knowledge_collection_definition} from './knowledge-collection-definition';
 import {project_knowledge_collection_view,apply_knowledge_collection_control} from './knowledge-collection-engine';
+import {advance_collection_work} from './knowledge-collection-work';
 import {valid_knowledge_collection_envelope} from '../knowledge-collection-protocol';
 import type {KnowledgeCollectionEnvelope} from '../knowledge-collection-contracts';
 import {valid_integrated_field_envelope} from '../integrated-field-protocol';
@@ -158,6 +159,16 @@ export class Game {
         await this.validate_stored_state(node!);
         if(node?.sim_time===to){context.history=node;return context;}
       }
+    }
+    if(initial.schema===14&&latest.schema===14){
+      let replay=structuredClone(initial);
+      for(const input of latest.inputs){
+        if(input.at>to)break;
+        if(input.envelope.intent.kind==='advance'&&input.envelope.intent.to>to){await advance_collection_work(replay,to);break;}
+        replay=await apply_knowledge_collection_control(replay,input.envelope,input.clock_to);
+      }
+      if(replay.sim_time<to)await advance_collection_work(replay,to);
+      delete replay.integrity;context.history=replay;return context;
     }
     if(initial.schema===8||initial.schema===9||initial.schema===10||initial.schema===11||initial.schema===12||initial.schema===13||initial.schema===14)throw new GameError('INVALID_INPUT');
     if(latest.schema===8||latest.schema===9||latest.schema===10||latest.schema===11||latest.schema===12||latest.schema===13||latest.schema===14)throw new GameError('INVALID_SAVE');

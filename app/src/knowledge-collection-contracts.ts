@@ -1,5 +1,12 @@
 import type {Mode} from './contracts';
 export type CollectionActor='R'|'W';
+export type KnowledgeCollectionCaseRef='KA-NORMAL-01'|'KA-SOURCE3-01'|'KA-LATE-POSITION-01';
+export type CollectionSourceSummary={field_scope:'B.condition';content_delivery_count:number;report_identity_count:number;global_independence:{kind:'unknown'}|{kind:'confirmed';count:3;scope:{id:'B';version:1}};confirmed_pairs:Array<{credential_ref:CollectionRef<'source-credential'>;roots:CollectionRef<'source-root'>[];scope:{id:'B';version:1};status:'valid'|'invalidated';invalidation_ref:CollectionRef<'source_notice_delivery'>|null}>};
+export type CollectionRootRegistration={root_ref:CollectionRef<'source-root'>;actor:'R'|'W'|'S';method_ref:CollectionRef<'method'>;scope:{id:'B';version:1};issuer:'scenario-source-registrar';issued_at:-65000;qualification:{id:string;version:1}};
+export type CollectionPairCredential={id:string;version:1;issuer:'scenario-source-registrar';issued_at:-65000;roots:string[];scope:{id:'B';version:1|2};registrations:Array<{root_id:string;actor:'R'|'W'|'S';method:string;qualification:{id:string;version:1}}>};
+export type CollectionCredentialDelivery={ref:CollectionRef<'credential_delivery'>;credential:CollectionPairCredential;credential_digest:string;message_ref:CollectionRef<'message'>;reader_request_ref:CollectionRef<'archive_request'>;sender:'R';recipient:'HQ';sent_at:number;received_at:number;knowledge_seq:number};
+export type CollectionSourceNotice={id:string;version:1;issuer:'scenario-source-registrar';issued_at:-10000;kind:'revocation'|'contradiction';credential_id:'pair-WS';scope:{id:'B';version:1};reason:string};
+export type CollectionNoticeDelivery={ref:CollectionRef<'source_notice_delivery'>;notice:CollectionSourceNotice;notice_digest:string;message_ref:CollectionRef<'message'>;archive_read_receipt:CollectionArchiveReceipt;sender:'R';recipient:'HQ';sent_at:number;received_at:number;knowledge_seq:number};
 export type CollectionRef<K extends string=string>={run_id:string;kind:K;id:string;version:1};
 export type CollectionTime={kind:'known';value:number;evidence:CollectionRef}|{kind:'unknown'};
 export type CollectionRectangle={min_x:number;max_x:number;min_y:number;max_y:number};
@@ -7,9 +14,20 @@ export type CollectionRequestIntent={
   kind:'request_collection';actor:CollectionActor;question_ref:CollectionRef<'question'>;target_ref:CollectionRef<'facility'>;
   scope_ref:CollectionRef<'scope'>;method_ref:CollectionRef<'method'>;authority_ref:CollectionRef<'authority'>;
   basis_refs:CollectionRef<'briefing'>[];collection_window:{from:number;to:number};needed_by:number;
+  delivery_copies?:1|3;
 };
 export type CollectionCancelIntent={kind:'cancel_collection';request_ref:CollectionRef<'collection_request'>;authority_ref:CollectionRef<'authority'>};
-export type KnowledgeCollectionIntent=CollectionRequestIntent|CollectionCancelIntent|{kind:'advance';to:number};
+export type CollectionArchiveIntent={kind:'request_archive_read';actor:'R';entry:'survey'|'revocation'|'contradiction';method_ref:CollectionRef<'method'>;authority_ref:CollectionRef<'authority'>;forward_credentials:'defer'|'all'};
+export type CollectionCredentialForwardIntent={kind:'forward_source_credential';actor:'R';recipient:'HQ';reader_request_ref:CollectionRef<'archive_request'>;credential_roles:string[];authority_ref:CollectionRef<'authority'>};
+export type CollectionSourceForwardView={ref:CollectionRef<'source_forward'>;issued_at:number;status:'tasking'|'completed'|'failed';receipt:null|{outcome:'completed'|'not_available'|'busy'|'already_forwarded';sent_at:number;received_at:number}};
+export type CollectionReturnIntent={kind:'return_to_headquarters';actor:CollectionActor;authority_ref:CollectionRef<'authority'>};
+export type CollectionPositionIntent=({kind:'request_self_position';method_ref:CollectionRef<'method'>}|{kind:'forward_position_report';collection_request_ref:CollectionRef<'collection_request'>;output_role:'collection_end_self_position'})&{actor:'R';recipient:'HQ';authority_ref:CollectionRef<'authority'>};
+export type CollectionAssessmentIntent={kind:'record_collection_assessment';field:'B.condition';conclusion:'unconfirmed'|'operable'|'faulted';basis_refs:CollectionRef<'report'>[];reason?:string};
+export type CollectionAssessment={ref:CollectionRef<'assessment'>;recorded_at:number;field:'B.condition';conclusion:CollectionAssessmentIntent['conclusion'];basis_refs:CollectionRef<'report'>[];reason:{kind:'not_recorded'}|{kind:'recorded';text:string};context_digest:string};
+export type CollectionCorrection={ref:CollectionRef<'correction'>;field:'B.condition';scope_ref:CollectionRef<'scope'>;superseded_report_ref:CollectionRef<'report'>;new_report_ref:CollectionRef<'report'>;delivery_ref:CollectionRef<'delivery'>;recorded_at:number;effective_knowledge_seq:number};
+export type CollectionFacilityKnowledge={field:'B.condition';condition:'operable';scope_ref:CollectionRef<'scope'>;observed_at:number;received_at:number;report_ref:CollectionRef<'report'>;correction_ref:CollectionRef<'correction'>|null};
+export type CollectionKnowledge={assessments:CollectionAssessment[];corrections:CollectionCorrection[];facility:CollectionFacilityKnowledge|null};
+export type KnowledgeCollectionIntent=CollectionRequestIntent|CollectionCancelIntent|CollectionAssessmentIntent|CollectionArchiveIntent|CollectionCredentialForwardIntent|CollectionReturnIntent|CollectionPositionIntent|{kind:'advance';to:number}|{kind:'save'}|{kind:'restore';snapshot_revision:number};
 export type KnowledgeCollectionEnvelope={run_id:string;operation_id:string;expected_revision:number;intent:KnowledgeCollectionIntent};
 export type CollectionReport={
   ref:CollectionRef<'report'>;source_actor:CollectionActor;method:'limited-text-collection'|'qualified-facility-inspection'|'task-control-receipt';
@@ -21,11 +39,19 @@ export type CollectionReport={
   resource_snapshot:{actor:CollectionActor;at:number;energy_used_j:number};
   coverage:{planned_scope:CollectionRectangle;actual_scope:CollectionRectangle[];planned_area_m2:number;actual_area_m2:number|null;geometry_version:string;model_version:1};
   content_digest:string;
+  root_registration?:CollectionRootRegistration;
 };
-export type CollectionDelivery={ref:CollectionRef<'delivery'>;report_ref:CollectionRef<'report'>;message_ref:CollectionRef<'message'>;sender:CollectionActor;recipient:'HQ';sent_at:number;received_at:number;knowledge_seq:number};
+export type CollectionHistoricalOriginal={id:'archive-B-S-report';version:1;author:'S';observed_at:-60000;generated_at:-59000;scope:{id:'B';version:1};method:'historical-survey-text';text:string;limits:string[]};
+export type CollectionHistoricalReport={ref:CollectionRef<'report'>;source_actor:'S';method:'historical-survey-text';target_ref:CollectionRef<'facility'>;scope_ref:CollectionRef<'scope'>;method_ref:CollectionRef<'method'>;observation_ref:CollectionRef<'observation'>;record_ref:null;observed_time:{kind:'known';value:number;evidence:CollectionRef<'observation'>};generated_at:number;source_reported_time:{kind:'unknown'};body:{kind:'historical_survey';field:'B.condition';quality:'limited';outcome:'inconclusive';original:CollectionHistoricalOriginal;original_digest:string;limits:string[]};content_digest:string;root_registration:CollectionRootRegistration};
+export type CollectionPositionReport={ref:CollectionRef<'report'>;source_actor:'R';method:'self-position-registration'|'collection-end-self-position';target_ref:CollectionRef<'actor'>;scope_ref:CollectionRef<'scope'>;method_ref:CollectionRef<'method'>;observation_ref:CollectionRef<'observation'>;observed_time:{kind:'known';value:number;evidence:CollectionRef<'observation'>};generated_at:number;source_reported_time:{kind:'known';value:number;evidence:CollectionRef<'registration'>};body:{kind:'self_position';field:'R.position';quality:'registered';outcome:'recorded';point:[number,number];geometry_version:string;route_version:string;qualification_ref:CollectionRef<'qualification'>;limits:string[]};content_digest:string;root_registration?:never};
+export type KnowledgeCollectionReport=CollectionReport|CollectionHistoricalReport|CollectionPositionReport;
+export function is_collection_report(report:KnowledgeCollectionReport):report is CollectionReport{return report.method==='limited-text-collection'||report.method==='qualified-facility-inspection'||report.method==='task-control-receipt';}
+export type CollectionArchiveReceipt={request_ref:CollectionRef<'archive_request'>;reader:'R';entry:'survey'|'revocation'|'contradiction';read_started_at:number;read_completed_at:number;registered_at:number;available_credential_roles:string[]};
+export type CollectionArchiveRequestView={ref:CollectionRef<'archive_request'>;actor:'R';entry:'survey'|'revocation'|'contradiction';issued_at:number;status:'tasking'|'reading'|'completed'|'failed';acknowledgement:null|{sent_at:number;received_at:number};terminal_receipt:null|{outcome:'completed'|'not_at_site'|'capacity'|'deadline';sent_at:number;received_at:number}};
+export type CollectionDelivery={ref:CollectionRef<'delivery'>;report_ref:CollectionRef<'report'>;message_ref:CollectionRef<'message'>;sender:CollectionActor;recipient:'HQ';sent_at:number;received_at:number;knowledge_seq:number;archive_read_receipt?:CollectionArchiveReceipt;position_receipt?:{request_ref:CollectionRef<'position_request'>;accepted_at:number}};
 export type CollectionCoverage={ref:CollectionRef<'coverage'>;report_ref:CollectionRef<'report'>;delivery_ref:CollectionRef<'delivery'>;quality:CollectionReport['body']['quality'];outcome:CollectionReport['body']['outcome'];observed_time:CollectionTime;method_ref:CollectionRef<'method'>;limits:string[]}&CollectionReport['coverage'];
 export type KnowledgeCollectionPlayerView={
-  scenario_kind:'play_knowledge_collection';run_id:string;revision:number;sim_time:number;
+  scenario_kind:'play_knowledge_collection';case_ref:KnowledgeCollectionCaseRef;run_id:string;revision:number;sim_time:number;
   mode:Mode;rate:1|2|4;paused:boolean;finished:boolean;source_run:string|null;status:'ready';
   can_issue:boolean;next_action:string;gap:string;
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
@@ -33,5 +59,13 @@ export type KnowledgeCollectionPlayerView={
   geometry:{unit:string;metres_per_coordinate:number;points:{H:number[];A:number[];B:number[]}};
   replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
   collection_requests:Array<{ref:CollectionRef<'collection_request'>;actor:CollectionActor;issued_at:number;status:'tasking'|'collecting'|'processing'|'inconclusive'|'answered'|'expired'|'cancelled';local_receipt:null|{kind:'cancelled_before_send';at:number;remote_task_created:false};acknowledgement:null|{stage:'waiting_window'|'waiting_gate'|'refused_gate'|'collecting';sent_at:number;received_at:number;planned_start_at:number}}>;
-  reports:CollectionReport[];deliveries:CollectionDelivery[];coverage:CollectionCoverage[];facility_knowledge:null;
+  reports:KnowledgeCollectionReport[];deliveries:CollectionDelivery[];coverage:CollectionCoverage[];facility_knowledge:CollectionFacilityKnowledge|null;
+  assessments:CollectionAssessment[];correction_records:CollectionCorrection[];
+  source_relationships:CollectionSourceSummary;
+  archive_requests:CollectionArchiveRequestView[];
+  source_credentials:CollectionCredentialDelivery[];
+  source_forward_requests:CollectionSourceForwardView[];
+  source_notices:CollectionNoticeDelivery[];
+  return_requests:Array<{ref:CollectionRef<'return_request'>;actor:CollectionActor;issued_at:number;acknowledgement:null|{sent_at:number;received_at:number;outcome:'moving'|'capacity'}} >;
+  position_requests:Array<{ref:CollectionRef<'position_request'>;kind:CollectionPositionIntent['kind'];issued_at:number;acknowledgement:null|{sent_at:number;received_at:number};terminal_receipt:null|{sent_at:number;received_at:number;outcome:'completed'|'capacity'|'not_available'|'deadline'}} >;
 };
