@@ -20,6 +20,7 @@ export type CollectionCancelIntent={kind:'cancel_collection';request_ref:Collect
 export type CollectionArchiveIntent={kind:'request_archive_read';actor:'R';entry:'survey'|'revocation'|'contradiction';method_ref:CollectionRef<'method'>;authority_ref:CollectionRef<'authority'>;forward_credentials:'defer'|'all'};
 export type CollectionCredentialForwardIntent={kind:'forward_source_credential';actor:'R';recipient:'HQ';reader_request_ref:CollectionRef<'archive_request'>;credential_roles:string[];authority_ref:CollectionRef<'authority'>};
 export type CollectionSourceForwardView={ref:CollectionRef<'source_forward'>;issued_at:number;status:'tasking'|'completed'|'failed';receipt:null|{outcome:'completed'|'not_available'|'busy'|'already_forwarded';sent_at:number;received_at:number}};
+export type CollectionControlAdmission={operation_id:string;at:number;actor:CollectionActor;outcome:'busy';pending_ref:CollectionRef};
 export type CollectionReturnIntent={kind:'return_to_headquarters';actor:CollectionActor;authority_ref:CollectionRef<'authority'>};
 export type CollectionPositionIntent=({kind:'request_self_position';method_ref:CollectionRef<'method'>}|{kind:'forward_position_report';collection_request_ref:CollectionRef<'collection_request'>;output_role:'collection_end_self_position'})&{actor:'R';recipient:'HQ';authority_ref:CollectionRef<'authority'>};
 export type CollectionAssessmentIntent={kind:'record_collection_assessment';field:'B.condition';conclusion:'unconfirmed'|'operable'|'faulted';basis_refs:CollectionRef<'report'>[];reason?:string};
@@ -34,7 +35,7 @@ export type CollectionReport={
   target_ref:CollectionRef<'facility'>;scope_ref:CollectionRef<'scope'>;method_ref:CollectionRef<'method'>;
   requested_method_ref:CollectionRef<'method'>;
   observation_ref:CollectionRef<'observation'>|null;record_ref:CollectionRef<'record'>|null;observed_time:CollectionTime;generated_at:number;source_reported_time:{kind:'unknown'};
-  body:{kind:'limited_indication';field:'B.condition';quality:'limited';outcome:'inconclusive';limits:string[]}|{kind:'qualified_facility_field';field:'B.condition';condition:'operable';object_version:1;quality:'qualified';outcome:'detected';qualification_ref:CollectionRef<'qualification'>;limits:string[]}|{kind:'collection_failed';field:'B.condition';quality:'failed';outcome:'not_covered';conclusion:'unknown';reason:'window_closed'|'empty_scope'|'local_gate_unknown'|'local_gate_not_met';attempted_interval:{from:number;to:number};collection_work_ms:number;limits:string[]}|{kind:'collection_cancelled';field:'B.condition';quality:'failed';outcome:'not_covered';conclusion:'unknown';reason:'cancelled_before_start';collection_work_ms:0;limits:string[]};
+  body:{kind:'limited_indication';field:'B.condition';quality:'limited';outcome:'inconclusive';limits:string[]}|{kind:'qualified_facility_field';field:'B.condition';condition:'operable';object_version:1;quality:'qualified';outcome:'detected';qualification_ref:CollectionRef<'qualification'>;limits:string[]}|{kind:'collection_failed';field:'B.condition';quality:'failed';outcome:'not_covered';conclusion:'unknown';reason:'window_closed'|'empty_scope'|'local_gate_unknown'|'local_gate_not_met'|'not_at_site'|'capacity';attempted_interval:{from:number;to:number};collection_work_ms:number;limits:string[]}|{kind:'collection_cancelled';field:'B.condition';quality:'failed';outcome:'not_covered';conclusion:'unknown';reason:'cancelled_before_start';collection_work_ms:0;limits:string[]};
   control_outcomes:Array<{request_ref:CollectionRef<'cancellation'>;result:'cancelled'|'already_started'|'already_completed';decided_at:number}>;
   resource_snapshot:{actor:CollectionActor;at:number;energy_used_j:number};
   coverage:{planned_scope:CollectionRectangle;actual_scope:CollectionRectangle[];planned_area_m2:number;actual_area_m2:number|null;geometry_version:string;model_version:1};
@@ -58,7 +59,7 @@ export type KnowledgeCollectionPlayerView={
   public_rules:{deadline:number;receipt_grace:number;cleanup_duration:number};
   geometry:{unit:string;metres_per_coordinate:number;points:{H:number[];A:number[];B:number[]}};
   replay_nodes:Array<{revision:number;at:number;meaningful:boolean;label:string}>;
-  collection_requests:Array<{ref:CollectionRef<'collection_request'>;actor:CollectionActor;issued_at:number;status:'tasking'|'collecting'|'processing'|'inconclusive'|'answered'|'expired'|'cancelled';local_receipt:null|{kind:'cancelled_before_send';at:number;remote_task_created:false};acknowledgement:null|{stage:'waiting_window'|'waiting_gate'|'refused_gate'|'collecting';sent_at:number;received_at:number;planned_start_at:number}}>;
+  collection_requests:Array<{ref:CollectionRef<'collection_request'>;actor:CollectionActor;issued_at:number;status:'tasking'|'collecting'|'processing'|'inconclusive'|'answered'|'expired'|'cancelled';local_receipt:null|{kind:'cancelled_before_send';at:number;remote_task_created:false};acknowledgement:null|{stage:'waiting_window'|'waiting_gate'|'refused_gate'|'refused_site'|'refused_capacity'|'collecting';sent_at:number;received_at:number;planned_start_at:number}}>;
   reports:KnowledgeCollectionReport[];deliveries:CollectionDelivery[];coverage:CollectionCoverage[];facility_knowledge:CollectionFacilityKnowledge|null;
   assessments:CollectionAssessment[];correction_records:CollectionCorrection[];
   source_relationships:CollectionSourceSummary;
@@ -66,6 +67,7 @@ export type KnowledgeCollectionPlayerView={
   source_credentials:CollectionCredentialDelivery[];
   source_forward_requests:CollectionSourceForwardView[];
   source_notices:CollectionNoticeDelivery[];
+  control_admissions:CollectionControlAdmission[];
   return_requests:Array<{ref:CollectionRef<'return_request'>;actor:CollectionActor;issued_at:number;acknowledgement:null|{sent_at:number;received_at:number;outcome:'moving'|'capacity'}} >;
   position_requests:Array<{ref:CollectionRef<'position_request'>;kind:CollectionPositionIntent['kind'];issued_at:number;acknowledgement:null|{sent_at:number;received_at:number};terminal_receipt:null|{sent_at:number;received_at:number;outcome:'completed'|'capacity'|'not_available'|'deadline'}} >;
 };

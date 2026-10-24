@@ -15,7 +15,7 @@ function sort_events(state:KnowledgeCollectionState){
 function enqueue(state:KnowledgeCollectionState,request_id:string,kind:KnowledgeCollectionState['schedule'][number]['kind'],at:number,command_id?:string){
   state.schedule.push({at,sequence:++state.event_sequence,kind,request_id,...(command_id?{command_id}:{})});sort_events(state);
 }
-export function queue_source_message(state:KnowledgeCollectionState,input:Pick<import('./knowledge-collection-state').CollectionSourceMessage,'owner_kind'|'request_id'|'actor'|'kind'|'report_ref'|'copy_index'>){
+export function queue_source_message(state:KnowledgeCollectionState,input:Pick<import('./knowledge-collection-state').CollectionSourceMessage,'owner_kind'|'request_id'|'actor'|'kind'|'report_ref'|'copy_index'|'credential_id'>){
   const actor=state.actors[input.actor],sent=Math.max(state.sim_time,actor.sender_free_at),received=sent+state.definition.control_receipt.sender_ms;
   const suffix=input.kind==='accepted'?'.accepted':input.kind==='terminal'?'.terminal':'.'+input.kind+'-'+input.copy_index;
   const message:import('./knowledge-collection-state').CollectionSourceMessage={...input,ref:collection_ref(state.run_id,'message',input.request_id+suffix),optional:input.kind==='forward'||input.kind==='credential',planned_sent_at:sent,planned_received_at:received,sent_at:null,received_at:null,status:'queued'};
@@ -170,13 +170,16 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
     }else if(event.kind==='receive_collection'){
       task.received_at=state.sim_time;task.status='waiting';
       state.collection_tasks.push({ref:collection_ref(state.run_id,'collection_task',task.ref.id+'.task'),request_id:task.ref.id,requirement_ref:state.requirements.find(ir=>ir.request_id===task.ref.id)!.ref,source_actor:task.intent.actor,labor_ref:task.intent.actor+':LABOR',device_ref:task.intent.actor+':COLLECTOR',window:structuredClone(task.intent.collection_window),scope_ref:structuredClone(task.intent.scope_ref),method_ref:structuredClone(task.intent.method_ref),authority_ref:structuredClone(task.intent.authority_ref),basis_refs:structuredClone(task.intent.basis_refs),status:'allocated',started_at:null,observed_at:null});
-      task.accepted_stage=state.gates[task.intent.actor]==='unknown'?'waiting_gate':state.gates[task.intent.actor]==='not_met'?'refused_gate':task.planned_start_at>state.sim_time?'waiting_window':'collecting';
+      const point=state.actors[task.intent.actor].position,not_at_site=point[0]!==250||point[1]!==150;
+      const busy=task.intent.actor==='R'&&(state.archive_requests.some(item=>item.status==='reading'||item.status==='registering')||state.position_requests.some(item=>item.started_at!==null&&item.completed_at===null&&item.outcome===null));
+      task.accepted_stage=not_at_site?'refused_site':busy?'refused_capacity':state.gates[task.intent.actor]==='unknown'?'waiting_gate':state.gates[task.intent.actor]==='not_met'?'refused_gate':task.planned_start_at>state.sim_time?'waiting_window':'collecting';
       task.accepted_sent_at=queue_source_message(state,{owner_kind:'collection',request_id:task.ref.id,actor:task.intent.actor,kind:'accepted',report_ref:null,copy_index:0}).planned_sent_at;
+      if(not_at_site||busy){await refuse_local_collection(state,task,not_at_site?'not_at_site':'capacity');continue;}
       enqueue(state,task.ref.id,'start_collection',task.planned_start_at);
       enqueue(state,task.ref.id,'window_close',task.intent.collection_window.to);
     }else if(event.kind==='start_collection'){
       const actor=state.actors[task.intent.actor];
-      if(actor.position[0]!==250||actor.position[1]!==150)throw new GameError('INVALID_REQUEST');
+      if(actor.position[0]!==250||actor.position[1]!==150){await refuse_local_collection(state,task,'not_at_site');continue;}
       if(state.gates[task.intent.actor]==='unknown')continue;
       if(state.gates[task.intent.actor]==='not_met'){stop_collection_work(state,task,'local_gate_not_met');continue;}
       task.started_at=state.sim_time;task.status='collecting';
@@ -237,16 +240,23 @@ export async function advance_collection_work(state:KnowledgeCollectionState,to:
   accrue_energy(state,to);
   advance_intel_work(state.intel,to);
 }
+async function refuse_local_collection(state:KnowledgeCollectionState,task:CollectionRequestState,reason:'not_at_site'|'capacity'){
+  task.stop_reason=reason;task.collection_stopped_at=state.sim_time;
+  state.collection_tasks.find(item=>item.request_id===task.ref.id)!.status='failed';
+  // This is a local refusal receipt, not a sampled/registering work phase.
+  await form_activity_terminal(state,task);
+}
 
 export function request_archive_read(state:KnowledgeCollectionState,intent:CollectionArchiveIntent){
   const policy=state.definition.archive_policy;
   if(state.definition.case_ref!=='KA-SOURCE3-01'||intent.method_ref.id!==policy.method||intent.authority_ref.id!==policy.authority||state.archive_requests.some(task=>task.intent.entry===intent.entry))throw new GameError('INVALID_REQUEST');
-  const task:import('./knowledge-collection-state').ArchiveReadState={ref:collection_ref(state.run_id,'archive_request','archive-'+(state.archive_requests.length+1)),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,read_completed_at:null,registered_at:null,accepted_sent_at:null,accepted_received_at:null,terminal_sent_at:null,terminal_received_at:null,status:'tasking',outcome:null};
+  const task:import('./knowledge-collection-state').ArchiveReadState={ref:collection_ref(state.run_id,'archive_request','archive-'+(state.archive_requests.length+1)),intent:structuredClone(intent),registered_output:null,issued_at:state.sim_time,received_at:null,started_at:null,read_completed_at:null,registered_at:null,accepted_sent_at:null,accepted_received_at:null,terminal_sent_at:null,terminal_received_at:null,status:'tasking',outcome:null};
   state.archive_requests.push(task);dispatch_hq(state,task,'receive_archive');
 }
 export function request_collection_return(state:KnowledgeCollectionState,intent:CollectionReturnIntent){
-  if(intent.authority_ref.id!=='KA-INITIAL'||state.returns.some(task=>task.intent.actor===intent.actor))throw new GameError('INVALID_REQUEST');
-  const task:import('./knowledge-collection-state').CollectionReturnState={ref:collection_ref(state.run_id,'return_request','return-'+intent.actor),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,arrived_at:null,stage:'tasking',outcome:null,accepted_sent_at:null,accepted_received_at:null};
+  const previous=state.returns.filter(task=>task.intent.actor===intent.actor);
+  if(intent.authority_ref.id!=='KA-INITIAL'||previous.some(task=>task.stage!=='failed'))throw new GameError('INVALID_REQUEST');
+  const task:import('./knowledge-collection-state').CollectionReturnState={ref:collection_ref(state.run_id,'return_request','return-'+intent.actor+(previous.length?'-'+(previous.length+1):'')),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,started_at:null,arrived_at:null,stage:'tasking',outcome:null,accepted_sent_at:null,accepted_received_at:null};
   state.returns.push(task);dispatch_hq(state,task,'receive_return');
 }
 function return_speed(stage:'AB'|'HA',at:number){return stage==='HA'?1000:at>=180000&&at<300000?700:850;}
@@ -259,7 +269,7 @@ function queue_return_boundary(state:KnowledgeCollectionState,task:import('./kno
 function advance_return(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').CollectionReturnState,event:KnowledgeCollectionState['schedule'][number]){
   if(event.kind==='receive_return'){
     task.received_at=state.sim_time;
-    const busy=state.requests.some(item=>item.intent.actor===task.intent.actor&&(item.status==='collecting'||item.status==='registering'))||task.intent.actor==='R'&&state.archive_requests.some(item=>item.status==='reading'||item.status==='registering');
+    const busy=state.requests.some(item=>item.intent.actor===task.intent.actor&&(item.status==='waiting'||item.status==='collecting'||item.status==='registering'))||task.intent.actor==='R'&&state.archive_requests.some(item=>item.status==='reading'||item.status==='registering');
     task.outcome=busy?'capacity':'moving';task.stage=busy?'failed':'AB';
     task.accepted_sent_at=queue_source_message(state,{owner_kind:'return',request_id:task.ref.id,actor:task.intent.actor,kind:'accepted',report_ref:null,copy_index:0}).planned_sent_at;
     if(!busy){task.started_at=state.sim_time;queue_return_boundary(state,task);}
@@ -320,36 +330,44 @@ async function advance_archive(state:KnowledgeCollectionState,task:import('./kno
     task.read_completed_at=state.sim_time;task.status='registering';enqueue(state,task.ref.id,'archive_registration_complete',state.sim_time+policy.registration_ms);
   }else if(event.kind==='archive_registration_complete'){
     task.registered_at=state.sim_time;task.status='completed';task.outcome='completed';
-    if(task.intent.entry!=='survey'){task.terminal_sent_at=send('terminal',null);return;}
+    if(task.intent.entry!=='survey'){
+      const notice=structuredClone(state.definition.archive_materials.notices.find(item=>item.kind===task.intent.entry)) as CollectionSourceNotice;
+      if(!notice)throw new GameError('INVALID_REQUEST');
+      task.registered_output={kind:'notice',notice,digest:await hash(canonical(notice))};task.terminal_sent_at=send('terminal',null);return;
+    }
     const original=structuredClone(state.definition.archive_materials.survey) as CollectionHistoricalOriginal;
     if(await hash(canonical(original))!==state.definition.archive_materials.survey_digest)throw new GameError('INVALID_DEFINITION');
     const observation=collection_ref(state.run_id,'observation',original.id+'.historical');
     const content:Omit<CollectionHistoricalReport,'content_digest'>={root_registration:root_registration(state,'S','historical-survey-text'),ref:collection_ref(state.run_id,'report',original.id),source_actor:'S',method:'historical-survey-text',target_ref:collection_ref(state.run_id,'facility','B'),scope_ref:collection_ref(state.run_id,'scope','B'),method_ref:collection_ref(state.run_id,'method','historical-survey-text'),observation_ref:observation,record_ref:null,observed_time:{kind:'known',value:original.observed_at,evidence:observation},generated_at:original.generated_at,source_reported_time:{kind:'unknown'},body:{kind:'historical_survey',field:'B.condition',quality:'limited',outcome:'inconclusive',original,original_digest:await hash(canonical(original)),limits:structuredClone(original.limits)}};
     state.reports.push({...content,content_digest:await hash(canonical(content))});task.terminal_sent_at=send('terminal',content.ref);
-    if(task.intent.forward_credentials==='all')for(let i=0;i<state.definition.archive_materials.pairs.length;i++)queue_source_message(state,{owner_kind:'archive',request_id:task.ref.id,actor:'R',kind:'credential',report_ref:null,copy_index:i});
+    const credentials=[];
+    for(const pair of state.definition.archive_materials.pairs){const body=structuredClone(pair) as CollectionPairCredential;credentials.push({body,digest:await hash(canonical(body))});}
+    task.registered_output={kind:'survey',report_ref:content.ref,credentials};
+    if(task.intent.forward_credentials==='all')for(let i=0;i<credentials.length;i++)queue_source_message(state,{owner_kind:'archive',request_id:task.ref.id,actor:'R',kind:'credential',report_ref:null,copy_index:i,credential_id:credentials[i].body.id});
   }else if(event.kind==='accepted_receipt'){task.accepted_received_at=state.sim_time;state.knowledge_seq++;}
   else if(event.kind==='report_delivery'){
     const message=state.source_messages.find(item=>item.ref.id===event.source_message_id);
     if(!message||message.sent_at===null)throw new GameError('INVALID_REQUEST');
     if(message.kind==='credential'){
-      const credential=structuredClone(state.definition.archive_materials.pairs[message.copy_index]) as CollectionPairCredential;
-      state.source_credentials.push({ref:collection_ref(state.run_id,'credential_delivery',message.ref.id+'.delivery'),credential,credential_digest:await hash(canonical(credential)),message_ref:message.ref,reader_request_ref:task.ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});return;
+      const material=task.registered_output?.kind==='survey'?task.registered_output.credentials[message.copy_index]:undefined;
+      if(!material||material.body.id!==message.credential_id)throw new GameError('INVALID_REQUEST');
+      state.source_credentials.push({ref:collection_ref(state.run_id,'credential_delivery',message.ref.id+'.delivery'),credential:structuredClone(material.body),credential_digest:material.digest,message_ref:message.ref,reader_request_ref:task.ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});return;
     }
     task.terminal_received_at=state.sim_time;state.knowledge_seq++;
     if(task.outcome==='completed'&&task.intent.entry!=='survey'){
-      const notice=structuredClone(state.definition.archive_materials.notices.find(item=>item.kind===task.intent.entry)) as CollectionSourceNotice;
-      if(!notice)throw new GameError('INVALID_REQUEST');
-      state.source_notices.push({ref:collection_ref(state.run_id,'source_notice_delivery',task.ref.id+'.notice-delivery'),notice,notice_digest:await hash(canonical(notice)),message_ref:message.ref,archive_read_receipt:archive_receipt(state,task),sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:state.knowledge_seq});return;
+      const output=task.registered_output;
+      if(output?.kind!=='notice')throw new GameError('INVALID_REQUEST');
+      state.source_notices.push({ref:collection_ref(state.run_id,'source_notice_delivery',task.ref.id+'.notice-delivery'),notice:structuredClone(output.notice),notice_digest:output.digest,message_ref:message.ref,archive_read_receipt:archive_receipt(task),sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:state.knowledge_seq});return;
     }
     if(message.report_ref){
       if(task.started_at===null||task.read_completed_at===null||task.registered_at===null)throw new GameError('INVALID_REQUEST');
-      state.deliveries.push({ref:collection_ref(state.run_id,'delivery',task.ref.id+'.delivery'),report_ref:message.report_ref,message_ref:message.ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:state.knowledge_seq,archive_read_receipt:archive_receipt(state,task)});
+      state.deliveries.push({ref:collection_ref(state.run_id,'delivery',task.ref.id+'.delivery'),report_ref:message.report_ref,message_ref:message.ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:state.knowledge_seq,archive_read_receipt:archive_receipt(task)});
     }
   }else throw new GameError('INVALID_REQUEST');
 }
-function archive_receipt(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').ArchiveReadState):CollectionArchiveReceipt{
+function archive_receipt(task:import('./knowledge-collection-state').ArchiveReadState):CollectionArchiveReceipt{
   if(task.started_at===null||task.read_completed_at===null||task.registered_at===null)throw new GameError('INVALID_REQUEST');
-  return {request_ref:task.ref,reader:'R',entry:task.intent.entry,read_started_at:task.started_at,read_completed_at:task.read_completed_at,registered_at:task.registered_at,available_credential_roles:task.intent.entry==='survey'?state.definition.archive_materials.pairs.map(pair=>pair.id):[]};
+  return {request_ref:task.ref,reader:'R',entry:task.intent.entry,read_started_at:task.started_at,read_completed_at:task.read_completed_at,registered_at:task.registered_at,available_credential_roles:task.registered_output?.kind==='survey'?task.registered_output.credentials.map(item=>item.body.id):[]};
 }
 
 function root_registration(state:KnowledgeCollectionState,actor:'R'|'W'|'S',method:string):CollectionRootRegistration{
@@ -359,27 +377,40 @@ function root_registration(state:KnowledgeCollectionState,actor:'R'|'W'|'S',meth
 export function request_source_forward(state:KnowledgeCollectionState,intent:CollectionCredentialForwardIntent){
   if(state.definition.case_ref!=='KA-SOURCE3-01'||intent.authority_ref.id!==state.definition.archive_policy.authority||!state.archive_requests.some(task=>task.ref.id===intent.reader_request_ref.id))throw new GameError('INVALID_REQUEST');
   // Admission uses the public request identity; material availability is checked only when R receives the command.
-  const task:import('./knowledge-collection-state').SourceForwardState={ref:collection_ref(state.run_id,'source_forward','source-forward-'+(state.source_forwards.length+1)),intent:structuredClone(intent),issued_at:state.sim_time,received_at:null,outcome:null,terminal_sent_at:null,terminal_received_at:null};
+  const task:import('./knowledge-collection-state').SourceForwardState={ref:collection_ref(state.run_id,'source_forward','source-forward-'+(state.source_forwards.length+1)),intent:structuredClone(intent),materials:[],issued_at:state.sim_time,received_at:null,outcome:null,terminal_sent_at:null,terminal_received_at:null};
   state.source_forwards.push(task);dispatch_hq(state,task,'receive_source_forward');
+}
+export function admit_bounded_collection_control(state:KnowledgeCollectionState,envelope:import('../knowledge-collection-contracts').KnowledgeCollectionEnvelope){
+  const intent=envelope.intent;
+  if(intent.kind!=='forward_source_credential'&&intent.kind!=='forward_position_report'&&intent.kind!=='request_self_position'&&intent.kind!=='request_archive_read'&&intent.kind!=='return_to_headquarters')return true;
+  const requests=[...state.requests,...state.archive_requests,...state.source_forwards,...state.position_requests,...state.returns];
+  const queued=state.commands.find(command=>command.recipient===intent.actor&&command.status==='queued');
+  const same=requests.find(task=>task.intent.actor===intent.actor&&task.intent.kind===intent.kind&&('terminal_received_at' in task?task.terminal_received_at===null:'accepted_received_at' in task?task.accepted_received_at===null:false));
+  const pending=queued?requests.find(task=>task.ref.id===queued.request_id):same;
+  if(!pending)return true;
+  state.control_admissions.push({operation_id:envelope.operation_id,at:state.sim_time,actor:intent.actor,outcome:'busy',pending_ref:structuredClone(pending.ref)});return false;
 }
 async function advance_source_forward(state:KnowledgeCollectionState,task:import('./knowledge-collection-state').SourceForwardState,event:KnowledgeCollectionState['schedule'][number]){
   if(event.kind==='receive_source_forward'){
     task.received_at=state.sim_time;
     const read=state.archive_requests.find(item=>item.ref.id===task.intent.reader_request_ref.id);
-    const pairs=state.definition.archive_materials.pairs;
-    const indices=task.intent.credential_roles.map(role=>pairs.findIndex(pair=>pair.id===role));
-    task.outcome=!read||read.status!=='completed'||read.registered_at===null||indices.some(index=>index<0)?'not_available':state.source_messages.some(message=>message.actor==='R'&&message.optional&&(message.status==='queued'||message.status==='sending'))?'busy':state.source_messages.some(message=>message.kind==='credential'&&message.status!=='cancelled'&&indices.includes(message.copy_index))?'already_forwarded':'completed';
+    const held=read?.registered_output?.kind==='survey'?read.registered_output.credentials:[];
+    const materials=task.intent.credential_roles.map(role=>held.find(item=>item.body.id===role));
+    task.outcome=!read||read.intent.entry!=='survey'||read.status!=='completed'||read.registered_at===null||materials.some(item=>!item)?'not_available':state.source_messages.some(message=>message.actor==='R'&&message.optional&&(message.status==='queued'||message.status==='sending'))?'busy':state.source_messages.some(message=>message.kind==='credential'&&message.status!=='cancelled'&&message.credential_id!==undefined&&task.intent.credential_roles.includes(message.credential_id))?'already_forwarded':'completed';
     if(task.outcome!=='completed'){
       task.terminal_sent_at=queue_source_message(state,{owner_kind:'source_forward',request_id:task.ref.id,actor:'R',kind:'terminal',report_ref:null,copy_index:0}).planned_sent_at;
-    }else for(const index of indices){
-      const message=queue_source_message(state,{owner_kind:'source_forward',request_id:task.ref.id,actor:'R',kind:'credential',report_ref:null,copy_index:index});task.terminal_sent_at=message.planned_sent_at;
+    }else for(const material of materials){
+      if(!material)throw new GameError('INVALID_REQUEST');
+      const index=task.materials.length;task.materials.push(structuredClone(material));
+      const message=queue_source_message(state,{owner_kind:'source_forward',request_id:task.ref.id,actor:'R',kind:'credential',report_ref:null,copy_index:index,credential_id:material.body.id});task.terminal_sent_at=message.planned_sent_at;
     }
   }else if(event.kind==='report_delivery'){
     const message=state.source_messages.find(item=>item.ref.id===event.source_message_id);
     if(!message||message.sent_at===null)throw new GameError('INVALID_REQUEST');
     if(message.kind==='credential'){
-      const credential=structuredClone(state.definition.archive_materials.pairs[message.copy_index]) as CollectionPairCredential;
-      state.source_credentials.push({ref:collection_ref(state.run_id,'credential_delivery',message.ref.id+'.delivery'),credential,credential_digest:await hash(canonical(credential)),message_ref:message.ref,reader_request_ref:task.intent.reader_request_ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});
+      const material=task.materials[message.copy_index];
+      if(!material||material.body.id!==message.credential_id)throw new GameError('INVALID_REQUEST');
+      state.source_credentials.push({ref:collection_ref(state.run_id,'credential_delivery',message.ref.id+'.delivery'),credential:structuredClone(material.body),credential_digest:material.digest,message_ref:message.ref,reader_request_ref:task.intent.reader_request_ref,sender:'R',recipient:'HQ',sent_at:message.sent_at,received_at:state.sim_time,knowledge_seq:++state.knowledge_seq});
     }else state.knowledge_seq++;
     if(message.sent_at===task.terminal_sent_at)task.terminal_received_at=state.sim_time;
   }else throw new GameError('INVALID_REQUEST');

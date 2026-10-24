@@ -2,12 +2,12 @@ import {GameError} from '../contracts';
 import type {CollectionKnowledge,CollectionAssessmentIntent,KnowledgeCollectionPlayerView,CollectionReport,CollectionDelivery,CollectionRef} from '../knowledge-collection-contracts';
 import {hash} from './scenario';
 import {canonical} from './snapshot';
-import {valid_collection_ref} from '../knowledge-collection-protocol';
+import {valid_collection_ref,dense_collection_list} from '../knowledge-collection-protocol';
 
 const ref=<K extends string>(run_id:string,kind:K,id:string):CollectionRef<K>=>({run_id,kind,id,version:1});
 
 export async function record_collection_assessment(knowledge:CollectionKnowledge,intent:CollectionAssessmentIntent,view:KnowledgeCollectionPlayerView){
-  if(new Set(intent.basis_refs.map(ref=>ref.id)).size!==intent.basis_refs.length||intent.basis_refs.some(ref=>!view.reports.some(report=>report.ref.id===ref.id&&report.ref.run_id===ref.run_id&&report.ref.version===ref.version)))throw new GameError('INVALID_REQUEST');
+  if(!dense_collection_list(intent.basis_refs)||new Set(intent.basis_refs.map(ref=>ref.id)).size!==intent.basis_refs.length||intent.basis_refs.some(ref=>!view.reports.some(report=>report.ref.id===ref.id&&report.ref.run_id===ref.run_id&&report.ref.version===ref.version)))throw new GameError('INVALID_REQUEST');
   const context_digest=await hash(canonical(view));
   knowledge.assessments.push({ref:ref(view.run_id,'assessment','assessment-'+(knowledge.assessments.length+1)),recorded_at:view.sim_time,field:intent.field,conclusion:intent.conclusion,basis_refs:structuredClone(intent.basis_refs),reason:intent.reason?.trim()?{kind:'recorded',text:intent.reason}:{kind:'not_recorded'},context_digest});
 }
