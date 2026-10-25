@@ -2,14 +2,14 @@
 
 ## 来源快照
 
-本次公开事实采集截至 **2026-10-23T17:08:05.8396033Z**。这是固定来源快照，不代表之后的实时进展。
+本次公开事实采集截至 **2026-10-25T15:25:53.1315281Z**。这是固定来源快照，不代表之后的实时进展。
 
 | 身份 | 固定来源 | 结论范围 |
 | --- | --- | --- |
-| 已合并工程来源 main | [84a22b87b905d6d590dfc2e154a9422162d46788](https://github.com/susansys/fogbound-command/commit/84a22b87b905d6d590dfc2e154a9422162d46788) | B33 交付后的最小布局修复及验证前置纠正已完成交付，仍归同一第 10 次工程事件，不新增批次 |
+| 已合并工程来源 main | [2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23](https://github.com/susansys/fogbound-command/commit/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23) | K-A 文本知识采集包已完成工程交付，正式事件为第 11 次；文档派生同步不另计数 |
 | 文档来源 README | [固定 README](https://github.com/susansys/fogbound-command/blob/f7ce7996be0fbe1bb6302172be1a27a77b91344d/README.md) | 该固定公开 README 仍列旧六个演练；后续界面改进和 B31 可选档案包按固定实现、PR 分列，不把旧首页说明当最新范围；发布事实按 PR／验证记录分列 |
-| 该工程来源的 main CI | [39984476137](https://github.com/susansys/fogbound-command/actions/runs/39984476137) | 985 核心／94 文件、11 包装检查及 313 可移植浏览器通过，逐身份无 skip／flaky／retry；20 项 Windows 责任不由 Linux 跳过代签 |
-| 本目录已有文档交付 | [PR #118](https://github.com/susansys/fogbound-command/pull/118)、[文档 main 4d19ca6](https://github.com/susansys/fogbound-command/commit/4d19ca64dcbaf2c89ee932867c859af6f9a12511) | 上次文档实际 docs-only 检查成功；当时记录的两处布局问题现有后续修复交付，文档检查不等于游戏测试 |
+| 该工程来源的 main CI | [40199789493](https://github.com/susansys/fogbound-command/actions/runs/40199789493) | 1161 核心／104 文件、11 包装检查及 328 可移植浏览器通过；无 skip／flaky／retry，22 项 Windows 责任另有有界证据，不由 Linux 跳过代签 |
+| 本目录已有文档交付 | [PR #127](https://github.com/susansys/fogbound-command/pull/127)、[文档 main 9cd46dc](https://github.com/susansys/fogbound-command/commit/9cd46dcfe6d36dcc3761b776643c8378ee1412d2) | 上次文档实际 docs-only 检查成功；当时的 K-A 开发中记录现由本次最终交付事实更新，文档检查不等于游戏测试 |
 
 工程来源 SHA、文档来源与本目录的新交付 SHA 各自记录。当前工程 CI 只归属于其实际 SHA 和范围；本目录候选的 PR／CI／合并结果须由本次实际发布记录标识。
 
@@ -43,10 +43,10 @@ B33 工程交付已完成，技术导航现按固定工程提交更新。48 项�
 
 32 个界面／地图身份按有限证据映射：补齐 7 个布局缺口及 014 关联的未保存输入离开检查，其他身份保留原执行来源和适用复用证据。不是新跑 32 项，也不是一轮新的 Windows 验证；原 244AT 与正式 PLAY 仍未签收。
 
-## K-A 开发中
+## K-A 工程交付
 
-本节核对时间：2026-10-24T14:01:03.5763245Z。[SPEC #122](https://github.com/susansys/fogbound-command/issues/122) 已公开冻结设计 KA-TEXT-KNOWLEDGE-DESIGN-0.1.1 的实施范围：四票串行、40 项工程验收身份，一个最终批次 PR。范围包括有限采集、合格检查、合法纠正与来源证据、真实迟到位置、两实体记录的保管和逐件核验、有界收尾，以及公开界面和实际保存恢复；保留 schema4—13 身份。
+[PR #128](https://github.com/susansys/fogbound-command/pull/128) 已正常合并，四票／40 项工程例交付已核，五张原票关闭、制品核对、安全同步及单次复盘完成。正式事件已由原负责人登记为第 11 次；本目录不新增工程事件。范围仍限冻结的文本知识采集、合格检查、合法纠正与来源证据、真实迟到位置、两实体记录保管和逐件核验、有界收尾，以及公开界面和实际保存恢复。
 
-当前处于[首票开发](https://github.com/susansys/fogbound-command/issues/123)，后续依次为[纠正与迟到位置](https://github.com/susansys/fogbound-command/issues/124)、[保管核验与收尾](https://github.com/susansys/fogbound-command/issues/125)、[全链验证与交付](https://github.com/susansys/fogbound-command/issues/126)。局部测试或类型检查通过，不代表首票 10 项或整批 40 项验收通过；尚未形成新的工程 PR 或交付。已发布工程来源仍为 84a22b87，技术导航及工程计数 10 保持；文档同步不增加工程事件。
+新包使用独立 schema14，保留 schema4—13 身份。E38 已完成真实 Chrome 正常／异常 Agent 走查并经独立核证；它是本批工程证据，不代签最终人类 PLAY。主分支 458 项源码／58 项发行包已逐条目核对；Windows 22 项责任保留原执行及同源／构建有界复用，不冒称全部新跑。
 
-K-B、K-C、P1 及原 244AT 不在本次交付范围，正式 PLAY 未签收；设计冻结与任务图建立均不等于软件完成。
+[SPEC #122](https://github.com/susansys/fogbound-command/issues/122) 与[最终交付票 #126](https://github.com/susansys/fogbound-command/issues/126)保留原验收身份。K-B、K-C、P1 不属于本次 K-A 交付；后续规划不因此被记为已实施。原 244AT 未运行，最终正式 PLAY 未签收。
