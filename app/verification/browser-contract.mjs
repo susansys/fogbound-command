@@ -38,8 +38,8 @@ if(process.argv[2]==='--classify-change'){
 // Intentional discovery changes require a reviewed contract change, never runtime regeneration.
 const frozen={
   "baseline_sha": "cab208ebd360a55f8fcf55e150e5b7a033f02f59",
-  "full_count": 333,
-  "full_keys_sha256": "2b043b5fcba16bca5fe64bf511e3eed5b546aa239855f152159e6de3ed63cc18",
+  "full_count": 350,
+  "full_keys_sha256": "38a31273941c8604eb4d6d63a2b26c0273ed65574bd0e2f7e0b9bef4bdebe019",
   "legacy_count": 231,
   "legacy_keys_sha256": "272a726ad5b0eff5a06b345e202737d5bb292a20f6ed2069a785618a1efef7da",
   "legacy_files": [
@@ -356,8 +356,53 @@ const frozen={
       "file": "integrated-field-recovery.spec.ts",
       "title": "B33 AT047 edge restores integrated field state",
       "key": "[\"integrated-field-recovery.spec.ts\",\"\",[\"integrated-field-recovery.spec.ts\",\"B33 AT047 edge restores integrated field state\"]]"
+    },
+    {
+      "file": "knowledge-collection-recovery.spec.ts",
+      "title": "KA-E31-E36 chrome native Windows Workbench and recovery",
+      "key": "[\"knowledge-collection-recovery.spec.ts\",\"\",[\"knowledge-collection-recovery.spec.ts\",\"KA-E31-E36 chrome native Windows Workbench and recovery\"]]"
+    },
+    {
+      "file": "knowledge-collection-recovery.spec.ts",
+      "title": "KA-E31-E36 edge native Windows Workbench and recovery",
+      "key": "[\"knowledge-collection-recovery.spec.ts\",\"\",[\"knowledge-collection-recovery.spec.ts\",\"KA-E31-E36 edge native Windows Workbench and recovery\"]]"
     }
-  ]
+  ],
+  "ka_files": [
+    {
+      "file": "knowledge-collection.spec.ts",
+      "sha256": "250087b73a16cdbe3357d04b6480ba366e0e5d4e6e7082c8caa0edef9cc75a5a"
+    },
+    {
+      "file": "knowledge-collection-ui.spec.ts",
+      "sha256": "12da518615fb0e1d7fc108a5554ae340aaebaa78f5549c19e6ca0d7b61b7ce89"
+    },
+    {
+      "file": "knowledge-collection-recovery.spec.ts",
+      "sha256": "b15e369b8c9ac412da8dc84ba6f3e9d067edc8e5237aa2455f01518a475dbb3b"
+    }
+  ],
+  "ka_verifiers": [
+    {
+      "file": "native-knowledge-collection.mjs",
+      "sha256": "b12ecfe23dca9cec138c164293f93116564576293f185e285b029e63adccec7a"
+    },
+    {
+      "file": "native-knowledge-collection-recovery.mjs",
+      "sha256": "c3968de588a896f68daa6426796ac95a185e4325e34bae1b042008404d0af76d"
+    },
+    {
+      "file": "outcome-native-recovery.mjs",
+      "sha256": "511c076330dd0de0f629e8f469376ce52a543b0ba6e6c4bd24ccfe82d3182f9c"
+    }
+  ],
+  "ka_registration": {
+    "identity": "KA-TEXT-KNOWLEDGE-E37-v1",
+    "old_full_count": 333,
+    "old_full_keys_sha256": "2b043b5fcba16bca5fe64bf511e3eed5b546aa239855f152159e6de3ed63cc18",
+    "new_portable_count": 15,
+    "new_native_count": 2
+  }
 };
 
 const listOnly=process.argv[2]==='--list-only';
@@ -371,8 +416,11 @@ function checkConfig(report){assert.deepEqual(report.errors,[]);assert.equal(rep
 function discover(filters=[]){const result=spawnSync(process.execPath,[cli,'test','--list','--reporter=json',...filters],{encoding:'utf8',maxBuffer:8000000,env:{...process.env,PLAYWRIGHT_JSON_OUTPUT_FILE:'',PLAYWRIGHT_JSON_OUTPUT_NAME:''}});const report=JSON.parse(result.stdout);assert.equal(result.status,0,result.stderr||JSON.stringify(report.errors));checkConfig(report);return rows(report);}
 const full=discover();assert.equal(full.length,frozen.full_count);assert.equal(new Set(keys(full)).size,frozen.full_count);assert.equal(digest(keys(full)),frozen.full_keys_sha256,'Review every discovery addition/removal/title change against the fixed contract');
 for(const item of frozen.legacy_files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('browser',item.file))).digest('hex'),item.sha256,'The reviewed231 regression source must remain intact: '+item.file);
+for(const item of frozen.ka_files)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('browser',item.file))).digest('hex'),item.sha256,'Reviewed K-A browser identity source changed: '+item.file);
+for(const item of frozen.ka_verifiers)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join('verification',item.file))).digest('hex'),item.sha256,'Reviewed K-A native verifier source changed: '+item.file);
+const retained333=full.filter(row=>!frozen.ka_files.some(item=>item.file===row.file));assert.equal(retained333.length,frozen.ka_registration.old_full_count);assert.equal(digest(keys(retained333)),frozen.ka_registration.old_full_keys_sha256,'Every original333 identity stays exact');
 const legacyFiles=new Set(frozen.legacy_files.map(item=>item.file)),legacy=full.filter(row=>legacyFiles.has(row.file));assert.equal(legacy.length,frozen.legacy_count);assert.equal(digest(keys(legacy)),frozen.legacy_keys_sha256,'No original regression may be omitted');
-const nativeKeys=new Set(frozen.windows.map(item=>item.key)),native=full.filter(row=>nativeKeys.has(row.key));assert.equal(native.length,20);assert.equal(new Set(frozen.windows.map(item=>item.title)).size,20);assert.deepEqual(keys(native),[...nativeKeys].sort());
+const nativeKeys=new Set(frozen.windows.map(item=>item.key)),native=full.filter(row=>nativeKeys.has(row.key));assert.equal(native.length,22);assert.equal(new Set(frozen.windows.map(item=>item.title)).size,22);assert.deepEqual(keys(native),[...nativeKeys].sort());
 const portable=full.filter(row=>!nativeKeys.has(row.key)),windowsHost=process.platform==='win32',expected=windowsHost?full:portable;
 const escape=value=>value.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\$&');
 const nativeExclusionPattern=frozen.windows.map(item=>'(?:^| )'+escape(item.title)+'$').join('|'),filters=windowsHost?[]:['--grep-invert',nativeExclusionPattern];

@@ -1,0 +1,36 @@
+import {record,fields,valid_id} from './protocol';
+import type {KnowledgeCollectionEnvelope} from './knowledge-collection-contracts';
+export function dense_collection_list(value:unknown):value is unknown[]{
+  if(!Array.isArray(value)||Reflect.ownKeys(value).length!==value.length+1)return false;
+  return Array.from({length:value.length},(_,i)=>i).every(i=>Object.hasOwn(value,i)&&Object.getOwnPropertyDescriptor(value,String(i))?.enumerable===true);
+}
+export function valid_collection_ref(value:unknown,run:string,kind:string):boolean{
+  return record(value)&&fields(value,['run_id','kind','id','version'])&&value.run_id===run&&value.kind===kind&&valid_id(value.id)&&value.version===1;
+}
+export function valid_knowledge_collection_envelope(value:unknown):value is KnowledgeCollectionEnvelope{
+  if(!record(value)||!fields(value,['run_id','operation_id','expected_revision','intent'])||!valid_id(value.run_id)||!valid_id(value.operation_id)||!Number.isSafeInteger(value.expected_revision)||Number(value.expected_revision)<1||!record(value.intent))return false;
+  const intent=value.intent,run=value.run_id;
+  if(intent.kind==='cancel_hq_work')return fields(intent,['kind','job_ref','authority_ref'])&&valid_collection_ref(intent.job_ref,run,'processing_job')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='request_hq_preparation')return fields(intent,['kind','method_ref','authority_ref'])&&valid_collection_ref(intent.method_ref,run,'method')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='request_hq_processing')return fields(intent,['kind','method_ref','authority_ref','basis_refs'])&&valid_collection_ref(intent.method_ref,run,'method')&&valid_collection_ref(intent.authority_ref,run,'authority')&&dense_collection_list(intent.basis_refs)&&intent.basis_refs.length>0&&intent.basis_refs.length<=10&&intent.basis_refs.every(ref=>valid_collection_ref(ref,run,'report'));
+  if(intent.kind==='terminate_task')return fields(intent,['kind','authority_ref'])&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='save')return fields(intent,['kind']);
+  if(intent.kind==='restore')return fields(intent,['kind','snapshot_revision'])&&Number.isSafeInteger(intent.snapshot_revision)&&Number(intent.snapshot_revision)>=1;
+  if(intent.kind==='return_to_headquarters')return fields(intent,['kind','actor','authority_ref'])&&(intent.actor==='R'||intent.actor==='W')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='request_self_position')return fields(intent,['kind','actor','recipient','method_ref','authority_ref'])&&intent.actor==='R'&&intent.recipient==='HQ'&&valid_collection_ref(intent.method_ref,run,'method')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='forward_position_report')return fields(intent,['kind','actor','recipient','collection_request_ref','output_role','authority_ref'])&&intent.actor==='R'&&intent.recipient==='HQ'&&intent.output_role==='collection_end_self_position'&&valid_collection_ref(intent.collection_request_ref,run,'collection_request')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='forward_source_credential')return fields(intent,['kind','actor','recipient','reader_request_ref','credential_roles','authority_ref'])&&intent.actor==='R'&&intent.recipient==='HQ'&&valid_collection_ref(intent.reader_request_ref,run,'archive_request')&&valid_collection_ref(intent.authority_ref,run,'authority')&&dense_collection_list(intent.credential_roles)&&intent.credential_roles.length>0&&intent.credential_roles.length<=3&&Object.keys(intent.credential_roles).length===intent.credential_roles.length&&intent.credential_roles.every(role=>typeof role==='string'&&['pair-RW','pair-RS','pair-WS'].includes(role))&&new Set(intent.credential_roles).size===intent.credential_roles.length;
+  if(intent.kind==='request_archive_read')return fields(intent,['kind','actor','entry','method_ref','authority_ref','forward_credentials'])&&intent.actor==='R'&&(intent.entry==='survey'||intent.entry==='revocation'||intent.entry==='contradiction')&&(intent.entry==='survey'||intent.forward_credentials==='defer')&&(intent.forward_credentials==='defer'||intent.forward_credentials==='all')&&valid_collection_ref(intent.method_ref,run,'method')&&valid_collection_ref(intent.authority_ref,run,'authority');
+  if(intent.kind==='pause')return fields(intent,['kind','reason'])&&['manual','focus_lost','application_hidden'].includes(String(intent.reason))&&typeof intent.reason==='string';
+  if(intent.kind==='continue')return fields(intent,['kind']);
+  if(intent.kind==='rate')return fields(intent,['kind','rate'])&&[1,2,4].includes(Number(intent.rate))&&typeof intent.rate==='number';
+  if(intent.kind==='mode')return fields(intent,['kind','mode'])&&(intent.mode==='command'||intent.mode==='research');
+  if(intent.kind==='advance'||intent.kind==='tick')return fields(intent,['kind','to'])&&Number.isSafeInteger(intent.to)&&Number(intent.to)>=0&&Number(intent.to)<=1222000;
+  if(intent.kind==='cancel_collection')return fields(intent,['kind','request_ref','authority_ref'])&&valid_collection_ref(intent.request_ref,value.run_id,'collection_request')&&valid_collection_ref(intent.authority_ref,value.run_id,'authority');
+  if(intent.kind==='record_collection_assessment')return fields(intent,['kind','field','conclusion','basis_refs',...(intent.reason===undefined?[]:['reason'])])&&intent.field==='B.condition'&&typeof intent.conclusion==='string'&&['unconfirmed','operable','faulted'].includes(intent.conclusion)&&dense_collection_list(intent.basis_refs)&&intent.basis_refs.length>0&&intent.basis_refs.length<=10&&Object.keys(intent.basis_refs).length===intent.basis_refs.length&&intent.basis_refs.every(ref=>valid_collection_ref(ref,run,'report'))&&(intent.reason===undefined||typeof intent.reason==='string'&&intent.reason.length<=2000);
+  if(intent.kind!=='request_collection'||!fields(intent,['kind','actor','question_ref','target_ref','scope_ref','method_ref','authority_ref','basis_refs','collection_window','needed_by',...(intent.delivery_copies===undefined?[]:['delivery_copies'])])||intent.actor!=='R'&&intent.actor!=='W'||intent.delivery_copies!==undefined&&intent.delivery_copies!==1&&intent.delivery_copies!==3)return false;
+  for(const [key,kind]of [['question_ref','question'],['target_ref','facility'],['scope_ref','scope'],['method_ref','method'],['authority_ref','authority']])if(!valid_collection_ref(intent[key],value.run_id,kind))return false;
+  if(!dense_collection_list(intent.basis_refs)||intent.basis_refs.length!==1||Object.keys(intent.basis_refs).length!==1||!valid_collection_ref(intent.basis_refs[0],value.run_id,'briefing'))return false;
+  const window=intent.collection_window;
+  return record(window)&&fields(window,['from','to'])&&Number.isSafeInteger(window.from)&&Number.isSafeInteger(window.to)&&Number(window.from)>=0&&Number(window.to)>Number(window.from)&&Number(window.to)<=900000&&Number.isSafeInteger(intent.needed_by)&&Number(intent.needed_by)>0&&Number(intent.needed_by)<=900000;
+}

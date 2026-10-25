@@ -1,6 +1,7 @@
 import type { Mode, Envelope, Receipt,DefinitionRef,PrestartCaseRef } from "./contracts";
 import type {GamePlayerView as PlayerView} from './play-contracts';
 import {valid_response} from './dto';
+import {verify_collection_report_digests} from './knowledge-collection-dto';
 import {verify_integrated_truth_digest} from './integrated-field-dto';
 import {verify_outcome_participant_receipt,verify_outcome_inference_receipt,verify_outcome_truth_digest,verify_outcome_debrief_digest} from './outcome-dto';
 import {correlation} from './protocol';
@@ -12,7 +13,7 @@ export type RunSummary = {
   sim_time: number;
   mode: Mode;
   finished: boolean;
-  scenario_kind?: 'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
+  scenario_kind?: 'play_knowledge_collection'|'move'|'record'|'prestart_move'|'play_corridor'|'play_mission'|'play_intelligence'|'play_outcome'|'play_integrated_field';
   read_only?:boolean;
   source_package?:{id:'B31-SOURCE-TIME-01';version:1};
   conflicting_package?:{id:'B32-CONFLICTING-ACTION-01';version:1};
@@ -33,6 +34,7 @@ export type Request =
   |{kind:'open_outcome_debrief';run_id:string}
   |{kind:'request_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthRequest}
   |{kind:'confirm_outcome_truth';envelope:import('./outcome-contracts').OutcomeTruthAcknowledgement}
+  |{kind:'operate_knowledge_collection';envelope:import('./knowledge-collection-contracts').KnowledgeCollectionEnvelope}
   |{kind:'operate_conflicting_action';envelope:import('./conflicting-action-contracts').ConflictingActionEnvelope}
   |{kind:'operate_outcome';envelope:import('./outcome-contracts').OutcomeEnvelope}
   |{kind:'request_source_validation';envelope:unknown}
@@ -45,7 +47,7 @@ export type Request =
   |{kind:'evaluate_decision';run_id:string;view_revision:number;decision_ref:MissionRef<'decision'>}
   |{kind:'operate_mission';envelope:Envelope}
   |{kind:'operate_intelligence';envelope:Envelope}
-  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef }
+  | { kind: "create"; mode: Mode; operation_id: string;definition_ref?:DefinitionRef;case_ref?:PrestartCaseRef|import('./knowledge-collection-contracts').KnowledgeCollectionCaseRef }
   | { kind: "list" }
   | { kind: "view"; run_id: string }
   | { kind: "preview"; run_id: string; revision: number; editing_seq: number }
@@ -98,6 +100,7 @@ export class Transport {
     });
     this.worker.onmessage = async(event: MessageEvent<unknown>) => {
       let response:Response = valid_response(event.data)?event.data:{request_id:correlation(event.data),ok:false,code:'CHANNEL_UNCERTAIN'};
+      if(response.ok&&response.view?.scenario_kind==='play_knowledge_collection'){try{if(!await verify_collection_report_digests(response.view))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.debrief_participants){try{if(!await verify_outcome_participant_receipt(response.debrief_participants))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.debrief_inference){try{if(!await verify_outcome_inference_receipt(response.debrief_inference))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
       if(response.ok&&response.integrated_truth){try{if(!await verify_integrated_truth_digest(response.integrated_truth))response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}catch{response={request_id:response.request_id,ok:false,code:'CHANNEL_UNCERTAIN'};}}
