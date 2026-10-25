@@ -19,3 +19,5 @@
 地图 C、真实图源、模型 API、文件备份、自由问答等后续能力，不因在路线或索引中出现而成为当前实施范围。新增取舍回到正式负责人处理；本目录只在有明确公开依据后更新索引。
 
 B33 新包使用独立 schema13，保留 schema4—12 身份；实际入口见[固定状态](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-state.ts)。地图及界面继承随本批实现发布，原 48 项、地图 12 项及界面 20 项身份分列，不能以工程批次交付代签全部合同身份、原 244AT 或正式体验。
+
+K-A 已完成工程交付：[PR #128](https://github.com/susansys/fogbound-command/pull/128) 实现冻结的文本知识采集与保管范围，四票／40 项工程例；[固定状态](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-state.ts)使用 schema14，旧 schema4—13 身份保留。K-B、K-C、P1 及完整产品验收不并入本次交付，后续授权与已实现状态分开；事件为 11，派生文档增加 0。

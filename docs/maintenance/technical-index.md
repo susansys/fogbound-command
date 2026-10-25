@@ -36,3 +36,15 @@
 | 状态与保存 | [integrated-field-state.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-state.ts)、[integrated-field-snapshot.ts](https://github.com/susansys/fogbound-command/blob/274d105c621c9cb52380409fbaa50e42722b90bb/app/src/core/integrated-field-snapshot.ts) | 独立 schema13、嵌套校验与恢复；旧 schema4—12 保留各自身份 |
 
 布局与验证前置的后续修复固定于 [84a22b87](https://github.com/susansys/fogbound-command/commit/84a22b87b905d6d590dfc2e154a9422162d46788)：[工作台](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/src/integrated-field-workbench.tsx)、[布局样式](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/src/style.css) 与 [指纹验证](https://github.com/susansys/fogbound-command/blob/84a22b87b905d6d590dfc2e154a9422162d46788/app/verification/fingerprint.mjs)。其余导航保留原工程来源；新 CI 结论只属于对应修复 SHA，原失败和有限证据复用见[已知问题](known-issues-and-next.md)。
+
+## K-A 文本知识采集包
+
+以下新增导航固定于已交付工程 [2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23](https://github.com/susansys/fogbound-command/commit/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23)，与上方 B33 原实现／修复历史分列。
+
+| 边界 | 实际入口 | 阅读目的 |
+| --- | --- | --- |
+| 公共合同与视图 | [knowledge-collection-contracts.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/knowledge-collection-contracts.ts)、[knowledge-collection-dto.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/knowledge-collection-dto.ts) | 区分合法观察、报告与递交，不把私有状态当角色证据 |
+| 采集与记录保管 | [knowledge-collection-work.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-work.ts)、[knowledge-collection-records.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-records.ts) | 有限采集、两实体记录、保管和逐件核验 |
+| 所知与纠正 | [knowledge-collection-knowledge.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-knowledge.ts)、[knowledge-collection-sources.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-sources.ts) | 角色收到的合法证据、纠正及迟到信息分层 |
+| 界面与原文 | [knowledge-collection-workbench.tsx](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/knowledge-collection-workbench.tsx)、[knowledge-collection-reading.tsx](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/knowledge-collection-reading.tsx) | 当前工作、资料阅读及返回上下文 |
+| 状态与保存恢复 | [knowledge-collection-state.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-state.ts)、[knowledge-collection-snapshot.ts](https://github.com/susansys/fogbound-command/blob/2ef6c5f24b652d83fbd85561d9a0d9cddc6c6b23/app/src/core/knowledge-collection-snapshot.ts) | 独立 schema14 校验及重放，保留旧 schema4—13 身份 |

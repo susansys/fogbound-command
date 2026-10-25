@@ -36,3 +36,9 @@
 后续修复已完成交付：见 [PR #119](https://github.com/susansys/fogbound-command/pull/119)、[PR #120](https://github.com/susansys/fogbound-command/pull/120) 与 [main CI](https://github.com/susansys/fogbound-command/actions/runs/39984476137)，修复来源固定为 84a22b87b905d6d590dfc2e154a9422162d46788。原失败 [39816839152](https://github.com/susansys/fogbound-command/actions/runs/39816839152) 保留；本地 RED／GREEN 的 Node 24.14 与实际候选／main CI 的 Node 22.23.3 分开，不把受控复现当成真实网络重放。
 
 最后只有两份验证文件不同于已接受的界面快照，58 项运行制品相同，支持有限复用；CI 指纹核对 HTML 加 41 项公开资源，全部 58 项发行包和 428 项源码另按包内条目核对。旧 Windows 14 项／四步布局／42 附件保持原执行身份，不冒称全部 32 合同身份或 Windows 新跑通过。工程事件仍为 10，正式体验及原 244AT 未签收，不自动启动下一批。
+
+## K-A 验证与保留限制
+
+[PR #128](https://github.com/susansys/fogbound-command/pull/128) 已完成工程交付。[main CI](https://github.com/susansys/fogbound-command/actions/runs/40199789493) 的 1161 核心／328 可移植浏览器结果与 E38 真实 Chrome 正常／异常 Agent 走查分别记录，原 244AT 和最终人类 PLAY 不由本批签收。
+
+Windows 22 项责任采用真实原执行及同源／构建有界复用，不是全部新跑；实际观察到 48 个 Chrome 资源 URL，但未提取浏览器缓存响应体或运行身份，不能据此声称缓存中的完整运行源码已逐字节取证。458 项源码包和 58 项发行包的逐条目核对是另一份证明。旧停止／取消及失败历史保留，不因后续成功被抹除。
