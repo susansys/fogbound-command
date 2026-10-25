@@ -131,7 +131,7 @@ export class Game {
   async restart_run(run:string,operation:string):Promise<PlayerView>{
     this.assert_current();if(!valid_id(run)||!valid_id(operation))throw new GameError('INVALID_INPUT');
     const source=await this.store.read_committed(run);if(!source)throw new GameError('RUN_NOT_FOUND');await this.validate_stored_state(source);
-    return this.create(source.schema===13?{schema:13,contract:'0.5.1',package_ref:{id:'INTEGRATED-FIELD-PACK-3',version:1}}:source.schema===12?conflicting_definition_for_package(source.definition_hash):source.schema===11?source_time_definition_for_package(source.definition_hash,this.store.source_definitions):source.schema===10?outcome_definition_for_package(source.definition_hash,this.store.outcome_definitions):source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
+    return this.create(source.schema===14?source.definition:source.schema===13?{schema:13,contract:'0.5.1',package_ref:{id:'INTEGRATED-FIELD-PACK-3',version:1}}:source.schema===12?conflicting_definition_for_package(source.definition_hash):source.schema===11?source_time_definition_for_package(source.definition_hash,this.store.source_definitions):source.schema===10?outcome_definition_for_package(source.definition_hash,this.store.outcome_definitions):source.schema===9?intelligence_definition_for_package(source.definition_hash,this.store.intelligence_definitions):source.schema===8?mission_definition_for_package(source.definition_hash,this.store.mission_definitions):source.schema===7?play_definition_for_package(source.definition_hash,this.store.play_definitions):definition_for_package(source.schema,source.definition_hash),source.mode,operation,source,source.schema===6?source.prestart?.case_ref??'normal':'normal');
   }
   async get_replay(run:string,to:number,nodeRevision?:number):Promise<Game>{
     if(!valid_id(run)||!Number.isSafeInteger(to)||to<0)throw new GameError('INVALID_INPUT');
@@ -393,7 +393,7 @@ export class Game {
     return project_player_view(state,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions,this.store.source_definitions);
   }
   async get_view(run: string): Promise<PlayerView> {
-    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=project_player_view(this.history,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions,this.store.source_definitions);return this.history.schema>=5?{...view,can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
+    if(this.history){if(run!==this.history.run_id)throw new GameError('RUN_NOT_FOUND');const view=project_player_view(this.history,this.store.play_definitions,this.store.mission_definitions,this.store.intelligence_definitions,this.store.outcome_definitions,this.store.source_definitions);return this.history.schema>=5?{...view,...(view.scenario_kind==='play_knowledge_collection'?{read_only:true}:{}),can_issue:false,next_action:'历史记录只能查看，请返回当前行动后安排任务'}:view;}
     const state = await this.store.read_committed(run);
     if (!state) throw new GameError("RUN_NOT_FOUND");
     await this.validate_stored_state(state);
@@ -866,10 +866,10 @@ return {run_id:run,actor:'H',termination,sim_time:state.sim_time,reception:{rese
       if(!valid_knowledge_collection_envelope(envelope))throw new GameError('INVALID_INPUT');
       await this.validate_stored_state(state);
       const fingerprint=await hash(canonical(envelope)),prior=await this.store.receipt(state.run_id,envelope.operation_id);
-      if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_CONFLICT');return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind},view:project_knowledge_collection_view(state)};}
+      if(prior){if(prior.fingerprint!==fingerprint)throw new GameError('OPERATION_CONFLICT');return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:prior.revision,sim_time:prior.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind,...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{})},view:project_knowledge_collection_view(state)};}
       if(this.faulted)throw new GameError('STORAGE_UNCONFIRMED');
       const candidate=await apply_knowledge_collection_control(state,envelope,clock_to);await this.commit(candidate,state.revision,envelope.operation_id,fingerprint);
-      return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind},view:project_knowledge_collection_view(candidate)};
+      return {receipt:{run_id:state.run_id,operation_id:envelope.operation_id,revision:candidate.revision,sim_time:candidate.sim_time,fingerprint,result:'committed',kind:envelope.intent.kind,...(envelope.intent.kind==='restore'?{snapshot_revision:envelope.intent.snapshot_revision}:{})},view:project_knowledge_collection_view(candidate)};
     }
     if(state.schema===13){
       if(!valid_integrated_field_envelope(envelope))throw new GameError('INVALID_INPUT');

@@ -70,7 +70,7 @@ export type CollectionOutcome={ref:CollectionRef<'outcome'>;outcome:'success'|'p
 export type KnowledgeCollectionPlayerView={
   scenario_kind:'play_knowledge_collection';case_ref:KnowledgeCollectionCaseRef;run_id:string;revision:number;sim_time:number;
   mode:Mode;rate:1|2|4;paused:boolean;finished:boolean;source_run:string|null;status:'ready'|'terminating'|'finished';result:CollectionOutcome|null;termination:CollectionTerminationView|null;
-  can_issue:boolean;next_action:string;gap:string;
+  read_only:boolean;can_issue:boolean;next_action:string;gap:string;
   actors:Array<{id:'R'|'W';position:{point:[number,number];observed_at:number;received_at:number;evidence:string}}>;
   public_rules:{deadline:number;receipt_grace:number;cleanup_duration:number};
   geometry:{unit:string;metres_per_coordinate:number;points:{H:number[];A:number[];B:number[]}};

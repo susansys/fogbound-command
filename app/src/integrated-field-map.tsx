@@ -8,7 +8,8 @@ import {toIntegratedRegion,verifyIntegratedRegionBinding,integratedDisplayMappin
 import type {MapPreferences,RegionalDisplaySession} from './regional-display';
 import runtimeNotices from '../THIRD_PARTY_LICENSES/current-runtime-notices.txt?url&no-inline';
 type Selection='H'|'A'|'B'|'R'|'W';
-type Props={view:IntegratedFieldPlayerView;selected?:Selection;onSelect?:(id:Selection)=>void;displaySession?:RegionalDisplaySession};
+export type IntegratedFieldMapView=Pick<IntegratedFieldPlayerView,'run_id'|'revision'|'geometry'>&{actors:Array<{id:'R'|'W';position:{point:readonly[number,number];received_at:number}}>};
+type Props={view:IntegratedFieldMapView;selected?:Selection;onSelect?:(id:Selection)=>void;displaySession?:RegionalDisplaySession};
 const unitSymbol=new ms.Symbol('SFGPU-----*****',{size:30,standard:'APP6',fill:true,fillColor:'#91becb',outlineColor:'#e4eee2',outlineWidth:2}).asSVG();
 export function IntegratedFieldMap({view,selected='R',onSelect,displaySession}:Props){
  const geometry=view.geometry,geometryKey=JSON.stringify(geometry),host=useRef<HTMLDivElement>(null),geographicHost=useRef<HTMLDivElement>(null),application=useRef<Application|null>(null),scene=useRef<Container|null>(null),background=useRef<Container|null>(null),bundle=useRef<RegionalBundle|null>(null),surface=useRef<MapSurface|null>(null);

@@ -9,14 +9,70 @@ import {canonical} from '../src/core/snapshot';
 import {is_collection_report} from '../src/knowledge-collection-contracts';
 import {IDBFactory} from 'fake-indexeddb';
 import type {Response} from '../src/transport';
+// @ts-expect-error Native verification source is separately syntax-checked.
+import {assertNativeOriginalReceipt,assertNativePauseBoundary,selectNativeEndpointOwner,selectNativeForcedClose} from '../verification/native-knowledge-collection.mjs';
 
-async function actualWorkerModule(action:(send:(frame:Record<string,unknown>)=>Promise<Response>,pulse:()=>Promise<Response>)=>Promise<void>){
+test('KA native forced close requires the exact browser executable in addition to the observed task tree',()=>{
+  const executable='C:/Users/sunsy/AppData/Local/Google/Chrome/Application/chrome.exe',browser={pid:40036,created:'2026-10-25T01:38:00.000Z',executable},updater={pid:46572,created:'2026-10-25T01:38:34.0871180Z',executable:'C:/Users/sunsy/AppData/Local/Google/GoogleUpdater/157.0.8089.0/updater.exe'},unknown={pid:999,created:'2026-10-25T01:38:35.000Z',executable:null};
+  expect(selectNativeForcedClose([browser,updater,unknown],executable)).toEqual([browser]);
+  expect(selectNativeForcedClose([updater,unknown],executable)).toEqual([]);
+});
+
+const nativeOwnerFixture=()=>({carrier:'edge',executable:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',profile:'D:/owned/ka-fresh-profile',spawned_pid:36892,launched_at:'2026-10-25T00:55:40.011Z',listeners:[{address:'127.0.0.1',port:44551,pid:48072}],rows:[{pid:48072,parent:36892,created:'2026-10-25T00:55:40.126669Z',executable:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',command_line:'"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --user-data-dir="D:/owned/ka-fresh-profile" --remote-debugging-port=0 --no-first-run --no-default-browser-check --edge-skip-compat-layer-relaunch'}]});
+test('KA-E35 native endpoint accepts the exact observed Edge re-exec owner instead of the exited bootstrap PID',()=>{
+  const actual=nativeOwnerFixture();expect(selectNativeEndpointOwner(actual)).toEqual(actual.rows[0]);
+  const direct=nativeOwnerFixture();direct.spawned_pid=48072;direct.rows[0].parent=123;direct.rows[0].command_line=direct.rows[0].command_line.replace(' --edge-skip-compat-layer-relaunch','');expect(selectNativeEndpointOwner(direct)).toEqual(direct.rows[0]);
+});
+test.each(['foreign-listener','mixed-listeners','old-birth','foreign-executable','profile-prefix','unrelated-parent','network-override'])('KA-E35 native endpoint rejects ownership/method mutation: %s',mutation=>{
+  const changed=nativeOwnerFixture();
+  if(mutation==='foreign-listener')changed.listeners[0].pid=777;
+  else if(mutation==='mixed-listeners')changed.listeners.push({address:'::1',port:44551,pid:777});
+  else if(mutation==='old-birth')changed.rows[0].created='2026-10-25T00:54:00.000Z';
+  else if(mutation==='foreign-executable')changed.rows[0].executable='D:/foreign/msedge.exe';
+  else if(mutation==='profile-prefix')changed.rows[0].command_line=changed.rows[0].command_line.replace('ka-fresh-profile','ka-fresh-profile-foreign');
+  else if(mutation==='unrelated-parent')changed.rows[0].parent=777;
+  else changed.rows[0].command_line+=' --disable-web-security';
+  expect(selectNativeEndpointOwner(changed)).toBeNull();
+});
+
+test.each(['run_id','revision','sim_time','fingerprint'])('KA-E35 native original-receipt proof rejects a changed %s from an actual Game save',async(field)=>{
+  const store=new Persistence('ka-owned-native-receipt-proof-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const initial=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const saved=await game.save({run_id:initial.run_id,operation_id:'actual-save',expected_revision:initial.revision,intent:{kind:'save'}}),changed=structuredClone(saved.receipt);
+    if(field==='run_id')changed.run_id='foreign-owned-run';else if(field==='revision')changed.revision++;else if(field==='sim_time')changed.sim_time++;else changed.fingerprint=(changed.fingerprint[0]==='0'?'1':'0')+changed.fingerprint.slice(1);
+    expect(()=>assertNativeOriginalReceipt(changed,saved.receipt)).toThrow();
+  }finally{await store.delete();}
+});
+
+test('KA-E34 native proof refuses a stable paused return that already added wall time',async()=>{
+  const store=new Persistence('ka-owned-native-visible-proof-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const initial=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'command','create');
+    const paused=await game.control_clock({run_id:initial.run_id,operation_id:'actual-pause',expected_revision:initial.revision,intent:{kind:'pause',reason:'application_hidden'}},1000),returned={...structuredClone(paused.view),sim_time:2000};
+    expect(()=>assertNativePauseBoundary(paused.view,returned,structuredClone(returned))).toThrow();
+  }finally{await store.delete();}
+});
+
+test('KA-E34/E35 native proof accepts unchanged actual paused Game view and complete original save receipt',async()=>{
+  const store=new Persistence('ka-owned-native-proof-positive-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const initial=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'command','create');
+    const paused=await game.control_clock({run_id:initial.run_id,operation_id:'actual-pause',expected_revision:initial.revision,intent:{kind:'pause',reason:'application_hidden'}},1000),saved=await game.save({run_id:initial.run_id,operation_id:'actual-save',expected_revision:paused.view.revision,intent:{kind:'save'}});
+    expect(()=>assertNativePauseBoundary(paused.view,structuredClone(paused.view),structuredClone(paused.view))).not.toThrow();expect(()=>assertNativeOriginalReceipt(structuredClone(saved.receipt),saved.receipt)).not.toThrow();
+  }finally{await store.delete();}
+});
+
+type OwnedWorkerProbe={setWall:(at:number)=>void;probe:(at:number)=>Promise<Response[]>;records:()=>Promise<unknown>;reload:()=>Promise<void>};
+async function actualWorkerModule(action:(send:(frame:Record<string,unknown>)=>Promise<Response>,pulse:()=>Promise<Response>,probe:OwnedWorkerProbe)=>Promise<void>){
   // Browser host carrier only: the actual worker module, Game and Persistence run.
   // An independent fake-IDB factory owns every DB; this is not native evidence.
   vi.resetModules();vi.stubGlobal('indexedDB',new IDBFactory());
+  const {default:Dexie}=await import('dexie'),priorFactory=Dexie.dependencies.indexedDB;
+  Dexie.dependencies.indexedDB=indexedDB;
   let interval:(()=>void)|null=null,automatic:((value:Response)=>void)|null=null;
-  const pending=new Map<string,(value:Response)=>void>();
-  const host:{onmessage:((event:MessageEvent<unknown>)=>void)|null;postMessage:(value:Response)=>void}={onmessage:null,postMessage(value){const resolve=pending.get(value.request_id);if(resolve){pending.delete(value.request_id);resolve(value);}else automatic?.(value);}};
+  const pending=new Map<string,(value:Response)=>void>(),frames:Response[]=[];
+  const host:{onmessage:((event:MessageEvent<unknown>)=>void)|null;postMessage:(value:Response)=>void}={onmessage:null,postMessage(value){frames.push(structuredClone(value));const resolve=pending.get(value.request_id);if(resolve){pending.delete(value.request_id);resolve(value);}else automatic?.(value);}};
   vi.stubGlobal('self',host);vi.stubGlobal('navigator',{locks:{request:(_name:string,_options:unknown,callback:(lock:object)=>Promise<void>)=>callback({name:'owned-lock'})}});
   vi.stubGlobal('setInterval',(callback:()=>void)=>{interval=callback;return 1;});
   const now=vi.spyOn(performance,'now').mockReturnValue(0);
@@ -25,12 +81,44 @@ async function actualWorkerModule(action:(send:(frame:Record<string,unknown>)=>P
     const send=(frame:Record<string,unknown>)=>new Promise<Response>(resolve=>{const request_id=crypto.randomUUID();pending.set(request_id,resolve);host.onmessage!(new MessageEvent('message',{data:{...frame,request_id}}));});
     let time=0;
     const pulse=()=>new Promise<Response>(resolve=>{time=time===0?910000:1222000;now.mockReturnValue(time);automatic=resolve;interval!();});
-    await action(send,pulse);
+    const records=()=>new Promise<unknown>((resolve,reject)=>{const request=indexedDB.open('fogbound-map-b-game-1');request.onupgradeneeded=()=>{request.transaction?.abort();reject(Error('Owned Worker database absent'));};request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,names=['runs','snapshots','operations'],tx=db.transaction(names,'readonly'),result:Record<string,unknown>={};for(const name of names){const read=tx.objectStore(name).getAll();read.onsuccess=()=>{result[name]=read.result;};}tx.oncomplete=()=>{db.close();resolve(result);};tx.onerror=()=>{db.close();reject(tx.error);};};});
+    await action(send,pulse,{setWall:at=>{now.mockReturnValue(at);},probe:async at=>{const start=frames.length;now.mockReturnValue(at);interval!();await send({kind:'list'});return frames.slice(start);},records,reload:async()=>{await send({kind:'list'});host.onmessage=null;interval=null;vi.resetModules();await import('../src/worker');}});
   }finally{
     const {Persistence:WorkerPersistence}=await import('../src/core/persistence');await new WorkerPersistence('fogbound-map-b-game-1').delete();
+    Dexie.dependencies.indexedDB=priorFactory;
     vi.unstubAllGlobals();vi.restoreAllMocks();vi.resetModules();
   }
 }
+
+test('KA-E37 old schema10 actual Worker keeps command ticks, queued terminal guard, receipts and same-DB restore connected',async()=>{
+  await actualWorkerModule(async(send,_pulse,host)=>{
+    const created=await send({kind:'create',definition_ref:'B24-OUTCOME-01',mode:'command',operation_id:'old-create'});
+    if(!created.ok||created.view?.scenario_kind!=='play_outcome')throw Error('Missing actual old Worker view');
+    let view=created.view;const ref=(kind:string,id:string)=>({run_id:view.run_id,kind,id,version:1});
+    const issued=await send({kind:'operate_outcome',envelope:{run_id:view.run_id,operation_id:'old-issue',expected_revision:view.revision,intent:{kind:'issue_activity',actor_ref:ref('actor','R'),activity_ref:ref('activity','R-to-A'),authority_ref:ref('authority','HQ-field-authority'),basis_delivery_refs:[]}}});
+    if(!issued.ok||!issued.view||!issued.receipt)throw Error('Old Worker issue failed');view=issued.view as typeof view;
+    const moving=await host.probe(1000),ticks=moving.filter(frame=>frame.request_id.startsWith('clock-'));
+    expect(ticks).toHaveLength(1);expect(ticks[0]).toMatchObject({ok:true,view:{sim_time:1000,revision:view.revision+1,finished:false}});
+    if(!ticks[0].ok||!ticks[0].view)throw Error('Missing old Worker tick');view=ticks[0].view as typeof view;
+    const aborted=await send({kind:'operate_outcome',envelope:{run_id:view.run_id,operation_id:'old-abort',expected_revision:view.revision,intent:{kind:'abort_outcome'}}});
+    if(!aborted.ok||!aborted.view||!aborted.receipt)throw Error('Old Worker abort failed');view=aborted.view as typeof view;
+    expect(view).toMatchObject({finished:false,paused:false});
+    host.setWall(121000);const terminalSave=send({kind:'operate_outcome',envelope:{run_id:view.run_id,operation_id:'old-terminal-save',expected_revision:view.revision,intent:{kind:'save'}}});
+    const queued=await host.probe(121000),saved=await terminalSave;
+    expect(saved).toMatchObject({ok:true,view:{finished:true,paused:true,outcome:{result:'aborted'}}});
+    if(!saved.ok||!saved.view||!saved.receipt)throw Error('Missing old terminal save');view=saved.view as typeof view;
+    expect(queued.filter(frame=>frame.request_id.startsWith('clock-'))).toEqual([]);
+    const terminalRecords=await host.records();expect((await host.probe(500000)).filter(frame=>frame.request_id.startsWith('clock-'))).toEqual([]);expect(await host.records()).toEqual(terminalRecords);
+    for(const [operation_id,receipt] of [['old-issue',issued.receipt],['old-abort',aborted.receipt],['old-terminal-save',saved.receipt]] as const){const lookup=await send({kind:'receipt',run_id:view.run_id,operation_id});expect(lookup).toMatchObject({ok:true,receipt});expect(Object.hasOwn(lookup,'view')).toBe(false);}
+    expect(await host.records()).toEqual(terminalRecords);
+    await host.reload();const restored=await send({kind:'takeover',run_id:view.run_id,operation_id:'old-restore'});
+    expect(restored).toMatchObject({ok:true,view:{run_id:view.run_id,sim_time:view.sim_time,finished:true,paused:true}});
+    if(!restored.ok||!restored.view)throw Error('Missing re-instantiated old Worker restore');
+    const restoredRecords=await host.records();expect(await send({kind:'operate_outcome',envelope:{run_id:view.run_id,operation_id:'old-invalid-continue',expected_revision:restored.view.revision,intent:{kind:'continue'}}})).toMatchObject({ok:false,code:'RUN_ENDED'});
+    expect((await host.probe(999000)).filter(frame=>frame.request_id.startsWith('clock-'))).toEqual([]);
+    const lookup=await send({kind:'receipt',run_id:view.run_id,operation_id:'old-terminal-save'});expect(lookup).toMatchObject({ok:true,receipt:saved.receipt});expect(Object.hasOwn(lookup,'view')).toBe(false);expect(await host.records()).toEqual(restoredRecords);
+  });
+});
 
 test('KA-E29 actual Worker module routes schema14 controls, contextual operation lookup, list and cleanup past910 (owned host carrier)',async()=>{
   await actualWorkerModule(async(send)=>{
@@ -50,6 +138,22 @@ test('KA-E29 actual Worker command timer uses schema14 cleanup horizon rather th
     expect(await send({kind:'create',definition_ref:'KA-TEXT-KNOWLEDGE-01',mode:'command',operation_id:'create'})).toMatchObject({ok:true,view:{scenario_kind:'play_knowledge_collection',paused:false}});
     expect(await pulse()).toMatchObject({ok:true,view:{sim_time:910000,status:'terminating',finished:false}});
     expect(await pulse()).toMatchObject({ok:true,view:{sim_time:1120648,status:'finished',finished:true,paused:true}});
+  });
+});
+
+test('KA-E33 actual Worker publishes explicit read-only history, blocks writes and returns the unchanged live view',async()=>{
+  await actualWorkerModule(async(send)=>{
+    const created=await send({kind:'create',definition_ref:'KA-TEXT-KNOWLEDGE-01',mode:'research',operation_id:'create'});
+    if(!created.ok||created.view?.scenario_kind!=='play_knowledge_collection')throw Error('No collection run');
+    const run=created.view.run_id;
+    const advanced=await send({kind:'operate_knowledge_collection',envelope:{run_id:run,operation_id:'advance',expected_revision:created.view.revision,intent:{kind:'advance',to:40000}}});
+    expect(advanced).toMatchObject({ok:true,view:{read_only:false,sim_time:40000,can_issue:true,replay_nodes:[{revision:1},{revision:2,at:40000}]}});
+    const past=await send({kind:'replay',run_id:run,to:0,node_revision:1});
+    expect(past).toMatchObject({ok:true,view:{read_only:true,can_issue:false,revision:1,sim_time:0}});expect(valid_response(past)).toBe(true);
+    if(!past.ok||!past.view)throw Error('Missing history');
+    expect(valid_response({...past,view:{...past.view,can_issue:true}})).toBe(false);
+    expect(await send({kind:'operate_knowledge_collection',envelope:{run_id:run,operation_id:'forbidden',expected_revision:1,intent:{kind:'advance',to:1000}}})).toMatchObject({ok:false,code:'HISTORY_READ_ONLY'});
+    const current=await send({kind:'current',run_id:run});expect(current).toMatchObject({ok:true,view:{read_only:false,can_issue:true,revision:2,sim_time:40000}});
   });
 });
 

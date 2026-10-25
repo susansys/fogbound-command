@@ -3,6 +3,65 @@ import {Game} from '../src/core/game';
 import {Persistence} from '../src/core/persistence';
 import {settle_collection_outcome} from '../src/core/knowledge-collection-outcome';
 import {valid_response} from '../src/dto';
+import {state_hash} from '../src/core/snapshot';
+
+test.each(['KA-NORMAL-01','KA-SOURCE3-01','KA-LATE-POSITION-01'] as const)('KA-E36 restarting %s retains package identity and RNG origin in a new run while its parent becomes read-only',async(case_ref)=>{
+  const store=new Persistence('ka-owned-clone-collection-'+crypto.randomUUID()),game=new Game(store,{knowledge_collection_surface:'empty',knowledge_collection_gate_profile:'unknown_mid'});
+  try{
+    let parent=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1},case_ref,...(case_ref==='KA-SOURCE3-01'?{source_profile:'missing_pair_WS'}:{})},'research','create-parent');
+    parent=(await game.control_clock({run_id:parent.run_id,operation_id:'advance-parent',expected_revision:parent.revision,intent:{kind:'advance',to:10000}})).view;
+    const before=await store.read_committed(parent.run_id);if(before?.schema!==14)throw Error('Wrong parent');
+    const child=await game.restart_run(parent.run_id,'clone-once');
+    expect(child).toMatchObject({scenario_kind:'play_knowledge_collection',case_ref,source_run:parent.run_id,sim_time:0,revision:1,paused:true,mode:'research',reports:[],collection_requests:[]});
+    expect(child.run_id).not.toBe(parent.run_id);expect(valid_response({request_id:'clone',ok:true,view:child})).toBe(true);
+    expect(await game.restart_run(parent.run_id,'clone-once')).toEqual(child);
+    const state=await store.read_committed(child.run_id);if(state?.schema!==14)throw Error('Wrong child');
+    expect(state.definition_hash).toBe(before.definition_hash);expect(state.definition).toEqual(before.definition);expect(state.rng.origin).toBe(parent.run_id);expect(state.initial_conditions).toEqual({surface:'empty',gate_profile:'unknown_mid'});
+    expect(await store.is_read_only(parent.run_id)).toBe(true);expect(await store.read_committed(parent.run_id)).toEqual(before);
+    await expect(game.save({run_id:parent.run_id,operation_id:'forbidden-parent-write',expected_revision:parent.revision,intent:{kind:'save'}})).rejects.toThrow('HISTORY_READ_ONLY');
+    expect(await new Game(new Persistence(store.name)).get_view(child.run_id)).toEqual(child);
+  }finally{await store.delete();}
+});
+
+test('KA-E36 restore and its original-operation lookup identify the exact source snapshot without another restore commit',async()=>{
+  const store=new Persistence('ka-owned-restore-receipt-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    let view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    view=(await game.control_clock({run_id:view.run_id,operation_id:'advance',expected_revision:view.revision,intent:{kind:'advance',to:10000}})).view;
+    const saved=await game.save({run_id:view.run_id,operation_id:'save',expected_revision:view.revision,intent:{kind:'save'}});
+    const fresh=new Game(new Persistence(store.name)),restored=await fresh.restore(view.run_id,'restore-once');
+    expect(restored.receipt).toMatchObject({kind:'restore',snapshot_revision:saved.view.revision,revision:saved.view.revision+1});
+    const state=await store.read_committed(view.run_id);
+    expect(await fresh.restore(view.run_id,'restore-once')).toEqual(restored);
+    expect(await store.read_committed(view.run_id)).toEqual(state);
+    expect(restored.view).toMatchObject({run_id:view.run_id,sim_time:10000,paused:true});
+    expect(valid_response({request_id:'restore',ok:true,...restored})).toBe(true);
+  }finally{await store.delete();}
+});
+
+test.each(['unknown-schema','definition-hash','rehashed-extra-state'])('KA-E36 restore refuses %s and preserves the exact authored invalid package',async(fault)=>{
+  const store=new Persistence('ka-owned-invalid-restoration-'+crypto.randomUUID()),game=new Game(store);
+  try{
+    const view=await game.create_run({schema:14,contract:'0.5.1',package_ref:{id:'KA-TEXT-KNOWLEDGE-01',version:1}},'research','create');
+    const original=await store.read_committed(view.run_id);if(original?.schema!==14)throw Error('Wrong branch');
+    const bad=structuredClone(original);
+    if(fault==='unknown-schema')Reflect.set(bad,'schema',999);
+    else if(fault==='definition-hash')bad.definition_hash='0'.repeat(64);
+    else{Reflect.set(bad,'unregistered_field',true);bad.integrity=await state_hash(bad);}
+    // Serialized fault in this test-owned fake-IDB only. No running World patch,
+    // existing profile, real user DB or migration is involved.
+    await new Promise<void>((resolve,reject)=>{
+      const open=indexedDB.open(store.name);open.onerror=()=>reject(open.error);open.onsuccess=()=>{
+        const db=open.result,tx=db.transaction(['runs','snapshots'],'readwrite');
+        tx.objectStore('runs').put(bad);tx.objectStore('snapshots').put({key:view.run_id+':'+view.revision,run_id:view.run_id,state:bad});
+        tx.oncomplete=()=>{db.close();resolve();};tx.onabort=()=>{db.close();reject(tx.error);};
+      };
+    });
+    await expect(new Game(new Persistence(store.name)).restore(view.run_id,'invalid-restore')).rejects.toThrow('INVALID_SAVE');
+    expect(await store.read_committed(view.run_id)).toEqual(bad);expect(await store.snapshot(view.run_id,view.revision)).toEqual(bad);
+    expect(await store.receipt(view.run_id,'invalid-restore')).toBeUndefined();
+  }finally{await store.delete();}
+});
 
 async function normalCase(checkpoint:number|null,inspect:(store:Persistence,run:string)=>Promise<void>){
   const store=new Persistence('ka-owned-stage-recovery-'+crypto.randomUUID());let game=new Game(store);

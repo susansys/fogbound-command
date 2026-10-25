@@ -31,7 +31,8 @@ function run(mode){
  try{
   mkdirSync(path.join(dir,'verification'),{recursive:true});writeFileSync(path.join(dir,'verification/browser-contract.mjs'),wrapper);
   mkdirSync(path.join(dir,'node_modules/@playwright/test'),{recursive:true});writeFileSync(path.join(dir,'node_modules/@playwright/test/cli.js'),cli);
-  mkdirSync(path.join(dir,'browser'));for(const f of frozen.legacy_files)cpSync(path.join(app,'browser',f.file),path.join(dir,'browser',f.file));
+  mkdirSync(path.join(dir,'browser'));for(const f of [...frozen.legacy_files,...frozen.ka_files])cpSync(path.join(app,'browser',f.file),path.join(dir,'browser',f.file));
+  for(const f of frozen.ka_verifiers)cpSync(path.join(app,'verification',f.file),path.join(dir,'verification',f.file));
   writeFileSync(path.join(dir,'discovery.json'),JSON.stringify(discovery));
   const result=spawnSync(process.execPath,['verification/browser-contract.mjs',...(mode==='list'?['--list-only']:[])],{cwd:dir,encoding:'utf8',maxBuffer:8000000,timeout:30000,env:{...process.env,FB01_HEADED:'1',RUNNER_TEMP:dir,TEMP:dir,WRAPPER_FIXTURE:mode}});
   const base=path.join(dir,'verification-output/browser-contract');
@@ -42,9 +43,9 @@ function run(mode){
 test('one browser failure retains later independent results and a nonzero gate',()=>{
  const {result,manifest,report,summary}=run('fail');assert.notEqual(result.status,0);
  assert.ok(manifest,'full manifest is an artifact even when execution fails');assert.ok(report,'raw report remains available');assert.ok(summary);
- const expected=process.platform==='win32'?333:313;
+ const expected=process.platform==='win32'?350:328;
  assert.equal(summary.expected_count,expected);assert.equal(summary.actual_passed_count,expected-1);assert.equal(summary.failed_count,1);assert.equal(summary.not_run_count,0);assert.equal(summary.status,'failed');
- assert.equal(summary.passed_ids.length,expected-1);assert.equal(manifest.tests.length,333);
+ assert.equal(summary.passed_ids.length,expected-1);assert.equal(manifest.tests.length,350);
  assert(result.stdout.split('\n').every(line=>Buffer.byteLength(line)<4096),'machine summaries must not hit the GitHub 64KiB line limit');
 });
 test('all required cases pass only with complete raw and identity artifacts',()=>{
@@ -57,7 +58,7 @@ test('an exit-zero report with the right count but the wrong identity cannot pub
  const {result,summary}=run('wrong-identity');assert.notEqual(result.status,0);assert.equal(summary.status,'failed');assert.equal(summary.actual_passed_count,summary.expected_count);assert.ok(summary.validation_error);
 });
 test('the existing captured discovery interface keeps full tests and native selection fields',()=>{
- const {result}=run('list');assert.equal(result.status,0,result.stderr);const manifest=JSON.parse(result.stdout.split('\n').find(line=>line.startsWith('FB01_BROWSER_MANIFEST ')).slice(22));assert.equal(manifest.tests.length,333);assert.equal(typeof manifest.native_exclusion_pattern,'string');
+ const {result}=run('list');assert.equal(result.status,0,result.stderr);const manifest=JSON.parse(result.stdout.split('\n').find(line=>line.startsWith('FB01_BROWSER_MANIFEST ')).slice(22));assert.equal(manifest.tests.length,350);assert.equal(typeof manifest.native_exclusion_pattern,'string');
 });
 
 test('only a verified diff of the six existing ordinary maintenance docs selects the explicit docs route',()=>{
